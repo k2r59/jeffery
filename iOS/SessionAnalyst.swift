@@ -17,6 +17,8 @@ enum SessionAnalyst {
         var last30DaysWorkouts: Int = 0
         var last30DaysMinutes: Double = 0
         var last30DaysKm: Double = 0
+        var week: (count: Int, minutes: Double, km: Double) = (0, 0, 0)
+        var previousWeek: (count: Int, minutes: Double, km: Double) = (0, 0, 0)
     }
 
     static let readTypes: Set<HKObjectType> = [
@@ -41,6 +43,13 @@ enum SessionAnalyst {
         ctx.last30DaysWorkouts = workouts.count
         ctx.last30DaysMinutes = workouts.reduce(0) { $0 + $1.duration / 60 }
         ctx.last30DaysKm = workouts.compactMap(WorkoutHistory.distanceMeters).reduce(0, +) / 1000
+        let now = Date()
+        let d7 = now.addingTimeInterval(-7 * 86_400), d14 = now.addingTimeInterval(-14 * 86_400)
+        func agg(_ ws: [HKWorkout]) -> (Int, Double, Double) {
+            (ws.count, ws.reduce(0) { $0 + $1.duration / 60 }, ws.compactMap(WorkoutHistory.distanceMeters).reduce(0, +) / 1000)
+        }
+        ctx.week = agg(workouts.filter { $0.startDate >= d7 })
+        ctx.previousWeek = agg(workouts.filter { $0.startDate >= d14 && $0.startDate < d7 })
         return ctx
     }
 
@@ -70,7 +79,11 @@ enum SessionAnalyst {
         if let v = health.vo2Max { h.append(String(format: "VO2max %.1f", v)) }
         if let hrv = health.hrv { h.append("VFC \(Int(hrv)) ms") }
         h.append("30 derniers jours : \(health.last30DaysWorkouts) séances, \(Int(health.last30DaysMinutes)) min, \(String(format: "%.1f", health.last30DaysKm)) km")
+        h.append("7 derniers jours : \(health.week.count) séances, \(Int(health.week.minutes)) min, \(String(format: "%.1f", health.week.km)) km ; les 7 jours d'avant : \(health.previousWeek.count) séances, \(Int(health.previousWeek.minutes)) min, \(String(format: "%.1f", health.previousWeek.km)) km")
         lines.append("SANTÉ : " + h.joined(separator: " · "))
+        if let memory = JeffreyMemory.promptText() {
+            lines.append("CE QUE JEFFREY SAIT DE LUI (notes durables) :\n" + memory)
+        }
 
         var s = ["\(summary.kind.coachLabel)", Formatters.elapsed(summary.elapsed)]
         if let d = summary.distance {
@@ -140,6 +153,37 @@ enum SessionAnalyst {
         let jsonData = Data(text[jsonStart...jsonEnd].utf8)
         if let r = try? JSONDecoder().decode(Result.self, from: jsonData) { return r }
         return Result(analysis: text, advice: "", caution: nil)
+    }
+
+    /// Met à jour la mémoire longue à partir de la transcription de la séance : renvoie la liste fusionnée.
+    static func updateMemory(transcript: [String], existing: [String], summaryLine: String, apiKey: String, model: String) async throws -> [String] {
+        let system = """
+        Tu tiens les notes durables d'un coach sportif sur la personne qu'il accompagne. À partir de la transcription d'une séance \
+        et des notes existantes, renvoie la liste MISE À JOUR des notes : faits utiles sur la durée (blessures ou gênes, contexte de vie, \
+        objectifs à moyen terme, préférences, ce qui motive ou agace, habitudes, contraintes horaires), jamais les chiffres d'une séance. \
+        Fusionne les doublons, mets à jour ce qui a changé (une gêne qui va mieux remplace l'ancienne note), supprime ce qui est périmé, \
+        garde au plus \(JeffreyMemory.maxNotes) notes de 120 caractères maximum chacune, en français, à la troisième personne. \
+        Si la transcription n'apprend rien de durable, renvoie les notes existantes telles quelles. \
+        Réponds UNIQUEMENT en JSON : {"notes": ["...", "..."]}.
+        """
+        let input = "NOTES EXISTANTES :\n" + (existing.isEmpty ? "(aucune)" : existing.map { "- \($0)" }.joined(separator: "\n"))
+            + "\n\nSÉANCE : \(summaryLine)\n\nTRANSCRIPTION :\n" + transcript.joined(separator: "\n")
+        let body: [String: Any] = ["model": model, "instructions": system, "input": input, "max_output_tokens": 900]
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 60
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "SessionAnalyst", code: 2, userInfo: [NSLocalizedDescriptionKey: "mémoire : HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)"])
+        }
+        let text = outputText(from: data)
+        guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+              let json = try? JSONSerialization.jsonObject(with: Data(text[a...b].utf8)) as? [String: Any],
+              let notes = json["notes"] as? [String] else { return existing }
+        return notes
     }
 
     /// Concatène les segments texte d'une réponse Responses API.

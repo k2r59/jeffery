@@ -11,6 +11,8 @@ struct YouView: View {
     @AppStorage(Prefs.maxHR) private var maxHR: Double = 0
     @AppStorage(Prefs.athleteNotes) private var athleteNotes: String = ""
     @State private var health: SessionAnalyst.HealthContext?
+    @ObservedObject private var memory = JeffreyMemory.shared
+    @State private var newNote = ""
     @State private var loadingHealth = false
     @State private var healthNotice: String?
     @FocusState private var focused: Bool
@@ -96,6 +98,38 @@ struct YouView: View {
                             TextField("Forme du jour, blessures, contraintes, ce que Jeffrey doit savoir…", text: $athleteNotes, axis: .vertical)
                                 .lineLimit(2...5).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.creme)
                                 .focused($focused)
+                        }
+
+                        section("Ce que Jeffrey retient de toi") {
+                            if memory.notes.isEmpty {
+                                Text("Rien encore. Après chaque séance, Jeffrey note ce qui compte sur la durée : une gêne, un objectif, une préférence. Tu peux aussi lui écrire directement.")
+                                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
+                            }
+                            ForEach(memory.notes) { note in
+                                HStack(alignment: .top, spacing: 10) {
+                                    JeffreyMark(size: 16).padding(.top, 2)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(note.text).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.creme)
+                                        Text(note.updatedAt.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.muted)
+                                    }
+                                    Spacer()
+                                    Button { memory.remove(note.id) } label: { JIcon("fermer", size: 14).foregroundStyle(Theme.muted) }
+                                }
+                            }
+                            HStack(spacing: 8) {
+                                TextField("Dis-lui quelque chose à retenir…", text: $newNote)
+                                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.creme)
+                                    .padding(.horizontal, 12).frame(height: 40)
+                                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceRaised))
+                                    .onSubmit { memory.add(newNote); newNote = "" }
+                                Button {
+                                    memory.add(newNote); newNote = ""
+                                } label: {
+                                    JIcon("valider", size: 16).foregroundStyle(Theme.background)
+                                        .frame(width: 40, height: 40).background(Circle().fill(Theme.citron))
+                                }
+                                .disabled(newNote.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
                         }
 
                         if !summaries.isEmpty {

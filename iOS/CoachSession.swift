@@ -244,7 +244,8 @@ final class CoachSession: ObservableObject {
                 maxHeartRate: hrSamples.max(), feeling: nil,
                 goalLabel: goal.kind == .free ? nil : goal.label, goalReached: goal.kind == .free ? nil : goalReached,
                 lastCoachLine: transcript.last(where: { $0.role == .coach })?.text,
-                zoneCounts: HeartRateZone.allCases.map { z in hrSamples.filter { HeartRateZone.zone(for: $0, maxHR: config.maxHR) == z }.count })
+                zoneCounts: HeartRateZone.allCases.map { z in hrSamples.filter { HeartRateZone.zone(for: $0, maxHR: config.maxHR) == z }.count },
+                transcriptExcerpt: transcript.filter { $0.role != .info }.suffix(80).map { ($0.role == .user ? "Lui : " : "Jeffrey : ") + $0.text })
             sessionStartedAt = nil
         }
     }

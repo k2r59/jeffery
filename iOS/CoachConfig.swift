@@ -202,12 +202,13 @@ struct CoachConfig {
         let profileLine = profile.isEmpty ? "" : ", " + profile.joined(separator: ", ")
         let intentLine = Intent(rawValue: intent).map { "\nSon intention : \($0.coachLabel)." } ?? ""
         let recapLine = SessionSummary.recapForCoach().map { "\nDernière séance coachée : \($0). Tiens-en compte pour doser aujourd'hui." } ?? ""
+        let memoryBlock = JeffreyMemory.promptText().map { "\n\nCe que tu sais de lui d'après vos séances précédentes (notes durables, datées) :\n\($0)\nUtilise-les naturellement (prendre des nouvelles d'une gêne, rappeler un objectif à moyen terme), sans les réciter." } ?? ""
         let notes = athleteNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let notesLine = notes.isEmpty ? "" : "\nCe que le sportif dit de lui : \(notes)"
         return """
         \(basePrompt)
 
-        Sportif : \(userName.isEmpty ? "prénom inconnu" : userName), niveau \(level.coachLabel)\(profileLine).\(intentLine)\(notesLine)\(recapLine)
+        Sportif : \(userName.isEmpty ? "prénom inconnu" : userName), niveau \(level.coachLabel)\(profileLine).\(intentLine)\(notesLine)\(recapLine)\(memoryBlock)
         Séance en cours : \(kind.coachLabel). Il porte une Apple Watch ; les données arrivent en \(mode.label). \(goalLine)
 
         Tu reçois régulièrement des messages système commençant par [MÉTRIQUES] : fréquence cardiaque, zone cardiaque, \

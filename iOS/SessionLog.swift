@@ -43,6 +43,8 @@ struct SessionSummary: Codable, Identifiable {
     var analysis: String? = nil
     var advice: String? = nil
     var caution: String? = nil
+    var transcriptExcerpt: [String]? = nil
+    var memoryUpdated: Bool? = nil
 
     static var fileURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("sessions.json")

@@ -43,6 +43,7 @@
 		AA8054D04A39FFBD9DEA1CBA /* ObjectiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A433BC192FA6379ABE91035B /* ObjectiveView.swift */; };
 		AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349670EE16768E2C8346D827 /* KeychainStore.swift */; };
 		BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
+		C899428C5426D7A8690625AB /* JeffreyMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C633A224C23AEA7E5F906EE0 /* JeffreyMemory.swift */; };
 		CB08DD05ED173449299454B6 /* WatchCoachWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E26AB3EAECF37CF14F030331 /* VoicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = D501B5BC019DE9395044ADA3 /* VoicePreview.swift */; };
 		EC0901101D1F3616937B0785 /* ProfileImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF934BA7DEFCAB03A6719FF /* ProfileImage.swift */; };
@@ -104,6 +105,7 @@
 		BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneConnectivity.swift; sourceTree = "<group>"; };
 		BF832909FB51387ABE5722ED /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecorder.swift; sourceTree = "<group>"; };
+		C633A224C23AEA7E5F906EE0 /* JeffreyMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyMemory.swift; sourceTree = "<group>"; };
 		CB07464CCC26C18B28EB4F8B /* SessionGoal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionGoal.swift; sourceTree = "<group>"; };
 		CD82806422AB8276FBD93DB2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPipeline.swift; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 				1B72EA6338816D49A380C3D1 /* HealthProfile.swift */,
 				B771AF7CF4644315101BFB4F /* HistoryView.swift */,
 				283D571A2B12BF08F2767D09 /* Info.plist */,
+				C633A224C23AEA7E5F906EE0 /* JeffreyMemory.swift */,
 				397467C11C8057136CF8549F /* JeffreyView.swift */,
 				349670EE16768E2C8346D827 /* KeychainStore.swift */,
 				A8D0C65692CE31DF56C8BF4B /* LiveSessionView.swift */,
@@ -329,6 +332,7 @@
 				621D15B63E630840EF4F1E1B /* HealthProfile.swift in Sources */,
 				75A0EB54E5503D86B74B134C /* HistoryView.swift in Sources */,
 				F2DC8CB0D16F9403F45983B8 /* JeffreyMark.swift in Sources */,
+				C899428C5426D7A8690625AB /* JeffreyMemory.swift in Sources */,
 				074C41C7A8E27B9557E68F60 /* JeffreyView.swift in Sources */,
 				AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */,
 				66AA65F7EF3F6CFBCE483782 /* LiveSessionView.swift in Sources */,
