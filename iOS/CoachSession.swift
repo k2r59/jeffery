@@ -121,7 +121,7 @@ final class CoachSession: ObservableObject {
             endTimeoutTask?.cancel()
             endTimeoutTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
-                await self?.finishTeardown()
+                self?.finishTeardown()
             }
         } else {
             finishTeardown()
@@ -283,7 +283,7 @@ final class CoachSession: ObservableObject {
                 guard let self else { return }
                 if !self.audio.isPlaying { break }
             }
-            await self?.finishTeardown()
+            self?.finishTeardown()
         }
     }
 

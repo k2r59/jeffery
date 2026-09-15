@@ -63,8 +63,8 @@ final class RealtimeClient: NSObject {
     func send(_ event: [String: Any]) {
         guard let task, let data = try? JSONSerialization.data(withJSONObject: event),
               let text = String(data: data, encoding: .utf8) else { return }
-        sendQueue.async {
-            task.send(.string(text)) { [weak self] error in
+        sendQueue.async { [weak self] in
+            task.send(.string(text)) { error in
                 if let error, let self, !self.closedByUser {
                     self.callbacks.onError("Envoi : \(error.localizedDescription)")
                 }

@@ -3,47 +3,6 @@ import HealthKit
 import WatchKit
 import Combine
 
-extension WorkoutKind {
-    var activityType: HKWorkoutActivityType {
-        switch self {
-        case .running: return .running
-        case .walking: return .walking
-        case .cycling: return .cycling
-        case .hiking: return .hiking
-        case .functionalStrength: return .functionalStrengthTraining
-        case .hiit: return .highIntensityIntervalTraining
-        case .other: return .other
-        }
-    }
-
-    var locationType: HKWorkoutSessionLocationType {
-        switch self {
-        case .running, .walking, .cycling, .hiking: return .outdoor
-        default: return .indoor
-        }
-    }
-
-    var distanceType: HKQuantityType? {
-        switch self {
-        case .cycling: return HKQuantityType(.distanceCycling)
-        case .running, .walking, .hiking: return HKQuantityType(.distanceWalkingRunning)
-        default: return nil
-        }
-    }
-
-    init(activityType: HKWorkoutActivityType) {
-        switch activityType {
-        case .running: self = .running
-        case .walking: self = .walking
-        case .cycling: self = .cycling
-        case .hiking: self = .hiking
-        case .functionalStrengthTraining: self = .functionalStrength
-        case .highIntensityIntervalTraining: self = .hiit
-        default: self = .other
-        }
-    }
-}
-
 /// Gère la capture des métriques côté montre, dans l'un des deux modes :
 /// - `owned` : notre app possède la HKWorkoutSession (séance enregistrée par WatchCoach).
 /// - `companion` : l'app Exercice native possède la séance ; on garde de l'exécution en arrière-plan
@@ -326,8 +285,9 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
             case .paused:
                 self.markPaused()
             case .ended:
-                self.builder?.endCollection(withEnd: date) { _, _ in
-                    self.builder?.finishWorkout { _, error in
+                guard let builder = self.builder else { self.finishTracking(); return }
+                builder.endCollection(withEnd: date) { _, _ in
+                    builder.finishWorkout { _, error in
                         Task { @MainActor in
                             if let error { self.statusMessage = "Enregistrement : \(error.localizedDescription)" }
                             else { self.statusMessage = "Séance enregistrée dans Santé" }
