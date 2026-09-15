@@ -32,7 +32,7 @@
 		<string>physical-therapy</string>
 	</array>
 	<key>WKCompanionAppBundleIdentifier</key>
-	<string>com.k2r59.WatchCoach</string>
+	<string>dev.promo.watchcoach</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>
 	<false/>
 </dict>

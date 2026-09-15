@@ -5,7 +5,7 @@ import Security
 /// Si le trousseau refuse (build simulateur non signé, entitlements absents), repli sur UserDefaults
 /// avec `lastError` renseigné pour l'afficher dans les réglages.
 enum KeychainStore {
-    private static let service = "com.k2r59.WatchCoach"
+    private static let service = "dev.promo.watchcoach"
     static let apiKeyAccount = "openai_api_key"
     private static let fallbackPrefix = "keychain.fallback."
 

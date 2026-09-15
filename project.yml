@@ -1,6 +1,6 @@
 name: WatchCoach
 options:
-  bundleIdPrefix: com.k2r59
+  bundleIdPrefix: dev.promo
   deploymentTarget:
     iOS: "17.0"
     watchOS: "10.0"
@@ -11,7 +11,7 @@ settings:
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
     # Renseigne ton Team ID Apple ici (ou dans Xcode > Signing & Capabilities).
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: PTB959SX83
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
@@ -43,7 +43,7 @@ targets:
         com.apple.developer.healthkit.access: []
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.k2r59.WatchCoach
+        PRODUCT_BUNDLE_IDENTIFIER: dev.promo.watchcoach
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
 
@@ -58,7 +58,7 @@ targets:
       properties:
         CFBundleDisplayName: WatchCoach
         WKApplication: true
-        WKCompanionAppBundleIdentifier: com.k2r59.WatchCoach
+        WKCompanionAppBundleIdentifier: dev.promo.watchcoach
         WKRunsIndependentlyOfCompanionApp: false
         # workout-processing : mode piloté ; physical-therapy : session étendue du mode compagnon.
         WKBackgroundModes: [workout-processing, physical-therapy]
@@ -71,7 +71,7 @@ targets:
         com.apple.developer.healthkit.access: []
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.k2r59.WatchCoach.watchkitapp
+        PRODUCT_BUNDLE_IDENTIFIER: dev.promo.watchcoach.watchkitapp
         TARGETED_DEVICE_FAMILY: "4"
         SDKROOT: watchos
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
