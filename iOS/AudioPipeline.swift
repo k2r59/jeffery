@@ -100,6 +100,10 @@ final class AudioPipeline {
 
     // MARK: - Interne
 
+    /// Niveau RMS (0-1) sous lequel la trame est remplacée par du silence (anti-souffle, anti-vent).
+    var noiseGate: Float = 0.015
+    private var gateHold = 0
+
     /// Atténuer la musique des autres apps pendant que le coach parle.
     var duckOthersWhileSpeaking = true
     private var ducking = false
@@ -184,7 +188,19 @@ final class AudioPipeline {
             return buffer
         }
         guard status != .error, out.frameLength > 0, let channel = out.int16ChannelData else { return }
-        let data = Data(bytes: channel[0], count: Int(out.frameLength) * MemoryLayout<Int16>.size)
+        let count = Int(out.frameLength)
+        if noiseGate > 0 {
+            var acc: Float = 0
+            for i in 0..<count { let v = Float(channel[0][i]) / 32768; acc += v * v }
+            let rms = (acc / Float(count)).squareRoot()
+            // Hystérésis : on garde le micro ouvert ~300 ms après la dernière trame au-dessus du seuil.
+            if rms >= noiseGate { gateHold = 4 } else if gateHold > 0 { gateHold -= 1 }
+            if gateHold == 0 {
+                onCapturedPCM16?(Data(count: count * MemoryLayout<Int16>.size))
+                return
+            }
+        }
+        let data = Data(bytes: channel[0], count: count * MemoryLayout<Int16>.size)
         onCapturedPCM16?(data)
     }
 

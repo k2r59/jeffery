@@ -27,6 +27,9 @@ final class CoachSession: ObservableObject {
     @Published private(set) var currentZone: HeartRateZone?
     @Published private(set) var pace: String?
     @Published private(set) var reference: ReferenceStatus?
+    @Published var endedSummary: SessionSummary?
+    private var sessionStartedAt: Date?
+    private var hrSamples: [Double] = []
     private var referenceTracker: ReferenceTracker?
     private var referenceName: String?
     private var lastClimbWarnAt: Date = .distantPast
@@ -92,8 +95,11 @@ final class CoachSession: ObservableObject {
         reconnectAttempts = 0
         phase = .connecting
         status = "Connexion au coach…"
+        sessionStartedAt = Date()
+        hrSamples.removeAll()
         UIApplication.shared.isIdleTimerDisabled = true
         audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
+        audio.noiseGate = config.micSensitivity.noiseGate
         gps.start(kind: kind)
         if let ref = ReferenceRoute.load() {
             referenceTracker = ReferenceTracker(route: ref)
@@ -174,6 +180,17 @@ final class CoachSession: ObservableObject {
         userSpeaking = false
         phase = .idle
         status = "Séance terminée"
+        if let start = sessionStartedAt {
+            let elapsed = latest?.elapsed ?? Date().timeIntervalSince(start)
+            endedSummary = SessionSummary(
+                id: ISO8601DateFormatter().string(from: start), date: start, kind: kind,
+                elapsed: max(elapsed, Date().timeIntervalSince(start) > elapsed + 120 ? elapsed : elapsed),
+                distance: displayDistance,
+                averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
+                maxHeartRate: hrSamples.max(), feeling: nil,
+                lastCoachLine: transcript.last(where: { $0.role == .coach })?.text)
+            sessionStartedAt = nil
+        }
     }
 
     // MARK: - Realtime
@@ -188,9 +205,9 @@ final class CoachSession: ObservableObject {
                     "format": ["type": "audio/pcm", "rate": 24_000],
                     "turn_detection": [
                         "type": "server_vad",
-                        "threshold": NSDecimalNumber(string: "0.6"),
+                        "threshold": NSDecimalNumber(string: config.micSensitivity.vadThreshold),
                         "prefix_padding_ms": 300,
-                        "silence_duration_ms": 700,
+                        "silence_duration_ms": config.micSensitivity.silenceMs,
                         "create_response": true,
                         "interrupt_response": true,
                     ],
@@ -272,7 +289,8 @@ final class CoachSession: ObservableObject {
             log(.info, "Coach connecté (\(config.model), voix \(config.voice)).")
             startTimers()
             realtime.injectText("La séance de \(kind.coachLabel) démarre maintenant. " + metricsLine(prefix: "[MÉTRIQUES]"))
-            realtime.requestResponse(instructions: "Salue l'utilisateur en une phrase, rappelle l'objectif s'il y en a un (sinon demande-le en une question courte), et lance la séance.")
+            let name = config.userName.isEmpty ? "" : " Appelle-le \(config.userName)."
+            realtime.requestResponse(instructions: "Présente-toi comme Jeffrey en une phrase chaleureuse.\(name) Rappelle l'objectif s'il y en a un (sinon demande-le en une question courte), et lance la séance.")
         } else if phase == .live {
             status = "Coach reconnecté"
             realtime.injectText("Reconnexion après une coupure réseau ; la séance continue. " + metricsLine(prefix: "[MÉTRIQUES]"))
@@ -335,6 +353,7 @@ final class CoachSession: ObservableObject {
             distanceHistory.removeAll { snap.timestamp.timeIntervalSince($0.0) > 45 }
         }
         pace = computePace(snap)
+        if let hr = snap.heartRate, snap.state == .running { hrSamples.append(hr) }
         if let hr = snap.heartRate {
             let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
             currentZone = zone

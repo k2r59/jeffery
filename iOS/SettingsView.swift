@@ -14,6 +14,9 @@ struct SettingsView: View {
     @AppStorage(Prefs.heightCm) private var heightCm: Double = 0
     @State private var healthNotice: String?
     @AppStorage(Prefs.duckMusic) private var duckMusic: Bool = true
+    @AppStorage(Prefs.userName) private var userName: String = ""
+    @AppStorage(Prefs.micSensitivity) private var micSensitivity: String = MicSensitivity.medium.rawValue
+    @AppStorage(Prefs.intent) private var intentRaw: String = ""
     @AppStorage(Prefs.level) private var level: String = AthleteLevel.amateur.rawValue
     @AppStorage(Prefs.athleteNotes) private var athleteNotes: String = ""
     @AppStorage(Prefs.basePrompt) private var basePrompt: String = Prefs.defaultBasePrompt
@@ -91,6 +94,12 @@ struct SettingsView: View {
                     Text("Laisse 0 pour estimer automatiquement (\(220 - age) bpm).")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Section("Toi et Jeffrey") {
+                    TextField("Ton prénom", text: $userName)
+                    Picker("Intention", selection: $intentRaw) {
+                        ForEach(Intent.allCases) { Text($0.label).tag($0.rawValue) }
+                    }
+                }
                 Section("Coach") {
                     Picker("Niveau", selection: $level) {
                         ForEach(AthleteLevel.allCases) { Text($0.label).tag($0.rawValue) }
@@ -109,6 +118,11 @@ struct SettingsView: View {
                         .lineLimit(2...4)
                     Toggle("Interventions automatiques du coach", isOn: $autoCues)
                     Toggle("Baisser la musique quand le coach parle", isOn: $duckMusic)
+                    Picker("Sensibilité du micro", selection: $micSensitivity) {
+                        ForEach(MicSensitivity.allCases) { Text($0.label).tag($0.rawValue) }
+                    }
+                    Text("Faible si Jeffrey se déclenche tout seul (vent, souffle, pas) ; haute si tu dois hausser la voix.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Stepper("Toutes les \(Int(cueInterval)) s", value: $cueInterval, in: 20...300, step: 10)
                         .disabled(!autoCues)
                     Stepper("Métriques envoyées toutes les \(Int(metricsInterval)) s", value: $metricsInterval, in: 5...60, step: 5)

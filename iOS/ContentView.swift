@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showHistory = false
     @StateObject private var history = WorkoutHistory()
     @StateObject private var music = MusicController()
+    @AppStorage(Prefs.onboarded) private var onboarded: Bool = false
 
     private var kind: WorkoutKind { WorkoutKind(rawValue: kindRaw) ?? .running }
     private var mode: CaptureMode { CaptureMode(rawValue: modeRaw) ?? .companion }
@@ -43,6 +44,8 @@ struct ContentView: View {
         .tint(Theme.lime)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showHistory) { HistoryView() }
+        .fullScreenCover(isPresented: Binding(get: { !onboarded }, set: { _ in })) { OnboardingView() }
+        .sheet(item: $coach.endedSummary) { summary in SessionEndView(summary: summary) }
         .task { await history.load() }
         .onChange(of: coach.phase) { _, phase in
             if phase == .idle { Task { await history.load() } }
@@ -77,14 +80,13 @@ struct ContentView: View {
 
     private var header: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("WATCHCOACH")
-                    .font(.display(13, weight: .black))
-                    .tracking(4)
-                    .foregroundStyle(Theme.muted)
-                Text(kind.label.uppercased())
-                    .font(.display(28, weight: .black))
-                    .foregroundStyle(.white)
+            HStack(spacing: 10) {
+                JeffreyMark(state: jeffreyState, size: 44)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("jeffrey").font(.display(22, weight: .black)).foregroundStyle(.white)
+                    Text(isLive ? kind.label.uppercased() : jeffreyStateLabel)
+                        .font(.display(11, weight: .black)).tracking(2).foregroundStyle(Theme.muted)
+                }
             }
             Spacer()
             statusPill
@@ -106,6 +108,21 @@ struct ContentView: View {
             .opacity(isLive ? 0.4 : 1)
         }
         .padding(.top, 6)
+    }
+
+    private var jeffreyState: JeffreyState {
+        if coach.coachSpeaking { return .speaking }
+        if coach.userSpeaking || coach.phase == .live { return .listening }
+        return .available
+    }
+
+    private var jeffreyStateLabel: String {
+        switch coach.phase {
+        case .idle: return "DISPONIBLE"
+        case .connecting: return "ARRIVE"
+        case .live: return coach.coachSpeaking ? "TE PARLE" : "À L'ÉCOUTE"
+        case .ending: return "DÉBRIEF"
+        }
     }
 
     private var statusPill: some View {
@@ -196,19 +213,9 @@ struct ContentView: View {
     }
 
     private var speakingIndicator: some View {
-        HStack(spacing: 8) {
-            if coach.userSpeaking {
-                Image(systemName: "mic.fill")
-                    .foregroundStyle(Theme.ice)
-                    .symbolEffect(.pulse, isActive: true)
-            }
-            if coach.coachSpeaking {
-                Image(systemName: "waveform")
-                    .foregroundStyle(Theme.lime)
-                    .symbolEffect(.variableColor.iterative, isActive: true)
-            }
-        }
-        .font(.system(size: 22, weight: .bold))
+        Text(coach.coachSpeaking ? "Jeffrey te parle" : (coach.userSpeaking ? "Jeffrey t'écoute" : ""))
+            .font(.system(size: 12, weight: .heavy)).tracking(1)
+            .foregroundStyle(coach.coachSpeaking ? Theme.lime : Theme.ice)
     }
 
     // MARK: Cœur et zones
@@ -370,14 +377,14 @@ struct ContentView: View {
     private var transcriptCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("COACH").font(.system(size: 10, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
+                Text("JEFFREY").font(.system(size: 10, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
                 Spacer()
                 if let err = coach.errorMessage {
                     Text(err).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.pulse).lineLimit(2)
                 }
             }
             if coach.transcript.isEmpty {
-                Text(isLive ? "Le coach arrive…" : "Mets tes écouteurs, lance ta séance sur la montre, et appuie sur Go.")
+                Text(isLive ? "Jeffrey arrive…" : "Mets tes écouteurs, lance ta séance sur la montre, et Jeffrey t'accompagne.")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Theme.muted)
                     .padding(.vertical, 8)
@@ -412,11 +419,7 @@ struct ContentView: View {
                 .padding(.vertical, 2)
         case .coach:
             HStack(alignment: .bottom, spacing: 8) {
-                Image(systemName: "figure.run")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.background)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(Theme.lime))
+                JeffreyMark(size: 24)
                 Text(line.text)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white)
@@ -446,7 +449,7 @@ struct ContentView: View {
                 Button { coach.start(kind: kind, mode: mode) } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "mic.fill")
-                        Text("GO, COACH")
+                        Text("GO, JEFFREY")
                             .tracking(2)
                     }
                     .font(.display(20, weight: .black))

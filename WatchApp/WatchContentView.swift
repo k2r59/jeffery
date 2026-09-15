@@ -16,7 +16,7 @@ struct WatchContentView: View {
         } else {
             NavigationStack {
                 ScrollView { startView }
-                    .navigationTitle("WatchCoach")
+                    .navigationTitle("Jeffrey")
             }
         }
     }
@@ -80,6 +80,7 @@ struct WatchContentView: View {
             }
             .pickerStyle(.navigationLink)
 
+            JeffreyWordmark(size: 16)
             Button {
                 workout.startCompanion(kind: workout.selectedKind)
             } label: {
@@ -109,6 +110,11 @@ struct WatchContentView: View {
     private var liveView: some View {
         let s = workout.snapshot
         return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                JeffreyMark(size: 22)
+                Spacer()
+                Text(s.kind.label.uppercased()).font(.system(size: 10, weight: .heavy)).foregroundStyle(.secondary)
+            }
             Text(Formatters.elapsed(s.elapsed))
                 .font(.system(.title2, design: .rounded).monospacedDigit())
                 .foregroundStyle(.yellow)

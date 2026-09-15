@@ -15,12 +15,17 @@ enum Prefs {
     static let weightKg = "pref.weightKg"
     static let heightCm = "pref.heightCm"
     static let duckMusic = "pref.duckMusic"
+    static let userName = "pref.userName"
+    static let intent = "pref.intent"
+    static let onboarded = "pref.onboarded"
+    static let micSensitivity = "pref.micSensitivity"
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
 
     static let defaultBasePrompt = """
-    Tu es un coach sportif vocal, présent en direct pendant la séance, en français, et tu tutoies.
+    Tu es Jeffrey, coach sportif vocal, présent en direct pendant la séance, en français, et tu tutoies. \
+    Tu te présentes par ton prénom la première fois, puis tu restes simple et proche, jamais lourd.
     Tu t'adaptes au sportif : son niveau (débutant, amateur ou confirmé), son état de forme du jour, \
     ses contraintes éventuelles. Un débutant a besoin de repères simples, de pauses et de réassurance ; \
     un confirmé attend des consignes précises sur l'allure, les zones et la gestion de l'effort.
@@ -47,6 +52,10 @@ enum Prefs {
             weightKg: 0.0,
             heightCm: 0.0,
             duckMusic: true,
+            userName: "",
+            intent: "",
+            onboarded: false,
+            micSensitivity: MicSensitivity.medium.rawValue,
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,
@@ -73,8 +82,47 @@ enum AthleteLevel: String, CaseIterable, Identifiable {
     }
 }
 
+enum MicSensitivity: String, CaseIterable, Identifiable {
+    case low, medium, high
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .low: return "Faible"
+        case .medium: return "Moyenne"
+        case .high: return "Haute"
+        }
+    }
+    /// Seuil de détection de voix côté serveur (0-1) : plus haut = il faut parler plus franchement.
+    var vadThreshold: String {
+        switch self {
+        case .low: return "0.9"
+        case .medium: return "0.75"
+        case .high: return "0.55"
+        }
+    }
+    /// Silence requis pour considérer que la phrase est finie (ms).
+    var silenceMs: Int {
+        switch self {
+        case .low: return 1200
+        case .medium: return 900
+        case .high: return 600
+        }
+    }
+    /// Niveau RMS (0-1) en dessous duquel l'iPhone envoie du silence au lieu du bruit ambiant.
+    var noiseGate: Float {
+        switch self {
+        case .low: return 0.03
+        case .medium: return 0.015
+        case .high: return 0.0
+        }
+    }
+}
+
 struct CoachConfig {
     var apiKey: String
+    var micSensitivity: MicSensitivity
+    var userName: String
+    var intent: String
     var age: Int
     var weightKg: Double
     var heightCm: Double
@@ -112,6 +160,9 @@ struct CoachConfig {
         let base = d.string(forKey: Prefs.basePrompt)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return CoachConfig(
             apiKey: KeychainStore.read(KeychainStore.apiKeyAccount) ?? "",
+            micSensitivity: MicSensitivity(rawValue: d.string(forKey: Prefs.micSensitivity) ?? "") ?? .medium,
+            userName: d.string(forKey: Prefs.userName) ?? "",
+            intent: d.string(forKey: Prefs.intent) ?? "",
             age: d.integer(forKey: Prefs.age),
             weightKg: d.double(forKey: Prefs.weightKg),
             heightCm: d.double(forKey: Prefs.heightCm),
@@ -137,12 +188,14 @@ struct CoachConfig {
         if weightKg > 0 { profile.append("\(Int(weightKg.rounded())) kg") }
         if heightCm > 0 { profile.append("\(Int(heightCm.rounded())) cm") }
         let profileLine = profile.isEmpty ? "" : ", " + profile.joined(separator: ", ")
+        let intentLine = Intent(rawValue: intent).map { "\nSon intention : \($0.coachLabel)." } ?? ""
+        let recapLine = SessionSummary.recapForCoach().map { "\nDernière séance coachée : \($0). Tiens-en compte pour doser aujourd'hui." } ?? ""
         let notes = athleteNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let notesLine = notes.isEmpty ? "" : "\nCe que le sportif dit de lui : \(notes)"
         return """
         \(basePrompt)
 
-        Sportif : niveau \(level.coachLabel)\(profileLine).\(notesLine)
+        Sportif : \(userName.isEmpty ? "prénom inconnu" : userName), niveau \(level.coachLabel)\(profileLine).\(intentLine)\(notesLine)\(recapLine)
         Séance en cours : \(kind.coachLabel). Il porte une Apple Watch ; les données arrivent en \(mode.label). \(goalLine)
 
         Tu reçois régulièrement des messages système commençant par [MÉTRIQUES] : fréquence cardiaque, zone cardiaque, \

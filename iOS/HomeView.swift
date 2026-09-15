@@ -10,6 +10,8 @@ struct HomeView: View {
 
     @AppStorage(Prefs.level) private var level: String = AthleteLevel.amateur.rawValue
     @AppStorage(Prefs.goal) private var goal: String = ""
+    @AppStorage(Prefs.userName) private var userName: String = ""
+    @AppStorage(Prefs.intent) private var intentRaw: String = ""
 
     private var weekWorkouts: [HKWorkout] {
         let cal = Calendar.current
@@ -33,7 +35,7 @@ struct HomeView: View {
         let hour = Calendar.current.component(.hour, from: Date())
         let word = hour < 5 ? "Bonne nuit" : (hour < 12 ? "Bonjour" : (hour < 18 ? "Bon après-midi" : "Bonsoir"))
         return VStack(alignment: .leading, spacing: 4) {
-            Text(word.uppercased()).font(.display(12, weight: .black)).tracking(3).foregroundStyle(Theme.muted)
+            Text((word + (userName.isEmpty ? "" : ", \(userName)")).uppercased()).font(.display(12, weight: .black)).tracking(3).foregroundStyle(Theme.muted)
             Text(headline).font(.display(24, weight: .black)).foregroundStyle(.white)
             Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)).capitalized)
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
@@ -45,7 +47,7 @@ struct HomeView: View {
     private var headline: String {
         let n = weekWorkouts.count
         switch n {
-        case 0: return "On lance la semaine ?"
+        case 0: return "On reprend ? Jeffrey est là."
         case 1: return "Une séance faite, on enchaîne."
         case 2...3: return "Belle régularité cette semaine."
         default: return "Grosse semaine, bravo."
@@ -162,12 +164,11 @@ struct HomeView: View {
     private var coachCard: some View {
         Button(action: onOpenSettings) {
             HStack(spacing: 12) {
-                Image(systemName: "waveform.and.mic")
-                    .font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.lime)
+                JeffreyMark(size: 34)
                     .frame(width: 42, height: 42).background(Circle().fill(Theme.surfaceRaised))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("TON COACH").font(.system(size: 10, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
-                    Text("Profil \((AthleteLevel(rawValue: level) ?? .amateur).label.lowercased())")
+                    Text("JEFFREY").font(.system(size: 10, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
+                    Text(Intent(rawValue: intentRaw)?.label ?? "Profil \((AthleteLevel(rawValue: level) ?? .amateur).label.lowercased())")
                         .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                     Text(goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Aucun objectif défini, il te le demandera." : "Objectif : \(goal)")
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted).lineLimit(2)

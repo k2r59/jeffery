@@ -28,7 +28,7 @@ targets:
     info:
       path: iOS/Info.plist
       properties:
-        CFBundleDisplayName: WatchCoach
+        CFBundleDisplayName: Jeffrey
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [audio, location]
@@ -58,7 +58,7 @@ targets:
     info:
       path: WatchApp/Info.plist
       properties:
-        CFBundleDisplayName: WatchCoach
+        CFBundleDisplayName: Jeffrey
         WKApplication: true
         WKCompanionAppBundleIdentifier: dev.promo.watchcoach
         WKRunsIndependentlyOfCompanionApp: false
