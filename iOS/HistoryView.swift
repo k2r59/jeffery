@@ -84,6 +84,7 @@ struct WorkoutDetailView: View {
     @State private var locations: [CLLocation] = []
     @State private var averageHR: Double?
     @State private var loaded = false
+    @State private var routeSource: String?
 
     private var coordinates: [CLLocationCoordinate2D] {
         locations.filter { $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy < 60 }.map(\.coordinate)
@@ -107,7 +108,13 @@ struct WorkoutDetailView: View {
             loaded = true
             async let r = history.route(for: workout)
             async let hr = history.averageHeartRate(for: workout)
-            locations = await r
+            var locs = await r
+            routeSource = locs.isEmpty ? nil : "Santé"
+            if locs.count < 2, let local = LocalRoute.matching(start: workout.startDate, end: workout.endDate) {
+                locs = local.locations
+                routeSource = "GPS iPhone (WatchCoach)"
+            }
+            locations = locs
             averageHR = await hr
         }
     }
@@ -156,6 +163,7 @@ struct WorkoutDetailView: View {
             stat("DÉNIVELÉ +", locations.isEmpty ? "--" : "\(Int(WorkoutHistory.elevationGain(locations))) m", Theme.ice)
             stat("DÉBUT", workout.startDate.formatted(date: .omitted, time: .shortened), Theme.muted)
             stat("SOURCE", WorkoutHistory.sourceLabel(workout), Theme.muted)
+            if let routeSource { stat("TRACÉ", routeSource, Theme.muted) }
         }
     }
 

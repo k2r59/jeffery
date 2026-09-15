@@ -18,6 +18,7 @@
 		621D15B63E630840EF4F1E1B /* HealthProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B72EA6338816D49A380C3D1 /* HealthProfile.swift */; };
 		68EC907D8F7131B3708D2656 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D002EFFA958D8FD19FC15B0A /* ContentView.swift */; };
 		75A0EB54E5503D86B74B134C /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B771AF7CF4644315101BFB4F /* HistoryView.swift */; };
+		827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */; };
 		82C1230E51C0C277FC02F078 /* CoachSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB112F058BBADDA9A8B2F7C /* CoachSession.swift */; };
 		866DA61EF35ADFC8E9C783B8 /* WatchCoachApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */; };
 		88F89F6CD6F490B56D7F51C4 /* WatchCoachWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E609600A71477DB5A710B8DD /* WatchCoachWatchApp.swift */; };
@@ -74,6 +75,7 @@
 		B771AF7CF4644315101BFB4F /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneConnectivity.swift; sourceTree = "<group>"; };
 		BF832909FB51387ABE5722ED /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecorder.swift; sourceTree = "<group>"; };
 		D002EFFA958D8FD19FC15B0A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPipeline.swift; sourceTree = "<group>"; };
 		DC42CFE418F8BE04A8F90575 /* WatchCoach.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WatchCoach.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -113,6 +115,7 @@
 				349670EE16768E2C8346D827 /* KeychainStore.swift */,
 				BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */,
 				FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */,
+				C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */,
 				BF832909FB51387ABE5722ED /* SettingsView.swift */,
 				50D4AA1667A3275F3D77C3C7 /* Theme.swift */,
 				F16EC8AB3E3AFC4B4D7E2C88 /* WatchCoach.entitlements */,
@@ -257,6 +260,7 @@
 				BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */,
 				0FCF8FACF728ECDBF3B0ADC3 /* PhoneConnectivity.swift in Sources */,
 				EDCF91F2A7B9462E66319FA6 /* RealtimeClient.swift in Sources */,
+				827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */,
 				94537B092149D76C4523AC7E /* SettingsView.swift in Sources */,
 				10B71EEE9658C3AD09BBBBE1 /* Theme.swift in Sources */,
 				866DA61EF35ADFC8E9C783B8 /* WatchCoachApp.swift in Sources */,

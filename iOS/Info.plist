@@ -26,11 +26,14 @@
 	<string>WatchCoach lit tes données d'entraînement pour le coaching en direct.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>WatchCoach peut lancer une séance sur ta montre.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>WatchCoach enregistre le tracé GPS de ta séance et calcule distance et allure si la montre ne les fournit pas.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>WatchCoach écoute ta voix pour dialoguer avec le coach pendant la séance.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>location</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

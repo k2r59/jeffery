@@ -259,7 +259,7 @@ struct ContentView: View {
     private var statsRow: some View {
         let s = coach.latest
         return HStack(spacing: 10) {
-            statTile("DISTANCE", s?.distance.map(Formatters.distance) ?? "--", icon: "point.topleft.down.to.point.bottomright.curvepath.fill", color: Theme.ice)
+            statTile("DISTANCE", coach.displayDistance.map(Formatters.distance) ?? "--", icon: "point.topleft.down.to.point.bottomright.curvepath.fill", color: Theme.ice)
             statTile("ALLURE", coach.pace?.replacingOccurrences(of: " /km", with: "") ?? "--", unit: "/km", icon: "speedometer", color: Theme.lime)
             statTile("ÉNERGIE", s?.activeEnergy.map { "\(Int($0))" } ?? "--", unit: "kcal", icon: "flame.fill", color: Theme.ember)
         }

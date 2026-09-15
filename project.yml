@@ -31,7 +31,8 @@ targets:
         CFBundleDisplayName: WatchCoach
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIBackgroundModes: [audio]
+        UIBackgroundModes: [audio, location]
+        NSLocationWhenInUseUsageDescription: "WatchCoach enregistre le tracé GPS de ta séance et calcule distance et allure si la montre ne les fournit pas."
         NSMicrophoneUsageDescription: "WatchCoach écoute ta voix pour dialoguer avec le coach pendant la séance."
         NSHealthShareUsageDescription: "WatchCoach lit tes données d'entraînement pour le coaching en direct."
         NSHealthUpdateUsageDescription: "WatchCoach peut lancer une séance sur ta montre."

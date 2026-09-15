@@ -25,6 +25,7 @@ final class CoachSession: ObservableObject {
     @Published private(set) var pace: String?
 
     let connectivity = PhoneConnectivity()
+    let gps = RouteRecorder()
     private let audio = AudioPipeline()
     private let realtime = RealtimeClient()
 
@@ -48,6 +49,7 @@ final class CoachSession: ObservableObject {
         Prefs.registerDefaults()
         connectivity.activate()
         connectivity.requestHealthAuthorization()
+        gps.requestAuthorization()
         connectivity.onSnapshot = { [weak self] snap in self?.handle(snapshot: snap) }
         wireRealtime()
         audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
@@ -78,6 +80,7 @@ final class CoachSession: ObservableObject {
         phase = .connecting
         status = "Connexion au coach…"
         UIApplication.shared.isIdleTimerDisabled = true
+        gps.start(kind: kind)
 
         realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
         Task { [weak self] in
@@ -115,6 +118,8 @@ final class CoachSession: ObservableObject {
         phase = .ending
         status = "Fin de séance…"
         stopTimers()
+        gps.stop()
+        if !gps.status.isEmpty { log(.info, gps.status) }
         if mode == .owned {
             connectivity.send(command: .end, kind: kind, mode: mode)
         } else {
@@ -321,8 +326,15 @@ final class CoachSession: ObservableObject {
         }
     }
 
+    /// Distance affichée : montre en priorité, sinon GPS de l'iPhone.
+    var displayDistance: Double? {
+        if let d = latest?.distance, d > 0 { return d }
+        return gps.distance > 20 ? gps.distance : nil
+    }
+
     private func computePace(_ snap: MetricsSnapshot) -> String? {
         if let v = snap.speed, let p = Formatters.pace(speedMetersPerSecond: v) { return p }
+        if snap.distance == nil, let v = gps.speed, let p = Formatters.pace(speedMetersPerSecond: v) { return p }
         guard let first = distanceHistory.first, let last = distanceHistory.last, last.0 > first.0 else { return nil }
         let dt = last.0.timeIntervalSince(first.0)
         let dd = last.1 - first.1
@@ -342,6 +354,7 @@ final class CoachSession: ObservableObject {
         }
         if s.kind.usesDistance {
             if let d = s.distance { parts.append("distance \(Formatters.distance(d))") }
+            else if let d = displayDistance { parts.append("distance \(Formatters.distance(d)) (GPS iPhone)") }
             if let p = pace { parts.append("allure \(p)") }
         }
         if let e = s.activeEnergy { parts.append("\(Int(e)) kcal") }
