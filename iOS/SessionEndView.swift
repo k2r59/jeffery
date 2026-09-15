@@ -21,6 +21,7 @@ struct SessionEndView: View {
                     VStack(spacing: 6) {
                         (Text("Bien joué, ") + Text(userName.isEmpty ? "champion" : userName).foregroundStyle(Theme.lime) + Text("."))
                             .font(.display(30, weight: .black)).foregroundStyle(.white)
+                        Text("Chaque sortie compte.").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.muted)
                         Text(Formatters.elapsed(summary.elapsed))
                             .font(.display(64, weight: .black).monospacedDigit()).foregroundStyle(.white)
                         HStack(spacing: 14) {
@@ -38,6 +39,16 @@ struct SessionEndView: View {
                         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
                         .frame(height: 200)
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    }
+                    if let g = summary.goalLabel {
+                        HStack(spacing: 8) {
+                            Image(systemName: summary.goalReached == true ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(summary.goalReached == true ? Theme.lime : Theme.muted)
+                            Text("Ton objectif · \(g) · \(summary.goalReached == true ? "Atteint" : "Pas cette fois, et c'est très bien")")
+                                .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                            Spacer()
+                        }
+                        .card()
                     }
                     VStack(spacing: 14) {
                         Text("Comment tu te sens ?").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
@@ -72,7 +83,7 @@ struct SessionEndView: View {
                         SessionSummary.upsert(summary)
                         dismiss()
                     } label: {
-                        Text("Chaque sortie compte.")
+                        Text("Terminer le bilan")
                             .font(.display(16, weight: .black)).foregroundStyle(Theme.background)
                             .frame(maxWidth: .infinity).frame(height: 56)
                             .background(Capsule().fill(Theme.startGradient))

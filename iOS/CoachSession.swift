@@ -28,6 +28,11 @@ final class CoachSession: ObservableObject {
     @Published private(set) var pace: String?
     @Published private(set) var reference: ReferenceStatus?
     @Published var endedSummary: SessionSummary?
+    @Published private(set) var goal: SessionGoal = .free
+    @Published var proposal: GoalProposal?
+    @Published private(set) var goalReached = false
+    @Published private(set) var lastCoachLine: String?
+    private var halfwayAnnounced = false
     private var sessionStartedAt: Date?
     private var hrSamples: [Double] = []
     private var referenceTracker: ReferenceTracker?
@@ -76,9 +81,14 @@ final class CoachSession: ObservableObject {
 
     // MARK: - Démarrage / arrêt
 
-    func start(kind: WorkoutKind, mode: CaptureMode) {
+    func start(kind: WorkoutKind, mode: CaptureMode, goal: SessionGoal = .free) {
         guard phase == .idle else { return }
         config = CoachConfig.load()
+        self.goal = goal
+        goalReached = false
+        halfwayAnnounced = false
+        proposal = nil
+        lastCoachLine = nil
         guard !config.apiKey.isEmpty else {
             errorMessage = "Renseigne ta clé API OpenAI dans les réglages."
             return
@@ -168,6 +178,28 @@ final class CoachSession: ObservableObject {
         }
     }
 
+    var isPaused: Bool { latest?.state == .paused }
+
+    func togglePause() {
+        guard phase == .live else { return }
+        let command: WatchCommand = isPaused ? .resume : .pause
+        connectivity.send(command: command, kind: kind, mode: mode)
+        realtime.injectText(command == .pause ? "L'utilisateur met la séance en pause." : "L'utilisateur reprend la séance.")
+    }
+
+    /// Applique ou refuse la proposition d'objectif de Jeffrey.
+    func resolveProposal(accept: Bool) {
+        guard let p = proposal else { return }
+        proposal = nil
+        if accept {
+            goal = p.goal
+            goalReached = false
+            halfwayAnnounced = false
+            log(.info, "Nouvel objectif : \(p.goal.label)")
+        }
+        realtime.sendFunctionOutput(callId: p.callId, output: ["accepted": accept, "current_goal": goal.coachLabel()])
+    }
+
     private func finishTeardown() {
         endTimeoutTask?.cancel()
         endTimeoutTask = nil
@@ -188,6 +220,7 @@ final class CoachSession: ObservableObject {
                 distance: displayDistance,
                 averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
                 maxHeartRate: hrSamples.max(), feeling: nil,
+                goalLabel: goal.kind == .free ? nil : goal.label, goalReached: goal.kind == .free ? nil : goalReached,
                 lastCoachLine: transcript.last(where: { $0.role == .coach })?.text)
             sessionStartedAt = nil
         }
@@ -200,6 +233,21 @@ final class CoachSession: ObservableObject {
             "type": "realtime",
             "instructions": config.instructions(kind: kind, mode: mode),
             "output_modalities": ["audio"],
+            "tools": [[
+                "type": "function",
+                "name": "propose_goal",
+                "description": "Proposer à l'utilisateur de modifier l'objectif de la séance en cours (raccourcir, allonger, changer de type). L'utilisateur devra confirmer sur son téléphone : ne considère pas le changement acquis avant la réponse.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "kind": ["type": "string", "enum": ["duration", "distance", "free"]],
+                        "target": ["type": "number", "description": "Minutes si kind=duration, kilomètres si kind=distance, 0 si free"],
+                        "reason": ["type": "string", "description": "Pourquoi, en une phrase courte"],
+                    ],
+                    "required": ["kind", "target", "reason"],
+                ],
+            ]],
+            "tool_choice": "auto",
             "audio": [
                 "input": [
                     "format": ["type": "audio/pcm", "rate": 24_000],
@@ -262,6 +310,9 @@ final class CoachSession: ObservableObject {
                 if self.phase == .ending { self.scheduleTeardownAfterPlayback() }
             }
         }
+        realtime.callbacks.onFunctionCall = { [weak self] name, callId, arguments in
+            Task { @MainActor in self?.handleFunctionCall(name: name, callId: callId, arguments: arguments) }
+        }
         realtime.callbacks.onError = { [weak self] message in
             Task { @MainActor in
                 self?.errorMessage = message
@@ -271,6 +322,21 @@ final class CoachSession: ObservableObject {
         realtime.callbacks.onDisconnected = { [weak self] reason in
             Task { @MainActor in self?.handleDisconnect(reason) }
         }
+    }
+
+    private func handleFunctionCall(name: String, callId: String, arguments: String) {
+        guard name == "propose_goal",
+              let data = arguments.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let kindRaw = json["kind"] as? String, let kind = SessionGoal.Kind(rawValue: kindRaw) else {
+            realtime.sendFunctionOutput(callId: callId, output: ["error": "arguments invalides"])
+            return
+        }
+        let value = (json["target"] as? Double) ?? 0
+        let target: Double = kind == .duration ? value * 60 : (kind == .distance ? value * 1000 : 0)
+        let reason = json["reason"] as? String ?? ""
+        proposal = GoalProposal(callId: callId, goal: SessionGoal(kind: kind, target: target), reason: reason)
+        log(.info, "Jeffrey propose : \(proposal!.goal.label)\(reason.isEmpty ? "" : " · \(reason)")")
     }
 
     private func onRealtimeReady() {
@@ -288,7 +354,7 @@ final class CoachSession: ObservableObject {
             status = "Coach en ligne"
             log(.info, "Coach connecté (\(config.model), voix \(config.voice)).")
             startTimers()
-            realtime.injectText("La séance de \(kind.coachLabel) démarre maintenant. " + metricsLine(prefix: "[MÉTRIQUES]"))
+            realtime.injectText("La séance de \(kind.coachLabel) démarre maintenant. Objectif du jour : \(goal.coachLabel()). " + metricsLine(prefix: "[MÉTRIQUES]"))
             let name = config.userName.isEmpty ? "" : " Appelle-le \(config.userName)."
             realtime.requestResponse(instructions: "Présente-toi comme Jeffrey en une phrase chaleureuse.\(name) Rappelle l'objectif s'il y en a un (sinon demande-le en une question courte), et lance la séance.")
         } else if phase == .live {
@@ -363,6 +429,17 @@ final class CoachSession: ObservableObject {
             }
             if lastAnnouncedZone == nil { lastAnnouncedZone = zone }
         }
+        if phase == .live, goal.kind != .free {
+            let p = goal.progress(elapsed: snap.elapsed, distance: displayDistance)
+            if !goalReached, goal.isReached(elapsed: snap.elapsed, distance: displayDistance) {
+                goalReached = true
+                lastCueAt = .distantPast
+                cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
+            } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues {
+                halfwayAnnounced = true
+                cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))")
+            }
+        }
         if phase == .live, snap.state == .ended, mode == .owned {
             log(.info, "La montre a terminé la séance.")
         }
@@ -420,6 +497,10 @@ final class CoachSession: ObservableObject {
             if let p = pace { parts.append("allure \(p)") }
         }
         if let e = s.activeEnergy { parts.append("\(Int(e)) kcal") }
+        if goal.kind != .free {
+            let p = goal.progress(elapsed: s.elapsed, distance: displayDistance)
+            parts.append("objectif \(goal.coachLabel()) : \(Int(p.fraction * 100)) %\(p.remaining.map { ", \($0)" } ?? "")\(goalReached ? " · ATTEINT" : "")")
+        }
         if let r = reference, let name = referenceName {
             if r.offRoute {
                 parts.append("parcours de référence « \(name) » : hors tracé pour l'instant")
@@ -490,6 +571,7 @@ final class CoachSession: ObservableObject {
         if let line = partialCoachLine, let idx = transcript.firstIndex(where: { $0.id == line.id }), !full.isEmpty {
             transcript[idx].text = full
         }
+        if let line = partialCoachLine { lastCoachLine = full.isEmpty ? line.text : full }
         partialCoachLine = nil
     }
 

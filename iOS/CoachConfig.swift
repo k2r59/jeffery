@@ -19,6 +19,8 @@ enum Prefs {
     static let intent = "pref.intent"
     static let onboarded = "pref.onboarded"
     static let micSensitivity = "pref.micSensitivity"
+    static let presence = "pref.presence"        // discreet | present
+    static let goalCues = "pref.goalCues"
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
@@ -56,6 +58,8 @@ enum Prefs {
             intent: "",
             onboarded: false,
             micSensitivity: MicSensitivity.medium.rawValue,
+            presence: "present",
+            goalCues: true,
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,
@@ -121,6 +125,8 @@ enum MicSensitivity: String, CaseIterable, Identifiable {
 struct CoachConfig {
     var apiKey: String
     var micSensitivity: MicSensitivity
+    var presence: String
+    var goalCues: Bool
     var userName: String
     var intent: String
     var age: Int
@@ -161,6 +167,8 @@ struct CoachConfig {
         return CoachConfig(
             apiKey: KeychainStore.read(KeychainStore.apiKeyAccount) ?? "",
             micSensitivity: MicSensitivity(rawValue: d.string(forKey: Prefs.micSensitivity) ?? "") ?? .medium,
+            presence: d.string(forKey: Prefs.presence) ?? "present",
+            goalCues: d.object(forKey: Prefs.goalCues) as? Bool ?? true,
             userName: d.string(forKey: Prefs.userName) ?? "",
             intent: d.string(forKey: Prefs.intent) ?? "",
             age: d.integer(forKey: Prefs.age),
@@ -173,7 +181,7 @@ struct CoachConfig {
             voice: d.string(forKey: Prefs.voice) ?? "marin",
             maxHR: maxHR,
             goal: d.string(forKey: Prefs.goal) ?? "",
-            cueInterval: max(20, d.double(forKey: Prefs.cueInterval)),
+            cueInterval: (d.string(forKey: Prefs.presence) ?? "present") == "discreet" ? max(150, d.double(forKey: Prefs.cueInterval) * 3) : max(20, d.double(forKey: Prefs.cueInterval)),
             metricsInterval: max(5, d.double(forKey: Prefs.metricsInterval)),
             autoCues: d.bool(forKey: Prefs.autoCues)
         )
@@ -203,7 +211,9 @@ struct CoachConfig {
         rappels d'objectif, alerte si la fréquence cardiaque monte trop (zone 5 prolongée) ou si l'allure décroche.
 
         Règles :
-        - Réponses très courtes : 1 à 3 phrases, orales, naturelles, sans liste ni formatage.
+        - Réponses très courtes : 1 à 3 phrases, orales, naturelles, sans liste ni formatage.\(presence == "discreet" ? " Mode discret : interviens rarement et brièvement, sauf si on te parle." : "")
+        - Si l'utilisateur veut changer l'objectif (raccourcir, allonger, passer en libre), appelle la fonction propose_goal \
+          plutôt que d'annoncer le changement toi-même ; il confirmera sur son téléphone.
         - N'énumère pas les chiffres bêtement : interprète-les (« tu es en zone 4, c'est bien pour ce bloc, tiens 2 minutes »).
         - Ne répète pas la même consigne à chaque intervention ; varie et sois concret.
         - Si l'utilisateur pose une question, réponds directement.

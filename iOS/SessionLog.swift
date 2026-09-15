@@ -36,6 +36,8 @@ struct SessionSummary: Codable, Identifiable {
     var averageHeartRate: Double?
     var maxHeartRate: Double?
     var feeling: Feeling?
+    var goalLabel: String?
+    var goalReached: Bool?
     var lastCoachLine: String?
 
     static var fileURL: URL {
@@ -46,6 +48,11 @@ struct SessionSummary: Codable, Identifiable {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
         return (try? d.decode([SessionSummary].self, from: data)) ?? []
+    }
+
+    /// Séance coachée correspondant à une séance Santé (même début, à 10 min près).
+    static func matching(start: Date) -> SessionSummary? {
+        loadAll().first { abs($0.date.timeIntervalSince(start)) < 600 }
     }
 
     static func upsert(_ s: SessionSummary) {
@@ -63,6 +70,7 @@ struct SessionSummary: Codable, Identifiable {
         var parts = ["\(last.kind.coachLabel) il y a \(days) jour\(days > 1 ? "s" : "")", Formatters.elapsed(last.elapsed)]
         if let d = last.distance { parts.append(Formatters.distance(d)) }
         if let hr = last.averageHeartRate { parts.append("FC moyenne \(Int(hr))") }
+        if let g = last.goalLabel { parts.append("objectif \(g) \(last.goalReached == true ? "atteint" : "non atteint")") }
         if let f = last.feeling { parts.append("ressenti : \(f.coachLabel)") }
         return parts.joined(separator: ", ")
     }

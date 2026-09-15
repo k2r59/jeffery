@@ -13,6 +13,7 @@ final class RealtimeClient: NSObject {
         var onResponseStarted: () -> Void = {}
         var onResponseDone: () -> Void = {}
         var onError: (String) -> Void = { _ in }
+        var onFunctionCall: (_ name: String, _ callId: String, _ arguments: String) -> Void = { _, _, _ in }
         var onDisconnected: (String) -> Void = { _ in }
     }
 
@@ -99,6 +100,14 @@ final class RealtimeClient: NSObject {
         send(["type": "response.create", "response": response])
     }
 
+    /// Renvoie le résultat d'un appel de fonction, puis laisse le modèle réagir.
+    func sendFunctionOutput(callId: String, output: [String: Any], thenRespond: Bool = true) {
+        let text = (try? JSONSerialization.data(withJSONObject: output)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        send(["type": "conversation.item.create",
+              "item": ["type": "function_call_output", "call_id": callId, "output": text]])
+        if thenRespond { requestResponse() }
+    }
+
     func cancelResponse() {
         send(["type": "response.cancel"])
     }
@@ -147,6 +156,10 @@ final class RealtimeClient: NSObject {
         case "conversation.item.input_audio_transcription.completed":
             if let t = json["transcript"] as? String, !t.trimmingCharacters(in: .whitespaces).isEmpty {
                 callbacks.onUserTranscript(t)
+            }
+        case "response.function_call_arguments.done":
+            if let name = json["name"] as? String, let callId = json["call_id"] as? String {
+                callbacks.onFunctionCall(name, callId, json["arguments"] as? String ?? "{}")
             }
         case "input_audio_buffer.speech_started":
             callbacks.onSpeechStarted()
