@@ -31,9 +31,9 @@ struct YouView: View {
                 ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
-                        JeffreyWordmark(size: 22).padding(.top, 4)
+                        JeffreyWordmark(size: 32).padding(.top, 4)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Toi").font(.display(40, weight: .black)).foregroundStyle(Theme.creme)
+                            Text("Toi").font(.display(30, weight: .black)).foregroundStyle(Theme.creme)
                             Text("Pour un coaching qui te ressemble.").font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.muted)
                         }
 
@@ -48,10 +48,12 @@ struct YouView: View {
                         memoryCard
                         if !summaries.isEmpty { feelingsCard }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(18)
                     .padding(.bottom, 70)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .clipped()
                 .onAppear {
                     #if DEBUG
                     if ProcessInfo.processInfo.environment["WATCHCOACH_SCROLL"] == "sante" {
@@ -170,7 +172,12 @@ struct YouView: View {
         let cols = [GridItem(.flexible()), GridItem(.flexible())]
         return LazyVGrid(columns: cols, spacing: 10) {
             measureTile("person", "Âge", value: age > 0 ? "\(age)" : nil, unit: "ans") {
-                Stepper("\(age) ans", value: $age, in: 10...100).font(.system(size: 13, weight: .semibold))
+                HStack(spacing: 8) {
+                    Button { age = max(10, age - 1) } label: { Image(systemName: "minus").font(.system(size: 12, weight: .black)).frame(width: 26, height: 26).background(Circle().fill(Theme.surfaceRaised)) }
+                    Text("\(age)").font(.system(size: 18, weight: .bold).monospacedDigit())
+                    Button { age = min(100, age + 1) } label: { Image(systemName: "plus").font(.system(size: 12, weight: .black)).frame(width: 26, height: 26).background(Circle().fill(Theme.surfaceRaised)) }
+                }
+                .foregroundStyle(Theme.creme)
             }
             measureTile("bag", "Poids", value: weightKg > 0 ? String(format: "%.0f", weightKg) : nil, unit: "kg") {
                 numberField(value: $weightKg, unit: "kg")
@@ -210,8 +217,8 @@ struct YouView: View {
         HStack(spacing: 4) {
             TextField("0", value: value, format: .number.precision(.fractionLength(0)))
                 .keyboardType(.decimalPad)
-                .font(.display(18, weight: .black).monospacedDigit()).foregroundStyle(Theme.creme)
-                .frame(width: 56)
+                .font(.system(size: 18, weight: .bold).monospacedDigit()).foregroundStyle(Theme.creme)
+                .frame(width: 48)
             Text(unit).font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
         }
     }
