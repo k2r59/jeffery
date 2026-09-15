@@ -31,6 +31,15 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .tint(Theme.lime)
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .task {
+            #if DEBUG
+            // Test sans interaction (simulateur) : WATCHCOACH_AUTOSTART=1 lance le coach au démarrage.
+            if ProcessInfo.processInfo.environment["WATCHCOACH_AUTOSTART"] == "1", coach.phase == .idle {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                coach.start(kind: kind, mode: mode)
+            }
+            #endif
+        }
     }
 
     // MARK: Fond

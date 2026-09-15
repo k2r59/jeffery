@@ -11,7 +11,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.metricsInterval) private var metricsInterval: Double = 15
     @AppStorage(Prefs.autoCues) private var autoCues: Bool = true
     @State private var apiKey: String = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
-    @State private var saved = false
+    @State private var saveNotice: String?
 
     var body: some View {
         NavigationStack {
@@ -50,6 +50,11 @@ struct SettingsView: View {
                     Stepper("Métriques envoyées toutes les \(Int(metricsInterval)) s", value: $metricsInterval, in: 5...60, step: 5)
                 }
                 Section {
+                    Text(apiKey.isEmpty ? "Aucune clé enregistrée." : "Clé enregistrée (\(apiKey.prefix(7))…\(apiKey.suffix(4))).")
+                        .font(.caption).foregroundStyle(apiKey.isEmpty ? .red : .green)
+                    if let saveNotice {
+                        Text(saveNotice).font(.caption).foregroundStyle(.orange)
+                    }
                     Text("La clé est stockée dans le trousseau de l'iPhone. L'audio et les métriques transitent uniquement vers l'API OpenAI.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -59,7 +64,11 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Enregistrer") {
                         KeychainStore.write(apiKey, account: KeychainStore.apiKeyAccount)
-                        dismiss()
+                        if KeychainStore.lastError != errSecSuccess {
+                            saveNotice = "Trousseau indisponible (\(KeychainStore.describe(KeychainStore.lastError))) : clé gardée en repli local."
+                        }
+                        apiKey = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
+                        if saveNotice == nil { dismiss() }
                     }
                 }
                 ToolbarItem(placement: .cancellationAction) {
