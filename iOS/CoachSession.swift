@@ -33,6 +33,17 @@ final class CoachSession: ObservableObject {
     @Published private(set) var goalReached = false
     @Published private(set) var lastCoachLine: String?
     private var halfwayAnnounced = false
+    // Accusé de réception « Je regarde. » : enregistré une fois par voix, joué localement si la réponse tarde.
+    private var ackAudio: Data?
+    private var capturingAck = false
+    private var ackCaptureBuffer = Data()
+    private var pendingGreeting = false
+    private var lastAudioDeltaAt: Date = .distantPast
+    private var lastAckAt: Date = .distantPast
+
+    private var ackFileURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("ack-\(config.voice).pcm")
+    }
     private var sessionStartedAt: Date?
     private var hrSamples: [Double] = []
     private var referenceTracker: ReferenceTracker?
@@ -286,8 +297,15 @@ final class CoachSession: ObservableObject {
         }
         realtime.callbacks.onAudioDelta = { [weak self] data in
             guard let self else { return }
-            self.audio.enqueuePlayback(pcm16: data)
-            Task { @MainActor in if !self.coachSpeaking { self.coachSpeaking = true } }
+            Task { @MainActor in
+                self.lastAudioDeltaAt = Date()
+                if self.capturingAck {
+                    self.ackCaptureBuffer.append(data)
+                } else {
+                    self.audio.enqueuePlayback(pcm16: data)
+                    if !self.coachSpeaking { self.coachSpeaking = true }
+                }
+            }
         }
         realtime.callbacks.onAssistantTranscriptDelta = { [weak self] delta in
             Task { @MainActor in self?.appendCoachDelta(delta) }
@@ -303,7 +321,11 @@ final class CoachSession: ObservableObject {
             Task { @MainActor in self?.userSpeaking = true }
         }
         realtime.callbacks.onSpeechStopped = { [weak self] in
-            Task { @MainActor in self?.userSpeaking = false }
+            Task { @MainActor in
+                guard let self else { return }
+                self.userSpeaking = false
+                self.scheduleAckIfSlow()
+            }
         }
         realtime.callbacks.onResponseStarted = { [weak self] in
             Task { @MainActor in self?.responseInProgress = true }
@@ -312,6 +334,16 @@ final class CoachSession: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.responseInProgress = false
+                if self.capturingAck {
+                    self.capturingAck = false
+                    if self.ackCaptureBuffer.count > 4_800 {
+                        self.ackAudio = self.ackCaptureBuffer
+                        try? self.ackCaptureBuffer.write(to: self.ackFileURL, options: .atomic)
+                    }
+                    self.ackCaptureBuffer = Data()
+                    if self.pendingGreeting { self.pendingGreeting = false; self.sendGreeting() }
+                    return
+                }
                 self.scheduleSpeakingReset()
                 if self.phase == .ending { self.scheduleTeardownAfterPlayback() }
             }
@@ -361,11 +393,39 @@ final class CoachSession: ObservableObject {
             log(.info, "Coach connecté (\(config.model), voix \(config.voice)).")
             startTimers()
             realtime.injectText("La séance de \(kind.coachLabel) démarre maintenant. Objectif du jour : \(goal.coachLabel()). " + metricsLine(prefix: "[MÉTRIQUES]"))
-            let name = config.userName.isEmpty ? "" : " Appelle-le \(config.userName)."
-            realtime.requestResponse(instructions: "Présente-toi comme Jeffrey en une phrase chaleureuse.\(name) Rappelle l'objectif s'il y en a un (sinon demande-le en une question courte), et lance la séance.")
+            if let cached = try? Data(contentsOf: ackFileURL), cached.count > 4_800 {
+                ackAudio = cached
+                sendGreeting()
+            } else {
+                // Une seule fois par voix : Jeffrey enregistre « Je regarde. » avec sa voix, joué localement ensuite.
+                capturingAck = true
+                pendingGreeting = true
+                ackCaptureBuffer = Data()
+                realtime.requestResponse(instructions: "Dis uniquement, sur un ton naturel : « Je regarde. » Rien d'autre.")
+            }
         } else if phase == .live {
             status = "Coach reconnecté"
             realtime.injectText("Reconnexion après une coupure réseau ; la séance continue. " + metricsLine(prefix: "[MÉTRIQUES]"))
+        }
+    }
+
+    private func sendGreeting() {
+        let name = config.userName.isEmpty ? "" : " Appelle-le \(config.userName)."
+        realtime.requestResponse(instructions: "Présente-toi comme Jeffrey en une phrase chaleureuse.\(name) Rappelle l'objectif s'il y en a un (sinon demande-le en une question courte), et lance la séance.")
+    }
+
+    /// Si aucune parole de Jeffrey n'arrive dans la seconde qui suit la fin de la tienne, on joue « Je regarde. ».
+    private func scheduleAckIfSlow() {
+        let stoppedAt = Date()
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            guard let self, self.phase == .live, let ack = self.ackAudio else { return }
+            guard self.lastAudioDeltaAt < stoppedAt, !self.audio.isPlaying,
+                  Date().timeIntervalSince(self.lastAckAt) > 8 else { return }
+            self.lastAckAt = Date()
+            self.audio.enqueuePlayback(pcm16: ack)
+            self.coachSpeaking = true
+            self.scheduleSpeakingReset()
         }
     }
 

@@ -212,8 +212,8 @@ struct CoachConfig {
 
         Règles :
         - Réponses très courtes : 1 à 3 phrases, orales, naturelles, sans liste ni formatage.\(presence == "discreet" ? " Mode discret : interviens rarement et brièvement, sauf si on te parle." : "")
-        - Si l'utilisateur veut changer l'objectif (raccourcir, allonger, passer en libre), appelle la fonction propose_goal \
-          plutôt que d'annoncer le changement toi-même ; il confirmera sur son téléphone.
+        - Si l'utilisateur veut changer l'objectif (raccourcir, allonger, passer en libre), dis d'abord « Je regarde » \
+          puis appelle la fonction propose_goal plutôt que d'annoncer le changement toi-même ; il confirmera sur son téléphone.
         - N'énumère pas les chiffres bêtement : interprète-les (« tu es en zone 4, c'est bien pour ce bloc, tiens 2 minutes »).
         - Ne répète pas la même consigne à chaque intervention ; varie et sois concret.
         - Si l'utilisateur pose une question, réponds directement. S'il t'a parlé pendant que tu parlais, \
