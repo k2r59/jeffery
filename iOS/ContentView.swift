@@ -169,7 +169,7 @@ struct ContentView: View {
 
     private func liveElapsed(_ s: MetricsSnapshot?, now: Date) -> TimeInterval {
         guard let s else { return 0 }
-        guard s.state == .running else { return s.elapsed }
+        guard s.state == .running, coach.phase != .idle else { return s.elapsed }
         return s.elapsed + max(0, now.timeIntervalSince(s.timestamp))
     }
 

@@ -10,6 +10,9 @@ struct SettingsView: View {
     @AppStorage(Prefs.cueInterval) private var cueInterval: Double = 60
     @AppStorage(Prefs.metricsInterval) private var metricsInterval: Double = 15
     @AppStorage(Prefs.autoCues) private var autoCues: Bool = true
+    @AppStorage(Prefs.weightKg) private var weightKg: Double = 0
+    @AppStorage(Prefs.heightCm) private var heightCm: Double = 0
+    @State private var healthNotice: String?
     @AppStorage(Prefs.level) private var level: String = AthleteLevel.amateur.rawValue
     @AppStorage(Prefs.athleteNotes) private var athleteNotes: String = ""
     @AppStorage(Prefs.basePrompt) private var basePrompt: String = Prefs.defaultBasePrompt
@@ -46,7 +49,35 @@ struct SettingsView: View {
                     }
                 }
                 Section("Toi") {
+                    Button {
+                        Task {
+                            let r = await HealthProfile.fetch()
+                            if let a = r.age { age = a }
+                            if let h = r.heightCm { heightCm = h }
+                            if let w = r.weightKg { weightKg = w }
+                            healthNotice = (r.age == nil && r.heightCm == nil && r.weightKg == nil)
+                                ? "Rien trouvé dans Santé (autorisation refusée ou données absentes)."
+                                : "Récupéré depuis Santé."
+                        }
+                    } label: {
+                        Label("Récupérer depuis l'app Santé", systemImage: "heart.text.square")
+                    }
+                    if let healthNotice { Text(healthNotice).font(.caption).foregroundStyle(.secondary) }
                     Stepper("Âge : \(age) ans", value: $age, in: 10...100)
+                    HStack {
+                        Text("Poids")
+                        Spacer()
+                        TextField("kg", value: $weightKg, format: .number.precision(.fractionLength(0...1)))
+                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 100)
+                        Text("kg").foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Taille")
+                        Spacer()
+                        TextField("cm", value: $heightCm, format: .number.precision(.fractionLength(0)))
+                            .keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(width: 100)
+                        Text("cm").foregroundStyle(.secondary)
+                    }
                     HStack {
                         Text("FC max")
                         Spacer()

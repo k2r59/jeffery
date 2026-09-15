@@ -22,8 +22,9 @@ final class PhoneConnectivity: NSObject, ObservableObject {
 
     func requestHealthAuthorization() {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        let types: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.heartRate),
+        var types: Set<HKObjectType> = [HKObjectType.workoutType(), HKQuantityType(.heartRate),
                                         HKQuantityType(.activeEnergyBurned), HKQuantityType(.distanceWalkingRunning)]
+        types.formUnion(HealthProfile.readTypes)
         healthStore.requestAuthorization(toShare: [HKObjectType.workoutType()], read: types) { _, _ in }
     }
 

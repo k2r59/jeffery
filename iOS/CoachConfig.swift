@@ -12,6 +12,8 @@ enum Prefs {
     static let autoCues = "pref.autoCues"
     static let kind = "pref.kind"
     static let mode = "pref.mode"
+    static let weightKg = "pref.weightKg"
+    static let heightCm = "pref.heightCm"
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
@@ -41,6 +43,8 @@ enum Prefs {
             autoCues: true,
             kind: WorkoutKind.running.rawValue,
             mode: CaptureMode.companion.rawValue,
+            weightKg: 0.0,
+            heightCm: 0.0,
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,
@@ -69,6 +73,9 @@ enum AthleteLevel: String, CaseIterable, Identifiable {
 
 struct CoachConfig {
     var apiKey: String
+    var age: Int
+    var weightKg: Double
+    var heightCm: Double
     var level: AthleteLevel
     var athleteNotes: String
     var basePrompt: String
@@ -103,6 +110,9 @@ struct CoachConfig {
         let base = d.string(forKey: Prefs.basePrompt)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return CoachConfig(
             apiKey: KeychainStore.read(KeychainStore.apiKeyAccount) ?? "",
+            age: d.integer(forKey: Prefs.age),
+            weightKg: d.double(forKey: Prefs.weightKg),
+            heightCm: d.double(forKey: Prefs.heightCm),
             level: AthleteLevel(rawValue: d.string(forKey: Prefs.level) ?? "") ?? .amateur,
             athleteNotes: d.string(forKey: Prefs.athleteNotes) ?? "",
             basePrompt: base.isEmpty ? Prefs.defaultBasePrompt : base,
@@ -120,12 +130,17 @@ struct CoachConfig {
         let goalLine = goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "Aucun objectif précis n'a été donné : demande-le brièvement au début, puis adapte-toi."
             : "Objectif annoncé pour la séance : \(goal)."
+        var profile: [String] = []
+        if age > 0 { profile.append("\(age) ans") }
+        if weightKg > 0 { profile.append("\(Int(weightKg.rounded())) kg") }
+        if heightCm > 0 { profile.append("\(Int(heightCm.rounded())) cm") }
+        let profileLine = profile.isEmpty ? "" : ", " + profile.joined(separator: ", ")
         let notes = athleteNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let notesLine = notes.isEmpty ? "" : "\nCe que le sportif dit de lui : \(notes)"
         return """
         \(basePrompt)
 
-        Sportif : niveau \(level.coachLabel).\(notesLine)
+        Sportif : niveau \(level.coachLabel)\(profileLine).\(notesLine)
         Séance en cours : \(kind.coachLabel). Il porte une Apple Watch ; les données arrivent en \(mode.label). \(goalLine)
 
         Tu reçois régulièrement des messages système commençant par [MÉTRIQUES] : fréquence cardiaque, zone cardiaque, \
