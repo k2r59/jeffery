@@ -9,11 +9,11 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             TodayView(history: history, goToSessions: { tab = 1 })
-                .tabItem { Label("Aujourd'hui", systemImage: "house.fill") }.tag(0)
+                .tabItem { Label { Text("Aujourd'hui") } icon: { Image("accueil-creme").renderingMode(.template) } }.tag(0)
             SessionsView(history: history)
-                .tabItem { Label("Séances", systemImage: "square.stack.fill") }.tag(1)
+                .tabItem { Label { Text("Séances") } icon: { Image("seances-creme").renderingMode(.template) } }.tag(1)
             JeffreyView()
-                .tabItem { Label("Jeffrey", systemImage: "waveform") }.tag(2)
+                .tabItem { Label { Text("Jeffrey") } icon: { Image("voix-creme").renderingMode(.template) } }.tag(2)
         }
         .tint(Theme.lime)
         .preferredColorScheme(.dark)
@@ -44,10 +44,7 @@ struct JeffreyHeader: View {
     var trailing: AnyView? = nil
     var body: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                JeffreyWordmark(size: 24)
-                Text("À tes côtés. À ton rythme.").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
-            }
+            JeffreyWordmark(size: 26, signature: true)
             Spacer()
             if let trailing { trailing }
         }
@@ -60,7 +57,7 @@ struct JeffreyBubble: View {
     var label: String = "JEFFREY"
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            JeffreyMark(size: 26).frame(width: 34, height: 34).background(Circle().fill(Theme.surfaceRaised))
+            JeffreyMark(size: 22).frame(width: 34, height: 34).background(Circle().fill(Theme.surfaceRaised))
             VStack(alignment: .leading, spacing: 3) {
                 Text(label).font(.system(size: 9, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
                 Text(text).font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
@@ -79,7 +76,7 @@ struct PrimaryButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if let icon { Image(systemName: icon) }
+                if let icon { JIcon(icon, size: 18) }
                 Text(title)
             }
             .font(.display(16, weight: .black)).foregroundStyle(Theme.background)
@@ -99,7 +96,7 @@ struct KindChips: View {
                     let selected = k.rawValue == kindRaw
                     Button { withAnimation(.snappy) { kindRaw = k.rawValue } } label: {
                         VStack(spacing: 4) {
-                            Image(systemName: icon(k)).font(.system(size: 15, weight: .bold))
+                            JIcon(icon(k), size: 20)
                             Text(k.label).font(.system(size: 11, weight: .bold))
                         }
                         .foregroundStyle(selected ? Theme.background : .white)
@@ -112,13 +109,13 @@ struct KindChips: View {
     }
     private func icon(_ k: WorkoutKind) -> String {
         switch k {
-        case .running: return "figure.run"
-        case .walking: return "figure.walk"
-        case .cycling: return "figure.outdoor.cycle"
-        case .hiking: return "figure.hiking"
-        case .functionalStrength: return "dumbbell.fill"
-        case .hiit: return "bolt.heart.fill"
-        case .other: return "figure.mixed.cardio"
+        case .running: return "course"
+        case .walking: return "marche"
+        case .cycling: return "velo"
+        case .hiking: return "randonnee"
+        case .functionalStrength: return "renforcement"
+        case .hiit: return "objectif"
+        case .other: return "libre"
         }
     }
 }

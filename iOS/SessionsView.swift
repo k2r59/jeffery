@@ -65,7 +65,7 @@ struct SessionsView: View {
     private func row(_ w: HKWorkout) -> some View {
         let coached = SessionSummary.matching(start: w.startDate) != nil || WorkoutHistory.sourceLabel(w) == "WatchCoach"
         return HStack(spacing: 12) {
-            Image(systemName: "figure.run").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+            JIcon("course", size: 17).foregroundStyle(Theme.creme)
                 .frame(width: 34, height: 34).background(Circle().fill(Theme.surfaceRaised))
             VStack(alignment: .leading, spacing: 2) {
                 Text(WorkoutKind(activityType: w.workoutActivityType).label).font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
@@ -74,7 +74,7 @@ struct SessionsView: View {
             }
             Spacer()
             Text(coached ? "Avec Jeffrey" : "Apple Watch").font(.system(size: 11, weight: .bold)).foregroundStyle(coached ? Theme.lime : Theme.muted)
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
+            JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
@@ -101,7 +101,7 @@ struct RedoRouteView: View {
             Theme.background.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Button { dismiss() } label: { Label("Retour", systemImage: "chevron.left").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted) }
+                    Button { dismiss() } label: { HStack(spacing: 6) { JIcon("retour", size: 14); Text("Retour") }.font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted) }
                     Text("On y retourne ?").font(.display(30, weight: .black)).foregroundStyle(.white)
                     Text("\(WorkoutKind(activityType: workout.workoutActivityType).label) du \(workout.startDate.formatted(.dateTime.weekday(.wide)))")
                         .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
@@ -123,9 +123,9 @@ struct RedoRouteView: View {
                     if coordinates.count >= 2 {
                         JeffreyBubble(text: "Même parcours. Ton objectif du jour ?")
                         HStack(spacing: 8) {
-                            styleChip(0, "Tranquillement", "figure.walk")
-                            styleChip(1, "Viser un temps", "stopwatch")
-                            styleChip(2, "Libre", "infinity")
+                            styleChip(0, "Tranquillement", "marche")
+                            styleChip(1, "Viser un temps", "chronometre")
+                            styleChip(2, "Libre", "libre")
                         }
                         PrimaryButton(title: "Refaire ce parcours") {
                             if let ref = ReferenceRoute.make(name: "\(WorkoutKind(activityType: workout.workoutActivityType).label) du \(workout.startDate.formatted(date: .abbreviated, time: .omitted))",
@@ -176,7 +176,7 @@ struct RedoRouteView: View {
         let selected = style == i
         return Button { withAnimation(.snappy) { style = i } } label: {
             VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 14, weight: .bold))
+                JIcon(icon, size: 18)
                 Text(title).font(.system(size: 11, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
             }
             .foregroundStyle(selected ? Theme.background : .white)
@@ -191,7 +191,7 @@ struct RedoRouteView: View {
                 Map {
                     MapPolyline(coordinates: coordinates).stroke(Theme.lime, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
                     if let f = coordinates.first { Annotation("", coordinate: f) { Circle().fill(.white).frame(width: 10, height: 10) } }
-                    if let l = coordinates.last { Annotation("", coordinate: l) { Image(systemName: "flag.checkered.circle.fill").foregroundStyle(.white) } }
+                    if let l = coordinates.last { Annotation("", coordinate: l) { JIcon("arrivee", size: 18).foregroundStyle(.white) } }
                 }
                 .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
                 .frame(height: 220).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))

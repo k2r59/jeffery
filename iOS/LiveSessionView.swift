@@ -35,7 +35,7 @@ struct LiveSessionView: View {
 
     private var header: some View {
         HStack {
-            Label(coach.latest?.kind.label.uppercased() ?? "SÉANCE", systemImage: "figure.run")
+            HStack(spacing: 6) { JIcon("course", size: 16); Text(coach.latest?.kind.label.uppercased() ?? "SÉANCE") }
                 .font(.system(size: 13, weight: .heavy)).tracking(1).foregroundStyle(.white)
             Spacer()
             HStack(spacing: 5) {
@@ -94,14 +94,14 @@ struct LiveSessionView: View {
         return HStack(spacing: 10) {
             tile(coach.displayDistance.map { String(format: "%.2f", $0 / 1000).replacingOccurrences(of: ".", with: ",") } ?? "--", "km", .white)
             tile(coach.pace?.replacingOccurrences(of: " /km", with: "").replacingOccurrences(of: ":", with: "'") ?? "--", "/km", .white)
-            tile(s?.heartRate.map { "\(Int($0))" } ?? "--", zone.map { "bpm · \($0.label)" } ?? "bpm", Theme.zoneColor(zone), icon: "heart.fill")
+            tile(s?.heartRate.map { "\(Int($0))" } ?? "--", zone.map { "bpm · \($0.label)" } ?? "bpm", Theme.zoneColor(zone), icon: "frequence-cardiaque")
         }
     }
 
     private func tile(_ value: String, _ unit: String, _ color: Color, icon: String? = nil) -> some View {
         VStack(spacing: 4) {
             HStack(spacing: 4) {
-                if let icon { Image(systemName: icon).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.pulse) }
+                if let icon { JIcon(icon, size: 16).foregroundStyle(Theme.pulse) }
                 Text(value).font(.display(24, weight: .black).monospacedDigit()).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.6)
             }
             Text(unit).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.muted)
@@ -112,7 +112,7 @@ struct LiveSessionView: View {
 
     private func proposalCard(_ p: GoalProposal) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Nouvel objectif · \(p.goal.label)", systemImage: "timer").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+            HStack(spacing: 6) { JIcon("objectif", size: 16); Text("Nouvel objectif · \(p.goal.label)") }.font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
             if !p.reason.isEmpty { Text(p.reason).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted) }
             HStack(spacing: 10) {
                 Button { coach.resolveProposal(accept: true) } label: {
@@ -130,7 +130,7 @@ struct LiveSessionView: View {
 
     private func referenceCard(_ r: ReferenceStatus) -> some View {
         HStack {
-            Image(systemName: "flag.checkered").foregroundStyle(Theme.ice)
+            JIcon("refaire-parcours", size: 16).foregroundStyle(Theme.citron)
             Text(r.offRoute ? "Hors tracé" : "\(r.progressText) · 500 m : \(r.reliefText)")
             Spacer()
             if let g = r.ghostText, !r.offRoute {
@@ -150,12 +150,12 @@ struct LiveSessionView: View {
             }
             Spacer()
             HStack(spacing: 4) {
-                musicButton("backward.fill") { music.previous() }
-                musicButton(music.isPlaying ? "pause.fill" : "play.fill", prominent: true) {
+                musicButton("piste-precedente") { music.previous() }
+                musicButton(music.isPlaying ? "pause" : "lecture", prominent: true) {
                     if !music.authorized { music.requestAuthorization() }
                     music.togglePlayPause()
                 }
-                musicButton("forward.fill") { music.next() }
+                musicButton("piste-suivante") { music.next() }
             }
         }
         .card()
@@ -164,7 +164,7 @@ struct LiveSessionView: View {
 
     private func musicButton(_ icon: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: prominent ? 15 : 12, weight: .bold))
+            JIcon(icon, size: prominent ? 16 : 13)
                 .foregroundStyle(prominent ? Theme.background : .white)
                 .frame(width: prominent ? 38 : 32, height: prominent ? 38 : 32)
                 .background(Circle().fill(prominent ? Theme.lime : Theme.surfaceRaised))
@@ -173,17 +173,17 @@ struct LiveSessionView: View {
 
     private var controls: some View {
         VStack(spacing: 10) {
-            PrimaryButton(title: "Parler à Jeffrey", icon: "mic.fill") { showTalk = true }
+            PrimaryButton(title: "Parler à Jeffrey", icon: "micro") { showTalk = true }
                 .disabled(coach.phase != .live).opacity(coach.phase == .live ? 1 : 0.5)
             HStack(spacing: 10) {
                 Button { coach.togglePause() } label: {
-                    Label(coach.isPaused ? "Reprendre" : "Pause", systemImage: coach.isPaused ? "play.fill" : "pause.fill")
+                    HStack(spacing: 6) { JIcon(coach.isPaused ? "lecture" : "pause", size: 16); Text(coach.isPaused ? "Reprendre" : "Pause") }
                         .font(.display(14, weight: .black)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).frame(height: 52).background(Capsule().fill(Theme.surfaceRaised))
                 }
                 .disabled(coach.phase != .live)
                 Button { coach.stop() } label: {
-                    Label("Terminer", systemImage: "stop.fill")
+                    HStack(spacing: 6) { JIcon("arreter", size: 16); Text("Terminer") }
                         .font(.display(14, weight: .black)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).frame(height: 52).background(Capsule().fill(Theme.pulse.opacity(0.85)))
                 }
@@ -203,7 +203,7 @@ struct TalkSheet: View {
             Theme.background.ignoresSafeArea()
             VStack(spacing: 16) {
                 HStack {
-                    Button { dismiss() } label: { Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(.white) }
+                    Button { dismiss() } label: { JIcon("retour", size: 18).foregroundStyle(Theme.creme) }
                     Spacer()
                     if coach.goal.kind != .free {
                         Text(coach.goal.progress(elapsed: coach.liveElapsed(), distance: coach.displayDistance).remaining ?? "")
@@ -231,7 +231,7 @@ struct TalkSheet: View {
                 }
                 if let p = coach.proposal {
                     VStack(spacing: 10) {
-                        Label("Nouvel objectif · \(p.goal.label)", systemImage: "timer")
+                        HStack(spacing: 6) { JIcon("objectif", size: 16); Text("Nouvel objectif · \(p.goal.label)") }
                             .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(14)
                             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
@@ -248,7 +248,7 @@ struct TalkSheet: View {
                     }
                 }
                 VStack(spacing: 6) {
-                    Image(systemName: "mic.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(Theme.lime)
+                    JIcon("micro", size: 26).foregroundStyle(Theme.lime)
                         .frame(width: 60, height: 60).background(Circle().stroke(Theme.lime, lineWidth: 2))
                     Text(coach.userSpeaking ? "Je t'entends…" : "Micro activé").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
                 }

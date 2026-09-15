@@ -12,9 +12,9 @@ enum Intent: String, CaseIterable, Identifiable {
     }
     var icon: String {
         switch self {
-        case .restart: return "figure.run"
-        case .keepPace: return "chart.bar.fill"
-        case .prepareGoal: return "scope"
+        case .restart: return "course"
+        case .keepPace: return "progression"
+        case .prepareGoal: return "objectif"
         }
     }
     var coachLabel: String {
@@ -75,7 +75,7 @@ struct OnboardingView: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: 18) {
-            JeffreyMark(size: 56).padding(.top, 30)
+            JeffreyWordmark(size: 30, signature: true).padding(.top, 30)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Moi, c'est").font(.display(34, weight: .black)).foregroundStyle(ink)
                 Text("Jeffrey.").font(.display(34, weight: .black)).foregroundStyle(ink.opacity(0.45))
@@ -88,10 +88,10 @@ struct OnboardingView: View {
                         level = intent.level.rawValue
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: intent.icon).font(.system(size: 15, weight: .bold)).frame(width: 22)
+                            JIcon(intent.icon, size: 20).frame(width: 22)
                             Text(intent.label).font(.system(size: 16, weight: .bold))
                             Spacer()
-                            Image(systemName: intentRaw == intent.rawValue ? "checkmark.circle.fill" : "chevron.right")
+                            JIcon(intentRaw == intent.rawValue ? "valider" : "suivant", size: 16)
                                 .foregroundStyle(intentRaw == intent.rawValue ? Theme.background : ink.opacity(0.4))
                         }
                         .foregroundStyle(intentRaw == intent.rawValue ? Theme.background : ink)
@@ -127,7 +127,7 @@ struct OnboardingView: View {
                         : "Récupéré depuis Santé : \(age) ans\(weightKg > 0 ? ", \(Int(weightKg)) kg" : "")\(heightCm > 0 ? ", \(Int(heightCm)) cm" : "")."
                 }
             } label: {
-                Label("Récupérer âge, poids et taille depuis Santé", systemImage: "heart.text.square")
+                HStack(spacing: 8) { JIcon("frequence-cardiaque", size: 18); Text("Récupérer âge, poids et taille depuis Santé") }
                     .font(.system(size: 15, weight: .bold)).foregroundStyle(ink)
                     .frame(maxWidth: .infinity).frame(height: 54)
                     .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
@@ -154,7 +154,7 @@ struct OnboardingView: View {
             Button {
                 if let pasted = UIPasteboard.general.string { apiKey = pasted.trimmingCharacters(in: .whitespacesAndNewlines) }
             } label: {
-                Label("Coller depuis le presse-papiers", systemImage: "doc.on.clipboard").font(.system(size: 14, weight: .bold)).foregroundStyle(ink)
+                HStack(spacing: 8) { JIcon("information", size: 16); Text("Coller depuis le presse-papiers") }.font(.system(size: 14, weight: .bold)).foregroundStyle(ink)
             }
             Spacer()
             primaryButton(apiKey.hasPrefix("sk-") ? "C'est parti" : "Plus tard") {

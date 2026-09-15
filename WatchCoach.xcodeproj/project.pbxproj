@@ -13,6 +13,8 @@
 		10B71EEE9658C3AD09BBBBE1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D4AA1667A3275F3D77C3C7 /* Theme.swift */; };
 		1600092E21C6985E6AB9AFA7 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD5230CD8F6E66BE4CD9541 /* SessionsView.swift */; };
 		25F7C47C9F29CEBDDFF2B50F /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3F53CE58B179A6AF3DC43C /* WatchContentView.swift */; };
+		2CD4BE415E6407756280E286 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E815CF64D6BC9EC9969F4101 /* Assets.xcassets */; };
+		3856BEC48F6C967B792BF246 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3E1F94AF9504750D0AC84335 /* Assets.xcassets */; };
 		3C0DA67E865FD64FA0A8BBC6 /* CoachConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2097E145A239323A219EBC1 /* CoachConfig.swift */; };
 		3E0BED32725F9FD516A9645A /* WorkoutKind+HealthKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EA9D6E0CF16BBB2466EE8E /* WorkoutKind+HealthKit.swift */; };
 		48A9A39515C84655284DF338 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD82806422AB8276FBD93DB2 /* OnboardingView.swift */; };
@@ -78,6 +80,7 @@
 		349670EE16768E2C8346D827 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		397467C11C8057136CF8549F /* JeffreyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyView.swift; sourceTree = "<group>"; };
 		3CD5230CD8F6E66BE4CD9541 /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
+		3E1F94AF9504750D0AC84335 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3E589C09902B7A842396858D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
 		50D4AA1667A3275F3D77C3C7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -105,6 +108,7 @@
 		DEA482D9F644EE21C7810B1F /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		E436D5C4A739476728581A22 /* SessionLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLog.swift; sourceTree = "<group>"; };
 		E609600A71477DB5A710B8DD /* WatchCoachWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachWatchApp.swift; sourceTree = "<group>"; };
+		E815CF64D6BC9EC9969F4101 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E8EA9D6E0CF16BBB2466EE8E /* WorkoutKind+HealthKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkoutKind+HealthKit.swift"; sourceTree = "<group>"; };
 		F01028830AC541CE94AA809A /* MetricsSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsSnapshot.swift; sourceTree = "<group>"; };
 		F16EC8AB3E3AFC4B4D7E2C88 /* WatchCoach.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WatchCoach.entitlements; sourceTree = "<group>"; };
@@ -116,6 +120,7 @@
 		48B3D9DC9625622CE3293FFD /* WatchApp */ = {
 			isa = PBXGroup;
 			children = (
+				E815CF64D6BC9EC9969F4101 /* Assets.xcassets */,
 				3E589C09902B7A842396858D /* Info.plist */,
 				892B4D5B0C8155C590E5D7C7 /* WatchCoachWatch.entitlements */,
 				E609600A71477DB5A710B8DD /* WatchCoachWatchApp.swift */,
@@ -129,6 +134,7 @@
 		9450222908086875F81C9E31 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
+				3E1F94AF9504750D0AC84335 /* Assets.xcassets */,
 				D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */,
 				A2097E145A239323A219EBC1 /* CoachConfig.swift */,
 				FAB112F058BBADDA9A8B2F7C /* CoachSession.swift */,
@@ -198,6 +204,7 @@
 			buildConfigurationList = FD93AD14BFD858E11E404A9B /* Build configuration list for PBXNativeTarget "WatchCoachWatch" */;
 			buildPhases = (
 				C747BA38CFCE89521004BEE2 /* Sources */,
+				236BACFAD5B8362CB6F23343 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -215,6 +222,7 @@
 			buildConfigurationList = 65675020D985E5BCCE342026 /* Build configuration list for PBXNativeTarget "WatchCoach" */;
 			buildPhases = (
 				E123F7C9F2594BFC7705AEF2 /* Sources */,
+				8DEF50B31C43A50BCFDF983C /* Resources */,
 				9CC817E64FD9F5FE9C1A3B46 /* Embed Watch Content */,
 			);
 			buildRules = (
@@ -267,6 +275,25 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		236BACFAD5B8362CB6F23343 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2CD4BE415E6407756280E286 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8DEF50B31C43A50BCFDF983C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3856BEC48F6C967B792BF246 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		C747BA38CFCE89521004BEE2 /* Sources */ = {

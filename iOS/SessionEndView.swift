@@ -17,7 +17,7 @@ struct SessionEndView: View {
             RadialGradient(colors: [Theme.lime.opacity(0.22), .clear], center: .top, startRadius: 0, endRadius: 380).ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 22) {
-                    JeffreyMark(size: 46).padding(.top, 8)
+                    JeffreyMark(size: 56).padding(.top, 8)
                     VStack(spacing: 6) {
                         (Text("Bien joué, ") + Text(userName.isEmpty ? "champion" : userName).foregroundStyle(Theme.lime) + Text("."))
                             .font(.display(30, weight: .black)).foregroundStyle(.white)
@@ -42,7 +42,7 @@ struct SessionEndView: View {
                     }
                     if let g = summary.goalLabel {
                         HStack(spacing: 8) {
-                            Image(systemName: summary.goalReached == true ? "checkmark.circle.fill" : "circle")
+                            JIcon(summary.goalReached == true ? "valider" : "objectif", size: 18)
                                 .foregroundStyle(summary.goalReached == true ? Theme.lime : Theme.muted)
                             Text("Ton objectif · \(g) · \(summary.goalReached == true ? "Atteint" : "Pas cette fois, et c'est très bien")")
                                 .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
@@ -59,8 +59,7 @@ struct SessionEndView: View {
                                     SessionSummary.upsert(summary)
                                 } label: {
                                     VStack(spacing: 8) {
-                                        Image(systemName: f.icon)
-                                            .font(.system(size: 26, weight: .bold))
+                                        JIcon(f.icon, size: 30)
                                             .foregroundStyle(summary.feeling == f ? Theme.background : Theme.muted)
                                             .frame(width: 58, height: 58)
                                             .background(Circle().fill(summary.feeling == f ? Theme.lime : Theme.surfaceRaised))

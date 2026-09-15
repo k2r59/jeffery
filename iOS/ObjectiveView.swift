@@ -24,7 +24,7 @@ struct ObjectiveView: View {
             Theme.background.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 16) {
                 Button { dismiss() } label: {
-                    Label("Retour", systemImage: "chevron.left").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted)
+                    HStack(spacing: 6) { JIcon("retour", size: 14); Text("Retour") }.font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted)
                 }
                 Text("On vise quoi\naujourd'hui ?").font(.display(30, weight: .black)).foregroundStyle(.white)
                 HStack { Spacer(); JeffreyMark(state: .listening, size: 44); Spacer() }
@@ -34,7 +34,7 @@ struct ObjectiveView: View {
                         if k != .distance || kind.usesDistance {
                             let selected = goalKind == k
                             Button { withAnimation(.snappy) { goalKind = k } } label: {
-                                Label(k.label, systemImage: k.icon)
+                                HStack(spacing: 6) { JIcon(k.icon, size: 16); Text(k.label) }
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundStyle(selected ? Theme.background : .white)
                                     .frame(maxWidth: .infinity).frame(height: 44)
@@ -90,7 +90,7 @@ struct ObjectiveView: View {
 
     private func roundButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 18, weight: .black)).foregroundStyle(.white)
+            Image(systemName: icon).font(.system(size: 18, weight: .black)).foregroundStyle(Theme.creme)
                 .frame(width: 50, height: 50).background(Circle().fill(Theme.surfaceRaised))
         }
     }

@@ -12,9 +12,9 @@ enum Feeling: String, Codable, CaseIterable, Identifiable {
     }
     var icon: String {
         switch self {
-        case .easy: return "face.smiling"
-        case .good: return "face.smiling.inverse"
-        case .intense: return "face.dashed"
+        case .easy: return "ressenti-facile"
+        case .good: return "ressenti-bien"
+        case .intense: return "ressenti-intense"
         }
     }
     var coachLabel: String {

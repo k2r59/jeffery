@@ -14,9 +14,9 @@ struct SessionGoal: Codable, Equatable {
         }
         var icon: String {
             switch self {
-            case .duration: return "timer"
-            case .distance: return "point.topleft.down.to.point.bottomright.curvepath"
-            case .free: return "infinity"
+            case .duration: return "chronometre"
+            case .distance: return "distance"
+            case .free: return "libre"
             }
         }
     }

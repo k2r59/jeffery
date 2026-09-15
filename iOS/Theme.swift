@@ -1,29 +1,38 @@
 import SwiftUI
 
-/// Palette « piste de nuit » : noir profond, vert acide pour l'énergie, orange braise pour l'effort.
+/// Palette officielle Jeffrey (documentation/couleurs.json du pack d'assets).
 enum Theme {
-    static let background = Color(red: 0.04, green: 0.05, blue: 0.06)
-    static let surface = Color(red: 0.10, green: 0.11, blue: 0.13)
-    static let surfaceRaised = Color(red: 0.15, green: 0.16, blue: 0.19)
-    static let lime = Color(red: 0.78, green: 1.0, blue: 0.22)
-    static let ember = Color(red: 1.0, green: 0.42, blue: 0.16)
-    static let pulse = Color(red: 1.0, green: 0.23, blue: 0.35)
-    static let ice = Color(red: 0.55, green: 0.85, blue: 1.0)
-    static let muted = Color.white.opacity(0.55)
+    static let citron = Color(red: 0.831, green: 1.0, blue: 0.294)     // #D4FF4B
+    static let encre = Color(red: 0.063, green: 0.078, blue: 0.067)    // #101411
+    static let creme = Color(red: 0.949, green: 0.941, blue: 0.906)    // #F2F0E7
+    static let sauge = Color(red: 0.592, green: 0.643, blue: 0.549)    // #97A48C
+    static let surfaceOfficial = Color(red: 0.137, green: 0.169, blue: 0.125) // #232B20
+    static let alerte = Color(red: 1.0, green: 0.384, blue: 0.345)     // #FF6258
+
+    // Rôles utilisés dans les vues
+    static let background = encre
+    static let surface = Color(red: 0.10, green: 0.12, blue: 0.10)
+    static let surfaceRaised = surfaceOfficial
+    static let lime = citron
+    static let ember = Color(red: 1.0, green: 0.55, blue: 0.25)
+    static let pulse = alerte
+    static let ice = creme
+    static let muted = sauge
+    static let text = creme
 
     static func zoneColor(_ zone: HeartRateZone?) -> Color {
         switch zone {
-        case .z1: return Color(red: 0.45, green: 0.75, blue: 1.0)
-        case .z2: return lime
-        case .z3: return Color(red: 1.0, green: 0.85, blue: 0.2)
+        case .z1: return sauge
+        case .z2: return citron
+        case .z3: return Color(red: 1.0, green: 0.85, blue: 0.3)
         case .z4: return ember
-        case .z5: return pulse
-        case nil: return muted
+        case .z5: return alerte
+        case nil: return sauge
         }
     }
 
     static var startGradient: LinearGradient {
-        LinearGradient(colors: [lime, Color(red: 0.55, green: 0.95, blue: 0.35)], startPoint: .leading, endPoint: .trailing)
+        LinearGradient(colors: [citron, Color(red: 0.72, green: 0.95, blue: 0.35)], startPoint: .leading, endPoint: .trailing)
     }
 }
 
@@ -40,11 +49,25 @@ struct CardStyle: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Theme.surface)
-                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.creme.opacity(0.06)))
             )
     }
 }
 
 extension View {
     func card() -> some View { modifier(CardStyle()) }
+}
+
+/// Pictogramme du pack Jeffrey (version crème rendue en gabarit : la couleur vient de `.foregroundStyle`).
+struct JIcon: View {
+    let name: String
+    var size: CGFloat = 18
+    init(_ name: String, size: CGFloat = 18) { self.name = name; self.size = size }
+    var body: some View {
+        Image("\(name)-creme")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+    }
 }

@@ -18,7 +18,7 @@ struct JeffreyView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
                         JeffreyHeader()
-                        HStack { Spacer(); JeffreyMark(size: 64); Spacer() }
+                        HStack { Spacer(); JeffreyMark(size: 72); Spacer() }
                         Text("À ton rythme.").font(.display(30, weight: .black)).foregroundStyle(.white)
                         Text("Toujours là pour t'écouter, te motiver et t'aider à progresser.")
                             .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted)
@@ -44,7 +44,7 @@ struct JeffreyView: View {
                                         if preview.isLoading {
                                             ProgressView().tint(Theme.background).scaleEffect(0.8)
                                         } else {
-                                            Image(systemName: preview.isPlaying ? "speaker.wave.2.fill" : "play.fill")
+                                            JIcon(preview.isPlaying ? "volume" : "lecture", size: 14)
                                         }
                                         Text(preview.isLoading ? "Jeffrey arrive…" : "Écouter")
                                     }
@@ -59,12 +59,12 @@ struct JeffreyView: View {
                             }
                         }
                         section("Pendant la séance") {
-                            toggleRow("Encouragements", "hand.thumbsup.fill", $autoCues)
-                            toggleRow("Points sur l'objectif", "scope", $goalCues)
+                            toggleRow("Encouragements", "valider", $autoCues)
+                            toggleRow("Points sur l'objectif", "objectif", $goalCues)
                         }
                         section("Apple Watch") {
                             HStack {
-                                Image(systemName: "applewatch").foregroundStyle(.white)
+                                JIcon("montre", size: 18).foregroundStyle(Theme.creme)
                                 Text(coach.connectivity.isWatchAppInstalled ? (coach.connectivity.isReachable ? "Connectée" : "Installée, hors de portée") : "App montre non installée")
                                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
                                 Spacer()
@@ -79,10 +79,10 @@ struct JeffreyView: View {
                         JeffreyBubble(text: "Tu peux toujours me demander de parler moins.")
                         Button { showAdvanced = true } label: {
                             HStack {
-                                Label("Profil, clé API, micro, prompt…", systemImage: "slider.horizontal.3")
+                                HStack(spacing: 8) { JIcon("reglages", size: 18); Text("Profil, clé API, micro, prompt…") }
                                     .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
                                 Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                                JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
                             }
                             .card()
                         }
@@ -115,7 +115,7 @@ struct JeffreyView: View {
 
     private func toggleRow(_ title: String, _ icon: String, _ value: Binding<Bool>) -> some View {
         Toggle(isOn: value) {
-            Label(title, systemImage: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+            HStack(spacing: 8) { JIcon(icon, size: 18); Text(title) }.font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
         }
         .tint(Theme.lime)
     }

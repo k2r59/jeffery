@@ -50,7 +50,7 @@ struct TodayView: View {
     private var watchBadge: some View {
         HStack(spacing: 5) {
             Circle().fill(coach.connectivity.isReachable ? Theme.lime : Theme.muted).frame(width: 7, height: 7)
-            Image(systemName: "applewatch").font(.system(size: 13, weight: .semibold))
+            JIcon("montre", size: 14)
         }
         .foregroundStyle(coach.connectivity.isReachable ? .white : Theme.muted)
         .padding(.horizontal, 10).padding(.vertical, 7)
@@ -64,9 +64,9 @@ struct TodayView: View {
         return VStack(alignment: .leading, spacing: 12) {
             Text("Cette semaine").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
             HStack(spacing: 0) {
-                stat("figure.run", "\(w.count)", "séances")
-                stat("point.topleft.down.to.point.bottomright.curvepath", dist > 0 ? String(format: "%.2f", dist / 1000).replacingOccurrences(of: ".", with: ",") : "0", "km")
-                stat("timer", Formatters.humanDuration(time), "temps")
+                stat("course", "\(w.count)", "séances")
+                stat("distance", dist > 0 ? String(format: "%.2f", dist / 1000).replacingOccurrences(of: ".", with: ",") : "0", "km")
+                stat("chronometre", Formatters.humanDuration(time), "temps")
             }
         }
         .card()
@@ -74,7 +74,7 @@ struct TodayView: View {
 
     private func stat(_ icon: String, _ value: String, _ unit: String) -> some View {
         VStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted)
+            JIcon(icon, size: 16).foregroundStyle(Theme.muted)
             Text(value).font(.display(22, weight: .black).monospacedDigit()).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.muted)
         }
@@ -84,7 +84,7 @@ struct TodayView: View {
     private func lastOutingRow(_ w: HKWorkout) -> some View {
         Button(action: goToSessions) {
             HStack(spacing: 12) {
-                Image(systemName: "figure.run").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                JIcon("course", size: 18).foregroundStyle(Theme.creme)
                     .frame(width: 38, height: 38).background(Circle().fill(Theme.surfaceRaised))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Dernière sortie").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.muted)
@@ -93,7 +93,7 @@ struct TodayView: View {
                     Text("\(relative(w.startDate)) · \(Formatters.elapsed(w.duration))").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
             }
             .card()
         }
@@ -102,7 +102,7 @@ struct TodayView: View {
 
     private func referenceRow(_ ref: ReferenceRoute) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "flag.checkered").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.ice)
+            JIcon("refaire-parcours", size: 18).foregroundStyle(Theme.citron)
                 .frame(width: 38, height: 38).background(Circle().fill(Theme.surfaceRaised))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Parcours à refaire").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.muted)
@@ -110,7 +110,7 @@ struct TodayView: View {
                 Text("\(Formatters.distance(ref.totalDistance)) · D+ \(Int(ref.totalGain)) m").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
             }
             Spacer()
-            Button { ReferenceRoute.clear() } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted) }
+            Button { ReferenceRoute.clear() } label: { JIcon("fermer", size: 16).foregroundStyle(Theme.muted) }
         }
         .card()
     }
