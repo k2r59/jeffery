@@ -54,6 +54,7 @@ struct SessionsView: View {
                         }
                     }
                     .padding(18)
+                    .padding(.bottom, 70)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)

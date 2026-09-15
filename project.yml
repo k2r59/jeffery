@@ -32,11 +32,11 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [audio, location]
-        NSLocationWhenInUseUsageDescription: "WatchCoach enregistre le tracé GPS de ta séance et calcule distance et allure si la montre ne les fournit pas."
-        NSAppleMusicUsageDescription: "WatchCoach affiche le titre en cours et permet de le mettre en pause ou de passer au suivant pendant la séance."
-        NSMicrophoneUsageDescription: "WatchCoach écoute ta voix pour dialoguer avec le coach pendant la séance."
-        NSHealthShareUsageDescription: "WatchCoach lit tes données d'entraînement pour le coaching en direct."
-        NSHealthUpdateUsageDescription: "WatchCoach peut lancer une séance sur ta montre."
+        NSLocationWhenInUseUsageDescription: "Jeffrey enregistre le tracé GPS de ta séance et calcule distance et allure si la montre ne les fournit pas."
+        NSAppleMusicUsageDescription: "Jeffrey affiche le titre en cours et te laisse le mettre en pause ou passer au suivant pendant la séance."
+        NSMicrophoneUsageDescription: "Jeffrey t'écoute pour dialoguer avec toi pendant la séance."
+        NSHealthShareUsageDescription: "Jeffrey lit tes données d'entraînement pour te coacher en direct."
+        NSHealthUpdateUsageDescription: "Jeffrey peut lancer une séance sur ta montre."
         ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: iOS/WatchCoach.entitlements
@@ -65,9 +65,9 @@ targets:
         # workout-processing : mode piloté ; physical-therapy : session étendue du mode compagnon.
         WKBackgroundModes: [workout-processing, physical-therapy]
         UIBackgroundModes: [location]
-        NSLocationWhenInUseUsageDescription: "WatchCoach enregistre le tracé GPS des séances qu'il pilote en extérieur."
-        NSHealthShareUsageDescription: "WatchCoach lit fréquence cardiaque, distance et calories pendant la séance."
-        NSHealthUpdateUsageDescription: "WatchCoach enregistre la séance dans Santé quand il la pilote."
+        NSLocationWhenInUseUsageDescription: "Jeffrey enregistre le tracé GPS des séances qu'il pilote en extérieur."
+        NSHealthShareUsageDescription: "Jeffrey lit fréquence cardiaque, distance et calories pendant la séance."
+        NSHealthUpdateUsageDescription: "Jeffrey enregistre la séance dans Santé quand il la pilote."
     entitlements:
       path: WatchApp/WatchCoachWatch.entitlements
       properties:

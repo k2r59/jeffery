@@ -18,12 +18,12 @@ struct JeffreyMark: View {
     var body: some View {
         ZStack {
             JeffreyStroke()
-                .stroke(color, style: StrokeStyle(lineWidth: size * 0.26, lineCap: .round, lineJoin: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: size * 0.2, lineCap: .round, lineJoin: .round))
             switch state {
             case .available:
                 Circle().fill(color)
-                    .frame(width: size * 0.3, height: size * 0.3)
-                    .position(x: size * 0.62, y: size * 0.17)
+                    .frame(width: size * 0.24, height: size * 0.24)
+                    .position(x: size * 0.62, y: size * 0.15)
             case .listening:
                 // Anneau qui respire autour du point : Jeffrey écoute.
                 Circle().fill(color)
@@ -68,9 +68,9 @@ struct JeffreyStroke: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         let w = rect.width, h = rect.height
-        p.move(to: CGPoint(x: w * 0.62, y: h * 0.38))
-        p.addLine(to: CGPoint(x: w * 0.62, y: h * 0.62))
-        p.addQuadCurve(to: CGPoint(x: w * 0.22, y: h * 0.86), control: CGPoint(x: w * 0.62, y: h * 0.92))
+        p.move(to: CGPoint(x: w * 0.62, y: h * 0.36))
+        p.addLine(to: CGPoint(x: w * 0.62, y: h * 0.64))
+        p.addQuadCurve(to: CGPoint(x: w * 0.2, y: h * 0.84), control: CGPoint(x: w * 0.62, y: h * 0.96))
         return p
     }
 }

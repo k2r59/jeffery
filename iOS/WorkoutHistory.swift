@@ -18,7 +18,7 @@ final class WorkoutHistory: ObservableObject {
     }
 
     func load(days: Int = 90) async {
-        guard HKHealthStore.isHealthDataAvailable() else { errorMessage = "Santé indisponible"; return }
+        guard HKHealthStore.isHealthDataAvailable(), ProcessInfo.processInfo.environment["WATCHCOACH_NO_HEALTH"] == nil else { errorMessage = "Santé indisponible"; return }
         isLoading = true
         defer { isLoading = false }
         do {

@@ -36,6 +36,7 @@ struct TodayView: View {
                     }
                 }
                 .padding(18)
+                .padding(.bottom, 70)
             }
         }
         .sheet(isPresented: $showObjective) {
@@ -65,7 +66,7 @@ struct TodayView: View {
             HStack(spacing: 0) {
                 stat("figure.run", "\(w.count)", "séances")
                 stat("point.topleft.down.to.point.bottomright.curvepath", dist > 0 ? String(format: "%.2f", dist / 1000).replacingOccurrences(of: ".", with: ",") : "0", "km")
-                stat("timer", Formatters.elapsed(time).replacingOccurrences(of: ":", with: " h ", options: [], range: nil), "")
+                stat("timer", Formatters.humanDuration(time), "temps")
             }
         }
         .card()

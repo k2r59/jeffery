@@ -21,7 +21,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     }
 
     func requestHealthAuthorization() {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
+        guard HKHealthStore.isHealthDataAvailable(), ProcessInfo.processInfo.environment["WATCHCOACH_NO_HEALTH"] == nil else { return }
         var types: Set<HKObjectType> = [HKObjectType.workoutType(), HKQuantityType(.heartRate),
                                         HKQuantityType(.activeEnergyBurned), HKQuantityType(.distanceWalkingRunning)]
         types.formUnion(HealthProfile.readTypes)

@@ -30,10 +30,14 @@ struct JeffreyView: View {
                             .padding(4).background(Capsule().fill(Theme.surfaceRaised))
                         }
                         section("Voix du coach") {
-                            Picker("Voix", selection: $voice) {
-                                ForEach(Prefs.voices, id: \.self) { Text($0.capitalized).tag($0) }
+                            HStack {
+                                Text(voice.capitalized).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                                Spacer()
+                                Picker("Voix", selection: $voice) {
+                                    ForEach(Prefs.voices, id: \.self) { Text($0.capitalized).tag($0) }
+                                }
+                                .pickerStyle(.menu).tint(Theme.lime).labelsHidden()
                             }
-                            .pickerStyle(.menu).tint(.white)
                         }
                         section("Pendant la séance") {
                             toggleRow("Encouragements", "hand.thumbsup.fill", $autoCues)
@@ -65,6 +69,7 @@ struct JeffreyView: View {
                         }
                     }
                     .padding(18)
+                    .padding(.bottom, 70)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)

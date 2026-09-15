@@ -27,6 +27,9 @@ struct RootView: View {
             if phase == .idle { Task { await history.load() } }
         }
         .onAppear {
+            #if DEBUG
+            if let t = ProcessInfo.processInfo.environment["WATCHCOACH_TAB"], let i = Int(t) { tab = i }
+            #endif
             let appearance = UITabBarAppearance()
             appearance.configureWithOpaqueBackground()
             appearance.backgroundColor = UIColor(Theme.background)

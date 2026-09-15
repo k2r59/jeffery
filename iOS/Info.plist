@@ -23,15 +23,15 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>WatchCoach affiche le titre en cours et permet de le mettre en pause ou de passer au suivant pendant la séance.</string>
+	<string>Jeffrey affiche le titre en cours et te laisse le mettre en pause ou passer au suivant pendant la séance.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>WatchCoach lit tes données d'entraînement pour le coaching en direct.</string>
+	<string>Jeffrey lit tes données d'entraînement pour te coacher en direct.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>WatchCoach peut lancer une séance sur ta montre.</string>
+	<string>Jeffrey peut lancer une séance sur ta montre.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>WatchCoach enregistre le tracé GPS de ta séance et calcule distance et allure si la montre ne les fournit pas.</string>
+	<string>Jeffrey enregistre le tracé GPS de ta séance et calcule distance et allure si la montre ne les fournit pas.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>WatchCoach écoute ta voix pour dialoguer avec le coach pendant la séance.</string>
+	<string>Jeffrey t'écoute pour dialoguer avec toi pendant la séance.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

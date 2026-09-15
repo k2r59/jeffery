@@ -156,6 +156,12 @@ enum Formatters {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
     }
 
+    /// Durée « humaine » : 45 min, 1 h 17.
+    static func humanDuration(_ t: TimeInterval) -> String {
+        let m = Int(max(0, t)) / 60
+        return m >= 60 ? String(format: "%d h %02d", m / 60, m % 60) : "\(m) min"
+    }
+
     static func distance(_ meters: Double) -> String {
         meters >= 1000 ? String(format: "%.2f km", meters / 1000) : String(format: "%.0f m", meters)
     }

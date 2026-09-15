@@ -21,11 +21,11 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>WatchCoach lit fréquence cardiaque, distance et calories pendant la séance.</string>
+	<string>Jeffrey lit fréquence cardiaque, distance et calories pendant la séance.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>WatchCoach enregistre la séance dans Santé quand il la pilote.</string>
+	<string>Jeffrey enregistre la séance dans Santé quand il la pilote.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>WatchCoach enregistre le tracé GPS des séances qu'il pilote en extérieur.</string>
+	<string>Jeffrey enregistre le tracé GPS des séances qu'il pilote en extérieur.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

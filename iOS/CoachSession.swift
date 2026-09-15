@@ -66,7 +66,6 @@ final class CoachSession: ObservableObject {
         Prefs.registerDefaults()
         connectivity.activate()
         connectivity.requestHealthAuthorization()
-        gps.requestAuthorization()
         connectivity.onSnapshot = { [weak self] snap in self?.handle(snapshot: snap) }
         wireRealtime()
         audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
