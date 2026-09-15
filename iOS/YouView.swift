@@ -48,9 +48,10 @@ struct YouView: View {
                         memoryCard
                         if !summaries.isEmpty { feelingsCard }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(18)
                     .padding(.bottom, 70)
+                    // Largeur verrouillée sur celle de l'écran : aucun enfant ne peut élargir la colonne.
+                    .containerRelativeFrame(.horizontal, alignment: .leading)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .clipped()
@@ -246,7 +247,7 @@ struct YouView: View {
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surfaceRaised))
             }
-            if let healthNotice { Text(healthNotice).font(.caption).foregroundStyle(Theme.muted) }
+            if let healthNotice { Text(healthNotice).font(.caption).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
         }
         .card()
     }
@@ -332,6 +333,7 @@ struct YouView: View {
                     Circle().fill(Theme.citron).frame(width: 6, height: 6).padding(.top, 6)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(note.text).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.creme)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text(note.updatedAt.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.muted)
                     }
                     Spacer()
@@ -365,6 +367,7 @@ struct YouView: View {
                             .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.creme)
                         Text("\(s.date.formatted(date: .abbreviated, time: .omitted))\(s.feeling.map { " · \($0.label)" } ?? "")\(s.goalLabel.map { " · objectif \($0)\(s.goalReached == true ? " ✓" : "")" } ?? "")")
                             .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
                 }
