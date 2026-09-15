@@ -6,6 +6,8 @@ struct JeffreyView: View {
     @AppStorage(Prefs.voice) private var voice: String = "marin"
     @AppStorage(Prefs.autoCues) private var autoCues: Bool = true
     @AppStorage(Prefs.goalCues) private var goalCues: Bool = true
+    @AppStorage(Prefs.voiceBoost) private var voiceBoost: Bool = true
+    @AppStorage(Prefs.duckMusic) private var duckMusic: Bool = true
     @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var showAdvanced = false
@@ -61,6 +63,8 @@ struct JeffreyView: View {
                         section("Pendant la séance") {
                             toggleRow("Encouragements", "valider", $autoCues)
                             toggleRow("Points sur l'objectif", "objectif", $goalCues)
+                            toggleRow("Voix au-dessus de la musique", "volume", $voiceBoost)
+                            toggleRow("Baisser la musique quand il parle", "musique", $duckMusic)
                         }
                         section("Apple Watch") {
                             HStack {

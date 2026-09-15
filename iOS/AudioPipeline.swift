@@ -12,13 +12,20 @@ final class PCMPlaybackQueue {
         return samples.count - head
     }
 
+    /// Gain appliqué à la voix (écrêtage doux au-delà de 1.0) pour passer au-dessus de la musique.
+    var gain: Float = 1.0
+
     func append(pcm16 data: Data) {
         let count = data.count / 2
         guard count > 0 else { return }
         var floats = [Float](repeating: 0, count: count)
+        let g = gain
         data.withUnsafeBytes { raw in
             let src = raw.bindMemory(to: Int16.self)
-            for i in 0..<count { floats[i] = Float(Int16(littleEndian: src[i])) / 32768 }
+            for i in 0..<count {
+                let v = Float(Int16(littleEndian: src[i])) / 32768 * g
+                floats[i] = g > 1 ? tanh(v) : v
+            }
         }
         lock.lock()
         samples.append(contentsOf: floats)
@@ -71,6 +78,12 @@ final class AudioPipeline {
 
     var isPlaying: Bool { playback.available > 0 }
 
+    /// Niveau de la voix de Jeffrey (1.0 = tel quel ; 1.8 = nettement au-dessus de la musique).
+    var voiceGain: Float {
+        get { playback.gain }
+        set { playback.gain = newValue }
+    }
+
     func start() throws {
         try configureSession()
         try startEngine()
@@ -121,8 +134,23 @@ final class AudioPipeline {
     }
 
     /// Active ou retire l'atténuation des autres apps (appelé quand le coach commence / finit de parler).
+    private var unduckTask: DispatchWorkItem?
+
     func setDucking(_ on: Bool) {
-        guard isRunning, duckOthersWhileSpeaking || !on, on != ducking else { return }
+        guard isRunning, duckOthersWhileSpeaking || !on else { return }
+        unduckTask?.cancel()
+        if !on {
+            // On garde la musique basse encore 1,5 s après la phrase : pas de pompage entre deux phrases proches.
+            let task = DispatchWorkItem { [weak self] in self?.applyDucking(false) }
+            unduckTask = task
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: task)
+            return
+        }
+        applyDucking(true)
+    }
+
+    private func applyDucking(_ on: Bool) {
+        guard on != ducking else { return }
         ducking = on
         do {
             try applyCategory(duck: on)

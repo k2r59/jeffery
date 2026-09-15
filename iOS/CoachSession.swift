@@ -121,6 +121,7 @@ final class CoachSession: ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = true
         audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
         audio.noiseGate = config.micSensitivity.noiseGate
+        audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
         gps.start(kind: kind)
         if let ref = ReferenceRoute.load() {
             referenceTracker = ReferenceTracker(route: ref)

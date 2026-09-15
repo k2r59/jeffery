@@ -22,6 +22,14 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>spotify</string>
+		<string>deezer</string>
+		<string>music</string>
+		<string>youtubemusic</string>
+		<string>soundcloud</string>
+	</array>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>Jeffrey affiche le titre en cours et te laisse le mettre en pause ou passer au suivant pendant la séance.</string>
 	<key>NSHealthShareUsageDescription</key>

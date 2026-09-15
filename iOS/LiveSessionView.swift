@@ -142,24 +142,64 @@ struct LiveSessionView: View {
     }
 
     private var musicCard: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Ta musique").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
-                Text(music.title.map { "\($0)\(music.artist.map { " · \($0)" } ?? "")" } ?? "Aucune musique sélectionnée")
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted).lineLimit(1)
-            }
-            Spacer()
-            HStack(spacing: 4) {
-                musicButton("piste-precedente") { music.previous() }
-                musicButton(music.isPlaying ? "pause" : "lecture", prominent: true) {
-                    if !music.authorized { music.requestAuthorization() }
-                    music.togglePlayPause()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Ta musique").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                    Text(musicSubtitle).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted).lineLimit(1)
                 }
-                musicButton("piste-suivante") { music.next() }
+                Spacer()
+                if music.title != nil || music.isPlaying {
+                    HStack(spacing: 4) {
+                        musicButton("piste-precedente") { music.previous() }
+                        musicButton(music.isPlaying ? "pause" : "lecture", prominent: true) {
+                            if !music.authorized { music.requestAuthorization() }
+                            music.togglePlayPause()
+                        }
+                        musicButton("piste-suivante") { music.next() }
+                    }
+                }
+            }
+            if music.title == nil, !music.suggestedApps.isEmpty {
+                // Lecteurs tiers : iOS ne laisse pas afficher leur titre, on ouvre l'app (le dernier lancé en premier).
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(music.suggestedApps) { app in
+                            Button { music.open(app) } label: {
+                                HStack(spacing: 6) {
+                                    JIcon("musique", size: 14)
+                                    Text(app.name)
+                                }
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(music.lastApp == app.id ? Theme.background : Theme.creme)
+                                .padding(.horizontal, 12).frame(height: 34)
+                                .background(Capsule().fill(music.lastApp == app.id ? Theme.citron : Theme.surfaceRaised))
+                            }
+                        }
+                        Button {
+                            if !music.authorized { music.requestAuthorization() }
+                            music.togglePlayPause()
+                        } label: {
+                            HStack(spacing: 6) { JIcon("lecture", size: 14); Text("Apple Music") }
+                                .font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.creme)
+                                .padding(.horizontal, 12).frame(height: 34)
+                                .background(Capsule().fill(Theme.surfaceRaised))
+                        }
+                    }
+                }
             }
         }
         .card()
         .onAppear { music.requestAuthorization() }
+    }
+
+    private var musicSubtitle: String {
+        if let t = music.title { return "\(t)\(music.artist.map { " · \($0)" } ?? "")" }
+        if music.otherAudioPlaying {
+            let name = music.suggestedApps.first(where: { $0.id == music.lastApp })?.name ?? "une autre app"
+            return "En lecture dans \(name) · atténuée quand Jeffrey parle"
+        }
+        return "Rien en lecture · lance un lecteur"
     }
 
     private func musicButton(_ icon: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {

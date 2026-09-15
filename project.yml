@@ -38,6 +38,7 @@ targets:
         NSHealthShareUsageDescription: "Jeffrey lit tes données d'entraînement pour te coacher en direct."
         NSHealthUpdateUsageDescription: "Jeffrey peut lancer une séance sur ta montre."
         ITSAppUsesNonExemptEncryption: false
+        LSApplicationQueriesSchemes: [spotify, deezer, music, youtubemusic, soundcloud]
     entitlements:
       path: iOS/WatchCoach.entitlements
       properties:

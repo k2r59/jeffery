@@ -21,6 +21,7 @@ enum Prefs {
     static let micSensitivity = "pref.micSensitivity"
     static let presence = "pref.presence"        // discreet | present
     static let goalCues = "pref.goalCues"
+    static let voiceBoost = "pref.voiceBoost"
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
@@ -60,6 +61,7 @@ enum Prefs {
             micSensitivity: MicSensitivity.medium.rawValue,
             presence: "present",
             goalCues: true,
+            voiceBoost: true,
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,
