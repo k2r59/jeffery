@@ -267,7 +267,7 @@ final class CoachSession: ObservableObject {
                         "prefix_padding_ms": 300,
                         "silence_duration_ms": config.micSensitivity.silenceMs,
                         "create_response": true,
-                        "interrupt_response": true,
+                        "interrupt_response": false,
                     ],
                     "transcription": ["model": "gpt-4o-mini-transcribe", "language": "fr"],
                 ],
@@ -299,12 +299,8 @@ final class CoachSession: ObservableObject {
             Task { @MainActor in self?.log(.user, text) }
         }
         realtime.callbacks.onSpeechStarted = { [weak self] in
-            guard let self else { return }
-            self.audio.stopPlayback()
-            Task { @MainActor in
-                self.userSpeaking = true
-                self.coachSpeaking = false
-            }
+            // Pas d'interruption : Jeffrey finit sa phrase, la réponse à ce que tu dis arrive ensuite.
+            Task { @MainActor in self?.userSpeaking = true }
         }
         realtime.callbacks.onSpeechStopped = { [weak self] in
             Task { @MainActor in self?.userSpeaking = false }
