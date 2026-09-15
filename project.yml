@@ -83,3 +83,9 @@ schemes:
         WatchCoach: all
     run:
       config: Debug
+  WatchCoachWatch:
+    build:
+      targets:
+        WatchCoachWatch: all
+    run:
+      config: Debug
