@@ -41,8 +41,20 @@ struct CoachConfig {
     var metricsInterval: TimeInterval
     var autoCues: Bool
 
+    /// En Debug (simulateur), une clé passée en variable d'environnement OPENAI_API_KEY est copiée dans le trousseau
+    /// au premier lancement : `SIMCTL_CHILD_OPENAI_API_KEY=… xcrun simctl launch <udid> com.k2r59.WatchCoach`.
+    static func bootstrapKeyFromEnvironment() {
+        #if DEBUG
+        if (KeychainStore.read(KeychainStore.apiKeyAccount) ?? "").isEmpty,
+           let key = ProcessInfo.processInfo.environment["OPENAI_API_KEY"], !key.isEmpty {
+            KeychainStore.write(key, account: KeychainStore.apiKeyAccount)
+        }
+        #endif
+    }
+
     static func load() -> CoachConfig {
         Prefs.registerDefaults()
+        bootstrapKeyFromEnvironment()
         let d = UserDefaults.standard
         var maxHR = d.double(forKey: Prefs.maxHR)
         if maxHR <= 0 {
