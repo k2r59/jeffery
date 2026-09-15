@@ -247,6 +247,12 @@ final class CoachSession: ObservableObject {
 
     private func handleDisconnect(_ reason: String) {
         guard phase == .live || phase == .connecting else { return }
+        // Clé refusée ou accès interdit : inutile de retenter.
+        if let err = errorMessage?.lowercased(), err.contains("api key") || err.contains("invalid_api_key") || err.contains("unauthorized") {
+            errorMessage = "Clé API refusée par OpenAI : vérifie-la dans les réglages (elle commence par sk-)."
+            stop()
+            return
+        }
         reconnectAttempts += 1
         guard reconnectAttempts <= 5 else {
             errorMessage = "Connexion perdue : \(reason)"
