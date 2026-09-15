@@ -62,6 +62,8 @@ targets:
         WKRunsIndependentlyOfCompanionApp: false
         # workout-processing : mode piloté ; physical-therapy : session étendue du mode compagnon.
         WKBackgroundModes: [workout-processing, physical-therapy]
+        UIBackgroundModes: [location]
+        NSLocationWhenInUseUsageDescription: "WatchCoach enregistre le tracé GPS des séances qu'il pilote en extérieur."
         NSHealthShareUsageDescription: "WatchCoach lit fréquence cardiaque, distance et calories pendant la séance."
         NSHealthUpdateUsageDescription: "WatchCoach enregistre la séance dans Santé quand il la pilote."
     entitlements:

@@ -2,6 +2,7 @@ import Foundation
 import HealthKit
 import WatchKit
 import Combine
+import CoreLocation
 
 /// Gère la capture des métriques côté montre, dans l'un des deux modes :
 /// - `owned` : notre app possède la HKWorkoutSession (séance enregistrée par WatchCoach).
@@ -20,6 +21,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     // Mode owned
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    private var routeBuilder: HKWorkoutRouteBuilder?
+    private let locationManager = CLLocationManager()
+    private var recordingRoute = false
 
     // Mode companion
     private var runtimeSession: WKExtendedRuntimeSession?
@@ -60,6 +64,10 @@ final class WorkoutManager: NSObject, ObservableObject {
                 Task { @MainActor in self.statusMessage = "HealthKit : \(error.localizedDescription)" }
             }
         }
+        locationManager.delegate = self
+        if locationManager.authorizationStatus == .notDetermined {
+            locationManager.requestWhenInUseAuthorization()
+        }
     }
 
     // MARK: - Commandes venant de l'iPhone
@@ -94,6 +102,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
             let start = Date()
             beginTracking(kind: kind, mode: .owned, start: start)
+            if kind.locationType == .outdoor { startRouteRecording() }
             session.startActivity(with: start)
             builder.beginCollection(withStart: start) { _, error in
                 if let error {
@@ -286,8 +295,15 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
                 self.markPaused()
             case .ended:
                 guard let builder = self.builder else { self.finishTracking(); return }
+                let routeBuilder = self.routeBuilder
+                let hadRoute = self.recordingRoute
+                self.stopRouteRecording()
                 builder.endCollection(withEnd: date) { _, _ in
-                    builder.finishWorkout { _, error in
+                    builder.finishWorkout { workout, error in
+                        // Le tracé GPS est rattaché à la séance une fois celle-ci enregistrée.
+                        if let workout, let routeBuilder, hadRoute {
+                            routeBuilder.finishRoute(with: workout, metadata: nil) { _, _ in }
+                        }
                         Task { @MainActor in
                             if let error { self.statusMessage = "Enregistrement : \(error.localizedDescription)" }
                             else { self.statusMessage = "Séance enregistrée dans Santé" }
@@ -307,6 +323,41 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
             self.finishTracking()
         }
     }
+}
+
+// MARK: - GPS (mode piloté, extérieur)
+
+extension WorkoutManager: CLLocationManagerDelegate {
+    private func startRouteRecording() {
+        guard locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways else {
+            statusMessage = "GPS non autorisé : séance sans tracé"
+            return
+        }
+        routeBuilder = HKWorkoutRouteBuilder(healthStore: healthStore, device: nil)
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.distanceFilter = 5
+        locationManager.activityType = .fitness
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.startUpdatingLocation()
+        recordingRoute = true
+    }
+
+    private func stopRouteRecording() {
+        guard recordingRoute else { return }
+        locationManager.stopUpdatingLocation()
+        recordingRoute = false
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let good = locations.filter { $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy <= 50 }
+        guard !good.isEmpty else { return }
+        Task { @MainActor in
+            guard self.recordingRoute, let routeBuilder = self.routeBuilder else { return }
+            routeBuilder.insertRouteData(good) { _, _ in }
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
 
 // MARK: - HKLiveWorkoutBuilderDelegate

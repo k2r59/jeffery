@@ -24,6 +24,12 @@
 	<string>WatchCoach lit fréquence cardiaque, distance et calories pendant la séance.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>WatchCoach enregistre la séance dans Santé quand il la pilote.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>WatchCoach enregistre le tracé GPS des séances qu'il pilote en extérieur.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>WKApplication</key>
 	<true/>
 	<key>WKBackgroundModes</key>

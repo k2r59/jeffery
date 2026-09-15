@@ -5,6 +5,7 @@ struct ContentView: View {
     @AppStorage(Prefs.kind) private var kindRaw: String = WorkoutKind.running.rawValue
     @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @State private var showSettings = false
+    @State private var showHistory = false
 
     private var kind: WorkoutKind { WorkoutKind(rawValue: kindRaw) ?? .running }
     private var mode: CaptureMode { CaptureMode(rawValue: modeRaw) ?? .companion }
@@ -32,6 +33,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .tint(Theme.lime)
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showHistory) { HistoryView() }
         .task {
             #if DEBUG
             // Test sans interaction (simulateur) : WATCHCOACH_AUTOSTART=1 lance le coach au démarrage.
@@ -73,6 +75,13 @@ struct ContentView: View {
             }
             Spacer()
             statusPill
+            Button { showHistory = true } label: {
+                Image(systemName: "map")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Theme.surfaceRaised))
+            }
             Button { showSettings = true } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 17, weight: .semibold))
