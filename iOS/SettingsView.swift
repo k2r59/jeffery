@@ -138,6 +138,8 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Réglages")
+            .scrollContentBackground(.hidden)
+            .background(Theme.background)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Enregistrer") {
@@ -154,5 +156,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .preferredColorScheme(.dark)
+        .tint(Theme.lime)
     }
 }

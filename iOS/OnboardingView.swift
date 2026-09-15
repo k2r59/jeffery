@@ -47,8 +47,9 @@ struct OnboardingView: View {
     @State private var apiKey = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
     @State private var healthNotice: String?
 
-    private let cream = Color(red: 0.96, green: 0.95, blue: 0.91)
-    private let ink = Color(red: 0.06, green: 0.06, blue: 0.07)
+    // Thème sombre, comme le reste de l'app.
+    private let cream = Theme.background
+    private let ink = Color.white
 
     var body: some View {
         ZStack {
@@ -62,14 +63,14 @@ struct OnboardingView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in
-                        Capsule().fill(i == step ? Theme.lime : ink.opacity(0.15)).frame(width: i == step ? 22 : 8, height: 8)
+                        Capsule().fill(i == step ? Theme.lime : ink.opacity(0.2)).frame(width: i == step ? 22 : 8, height: 8)
                     }
                 }
                 .padding(.bottom, 18)
             }
         }
-        .preferredColorScheme(.light)
-        .tint(ink)
+        .preferredColorScheme(.dark)
+        .tint(Theme.lime)
     }
 
     private var intro: some View {
@@ -91,11 +92,11 @@ struct OnboardingView: View {
                             Text(intent.label).font(.system(size: 16, weight: .bold))
                             Spacer()
                             Image(systemName: intentRaw == intent.rawValue ? "checkmark.circle.fill" : "chevron.right")
-                                .foregroundStyle(intentRaw == intent.rawValue ? Theme.lime : ink.opacity(0.4))
+                                .foregroundStyle(intentRaw == intent.rawValue ? Theme.background : ink.opacity(0.4))
                         }
-                        .foregroundStyle(intentRaw == intent.rawValue ? cream : ink)
+                        .foregroundStyle(intentRaw == intent.rawValue ? Theme.background : ink)
                         .padding(.horizontal, 16).frame(height: 58)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(intentRaw == intent.rawValue ? ink : ink.opacity(0.06)))
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(intentRaw == intent.rawValue ? Theme.lime : Theme.surface))
                     }
                 }
             }
@@ -129,7 +130,7 @@ struct OnboardingView: View {
                 Label("Récupérer âge, poids et taille depuis Santé", systemImage: "heart.text.square")
                     .font(.system(size: 15, weight: .bold)).foregroundStyle(ink)
                     .frame(maxWidth: .infinity).frame(height: 54)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(ink.opacity(0.06)))
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
             }
             if let healthNotice { Text(healthNotice).font(.footnote).foregroundStyle(ink.opacity(0.6)) }
             Spacer()
@@ -149,7 +150,7 @@ struct OnboardingView: View {
                 .lineLimit(3...6)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(ink.opacity(0.06)))
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
             Button {
                 if let pasted = UIPasteboard.general.string { apiKey = pasted.trimmingCharacters(in: .whitespacesAndNewlines) }
             } label: {
@@ -168,12 +169,12 @@ struct OnboardingView: View {
         TextField(placeholder, text: text)
             .font(.system(size: 16, weight: .semibold))
             .padding(.horizontal, 16).frame(height: 54)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(ink.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
     }
 
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.display(17, weight: .black)).foregroundStyle(ink)
+            Text(title).font(.display(17, weight: .black)).foregroundStyle(Theme.background)
                 .frame(maxWidth: .infinity).frame(height: 58)
                 .background(Capsule().fill(Theme.lime))
         }
