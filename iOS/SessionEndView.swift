@@ -6,6 +6,8 @@ struct SessionEndView: View {
     @State var summary: SessionSummary
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var route: LocalRoute?
+    @State private var analyzing = false
+    @State private var analysisError: String?
 
     private var coordinates: [CLLocationCoordinate2D] {
         route?.locations.filter { $0.horizontalAccuracy < 60 }.map(\.coordinate) ?? []
@@ -71,6 +73,7 @@ struct SessionEndView: View {
                         }
                     }
                     .padding(.top, 6)
+                    analysisCard
                     if let line = summary.lastCoachLine, !line.isEmpty {
                         HStack(alignment: .top, spacing: 10) {
                             JeffreyMark(size: 22)
@@ -96,6 +99,65 @@ struct SessionEndView: View {
         .onAppear {
             route = LocalRoute.matching(start: summary.date, end: summary.date.addingTimeInterval(summary.elapsed + 60))
             SessionSummary.upsert(summary)
+            if summary.analysis == nil { runAnalysis() }
+        }
+    }
+
+    private var analysisCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                JeffreyMark(state: analyzing ? .speaking : .available, size: 24)
+                Text("LE REGARD DE JEFFREY").font(.system(size: 10, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
+                Spacer()
+                if !analyzing, summary.analysis != nil {
+                    Button { runAnalysis() } label: { JIcon("actualiser", size: 14).foregroundStyle(Theme.muted) }
+                }
+            }
+            if analyzing {
+                Text("Jeffrey regarde ta séance, ta forme et tes dernières sorties…")
+                    .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted)
+            } else if let a = summary.analysis {
+                Text(a).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.creme)
+                if let advice = summary.advice, !advice.isEmpty {
+                    HStack(alignment: .top, spacing: 8) {
+                        JIcon("objectif", size: 16).foregroundStyle(Theme.citron)
+                        Text("Pour la prochaine : \(advice)").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.citron)
+                    }
+                }
+                if let c = summary.caution, !c.isEmpty, c.lowercased() != "null" {
+                    HStack(alignment: .top, spacing: 8) {
+                        JIcon("information", size: 16).foregroundStyle(Theme.alerte)
+                        Text(c).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.alerte)
+                    }
+                }
+            } else if let e = analysisError {
+                Text("Bilan indisponible : \(e)").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.alerte)
+                Button("Réessayer") { runAnalysis() }.font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.citron)
+            }
+        }
+        .card()
+    }
+
+    private func runAnalysis() {
+        guard !analyzing else { return }
+        analyzing = true
+        analysisError = nil
+        Task {
+            let config = CoachConfig.load()
+            guard !config.apiKey.isEmpty else { analysisError = "clé API manquante"; analyzing = false; return }
+            let health = await SessionAnalyst.healthContext()
+            let dossier = SessionAnalyst.dossier(summary: summary, config: config, health: health, zones: summary.zoneCounts ?? [])
+            do {
+                let model = UserDefaults.standard.string(forKey: Prefs.analysisModel) ?? "gpt-5-mini"
+                let r = try await SessionAnalyst.analyze(dossier: dossier, apiKey: config.apiKey, model: model, userName: userName)
+                summary.analysis = r.analysis
+                summary.advice = r.advice
+                summary.caution = r.caution
+                SessionSummary.upsert(summary)
+            } catch {
+                analysisError = error.localizedDescription
+            }
+            analyzing = false
         }
     }
 }

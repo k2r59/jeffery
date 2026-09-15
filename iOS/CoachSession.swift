@@ -243,7 +243,8 @@ final class CoachSession: ObservableObject {
                 averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
                 maxHeartRate: hrSamples.max(), feeling: nil,
                 goalLabel: goal.kind == .free ? nil : goal.label, goalReached: goal.kind == .free ? nil : goalReached,
-                lastCoachLine: transcript.last(where: { $0.role == .coach })?.text)
+                lastCoachLine: transcript.last(where: { $0.role == .coach })?.text,
+                zoneCounts: HeartRateZone.allCases.map { z in hrSamples.filter { HeartRateZone.zone(for: $0, maxHR: config.maxHR) == z }.count })
             sessionStartedAt = nil
         }
     }

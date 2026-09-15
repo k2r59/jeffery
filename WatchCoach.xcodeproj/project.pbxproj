@@ -13,6 +13,7 @@
 		10B71EEE9658C3AD09BBBBE1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D4AA1667A3275F3D77C3C7 /* Theme.swift */; };
 		1600092E21C6985E6AB9AFA7 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD5230CD8F6E66BE4CD9541 /* SessionsView.swift */; };
 		25F7C47C9F29CEBDDFF2B50F /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3F53CE58B179A6AF3DC43C /* WatchContentView.swift */; };
+		283FD722227E973622E5D7CE /* SessionAnalyst.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC8C31809CD02803421C632 /* SessionAnalyst.swift */; };
 		2CD4BE415E6407756280E286 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E815CF64D6BC9EC9969F4101 /* Assets.xcassets */; };
 		3856BEC48F6C967B792BF246 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3E1F94AF9504750D0AC84335 /* Assets.xcassets */; };
 		3C0DA67E865FD64FA0A8BBC6 /* CoachConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2097E145A239323A219EBC1 /* CoachConfig.swift */; };
@@ -73,6 +74,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0FC8C31809CD02803421C632 /* SessionAnalyst.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAnalyst.swift; sourceTree = "<group>"; };
 		1B72EA6338816D49A380C3D1 /* HealthProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthProfile.swift; sourceTree = "<group>"; };
 		1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManager.swift; sourceTree = "<group>"; };
 		283D571A2B12BF08F2767D09 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 				2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */,
 				D5A63CF06A05D2BA57DB5461 /* RootView.swift */,
 				C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */,
+				0FC8C31809CD02803421C632 /* SessionAnalyst.swift */,
 				6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */,
 				CB07464CCC26C18B28EB4F8B /* SessionGoal.swift */,
 				E436D5C4A739476728581A22 /* SessionLog.swift */,
@@ -332,6 +335,7 @@
 				A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */,
 				48B34E824CC2E58A4B52982A /* RootView.swift in Sources */,
 				827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */,
+				283FD722227E973622E5D7CE /* SessionAnalyst.swift in Sources */,
 				4A6C94955EF3E4443DD6175A /* SessionEndView.swift in Sources */,
 				9329260E9C7DA8A64B02B2A9 /* SessionGoal.swift in Sources */,
 				0E824A8B7E8D8F9B3B3FB42C /* SessionLog.swift in Sources */,

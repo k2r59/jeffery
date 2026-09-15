@@ -25,7 +25,7 @@ struct TodayView: View {
                         Text("Salut\(userName.isEmpty ? "" : ", \(userName)").").font(.display(22, weight: .bold)).foregroundStyle(Theme.muted)
                         Text("On bouge ?").font(.display(32, weight: .black)).foregroundStyle(.white)
                     }
-                    JeffreyBubble(text: SessionSummary.loadAll().first.map { _ in "Quel est ton objectif aujourd'hui ?" } ?? "On commence tranquille ? Dis-moi ce que tu veux faire.")
+                    JeffreyBubble(text: todayBubble)
                     weekCard
                     if let last = history.workouts.first { lastOutingRow(last) }
                     if let ref = ReferenceRoute.load() { referenceRow(ref) }
@@ -45,6 +45,12 @@ struct TodayView: View {
                 coach.start(kind: kind, mode: CaptureMode(rawValue: UserDefaults.standard.string(forKey: Prefs.mode) ?? "") ?? .companion, goal: goal)
             }
         }
+    }
+
+    private var todayBubble: String {
+        guard let last = SessionSummary.loadAll().first else { return "On commence tranquille ? Dis-moi ce que tu veux faire." }
+        if let advice = last.advice, !advice.isEmpty { return "Mon conseil après ta dernière sortie : \(advice)" }
+        return "Quel est ton objectif aujourd'hui ?"
     }
 
     private var watchBadge: some View {

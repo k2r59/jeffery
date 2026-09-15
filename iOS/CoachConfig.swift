@@ -22,6 +22,7 @@ enum Prefs {
     static let presence = "pref.presence"        // discreet | present
     static let goalCues = "pref.goalCues"
     static let voiceBoost = "pref.voiceBoost"
+    static let analysisModel = "pref.analysisModel"
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
@@ -62,6 +63,7 @@ enum Prefs {
             presence: "present",
             goalCues: true,
             voiceBoost: true,
+            analysisModel: "gpt-5-mini",
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,

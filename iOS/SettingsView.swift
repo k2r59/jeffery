@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(Prefs.model) private var model: String = "gpt-realtime"
+    @AppStorage(Prefs.analysisModel) private var analysisModel: String = "gpt-5-mini"
     @AppStorage(Prefs.voice) private var voice: String = "marin"
     @AppStorage(Prefs.maxHR) private var maxHR: Double = 0
     @AppStorage(Prefs.age) private var age: Int = 40
@@ -45,7 +46,10 @@ struct SettingsView: View {
                         Text("\(apiKey.count) car.")
                             .font(.caption).foregroundStyle(apiKey.hasPrefix("sk-") ? .green : .orange)
                     }
-                    TextField("Modèle", text: $model)
+                    TextField("Modèle voix", text: $model)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("Modèle bilan de fin de séance", text: $analysisModel)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     Picker("Voix", selection: $voice) {

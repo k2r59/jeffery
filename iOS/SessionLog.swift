@@ -39,6 +39,10 @@ struct SessionSummary: Codable, Identifiable {
     var goalLabel: String?
     var goalReached: Bool?
     var lastCoachLine: String?
+    var zoneCounts: [Int]? = nil
+    var analysis: String? = nil
+    var advice: String? = nil
+    var caution: String? = nil
 
     static var fileURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("sessions.json")
@@ -72,6 +76,8 @@ struct SessionSummary: Codable, Identifiable {
         if let hr = last.averageHeartRate { parts.append("FC moyenne \(Int(hr))") }
         if let g = last.goalLabel { parts.append("objectif \(g) \(last.goalReached == true ? "atteint" : "non atteint")") }
         if let f = last.feeling { parts.append("ressenti : \(f.coachLabel)") }
-        return parts.joined(separator: ", ")
+        var text = parts.joined(separator: ", ")
+        if let a = last.advice, !a.isEmpty { text += ". Ton conseil d'alors pour aujourd'hui : « \(a) »" }
+        return text
     }
 }
