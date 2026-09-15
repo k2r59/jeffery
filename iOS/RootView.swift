@@ -12,8 +12,10 @@ struct RootView: View {
                 .tabItem { Label { Text("Aujourd'hui") } icon: { Image("accueil-creme").renderingMode(.template) } }.tag(0)
             SessionsView(history: history)
                 .tabItem { Label { Text("Séances") } icon: { Image("seances-creme").renderingMode(.template) } }.tag(1)
+            YouView()
+                .tabItem { Label { Text("Toi") } icon: { Image("profil-creme").renderingMode(.template) } }.tag(2)
             JeffreyView()
-                .tabItem { Label { Text("Jeffrey") } icon: { Image("voix-creme").renderingMode(.template) } }.tag(2)
+                .tabItem { Label { Text("Jeffrey") } icon: { Image("voix-creme").renderingMode(.template) } }.tag(3)
         }
         .tint(Theme.lime)
         .preferredColorScheme(.dark)

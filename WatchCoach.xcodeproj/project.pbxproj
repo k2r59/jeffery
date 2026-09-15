@@ -21,6 +21,7 @@
 		48A9A39515C84655284DF338 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD82806422AB8276FBD93DB2 /* OnboardingView.swift */; };
 		48B34E824CC2E58A4B52982A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A63CF06A05D2BA57DB5461 /* RootView.swift */; };
 		4A6C94955EF3E4443DD6175A /* SessionEndView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */; };
+		4EC84103B5AB0B8C3C3CB051 /* YouView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8EE1F43250706F36FF0C16 /* YouView.swift */; };
 		509C76BD84E7D18BBD014B3F /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */; };
 		57D26E3739DEBCE115D10AEB /* WorkoutHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */; };
 		5B0CE21D56CC710BDD6EFC61 /* WatchSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E02BD34C7EDAE2584384F97 /* WatchSender.swift */; };
@@ -115,6 +116,7 @@
 		F01028830AC541CE94AA809A /* MetricsSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsSnapshot.swift; sourceTree = "<group>"; };
 		F16EC8AB3E3AFC4B4D7E2C88 /* WatchCoach.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WatchCoach.entitlements; sourceTree = "<group>"; };
 		FAB112F058BBADDA9A8B2F7C /* CoachSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachSession.swift; sourceTree = "<group>"; };
+		FD8EE1F43250706F36FF0C16 /* YouView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouView.swift; sourceTree = "<group>"; };
 		FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -166,6 +168,7 @@
 				F16EC8AB3E3AFC4B4D7E2C88 /* WatchCoach.entitlements */,
 				4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */,
 				915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */,
+				FD8EE1F43250706F36FF0C16 /* YouView.swift */,
 			);
 			path = iOS;
 			sourceTree = "<group>";
@@ -347,6 +350,7 @@
 				866DA61EF35ADFC8E9C783B8 /* WatchCoachApp.swift in Sources */,
 				57D26E3739DEBCE115D10AEB /* WorkoutHistory.swift in Sources */,
 				A336E0792D358AD246889323 /* WorkoutKind+HealthKit.swift in Sources */,
+				4EC84103B5AB0B8C3C3CB051 /* YouView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
