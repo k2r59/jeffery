@@ -50,7 +50,7 @@ struct LiveSessionView: View {
     private var timerCard: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let s = coach.latest
-            let elapsed = liveElapsed(s, now: context.date)
+            let elapsed = coach.liveElapsed(at: context.date)
             let p = coach.goal.progress(elapsed: elapsed, distance: coach.displayDistance)
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
@@ -205,8 +205,8 @@ struct TalkSheet: View {
                 HStack {
                     Button { dismiss() } label: { Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(.white) }
                     Spacer()
-                    if coach.goal.kind != .free, let s = coach.latest {
-                        Text(coach.goal.progress(elapsed: s.elapsed, distance: coach.displayDistance).remaining ?? "")
+                    if coach.goal.kind != .free {
+                        Text(coach.goal.progress(elapsed: coach.liveElapsed(), distance: coach.displayDistance).remaining ?? "")
                             .font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.muted)
                     }
                     Spacer()

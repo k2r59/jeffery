@@ -53,6 +53,7 @@ final class CoachSession: ObservableObject {
     private var partialCoachLine: TranscriptLine?
     private var metricsTimer: Timer?
     private var cueTimer: Timer?
+    private var goalTimer: Timer?
     private var lastInjectedSnapshot: MetricsSnapshot?
     private var lastCueAt: Date = .distantPast
     private var lastAnnouncedZone: HeartRateZone?
@@ -179,6 +180,16 @@ final class CoachSession: ObservableObject {
 
     var isPaused: Bool { latest?.state == .paused }
 
+    /// Temps écoulé « vrai » : dernier instantané de la montre + temps passé depuis, ou horloge locale sans montre.
+    func liveElapsed(at now: Date = Date()) -> TimeInterval {
+        if let s = latest {
+            if s.state == .running, phase != .idle { return s.elapsed + max(0, now.timeIntervalSince(s.timestamp)) }
+            return s.elapsed
+        }
+        if let start = sessionStartedAt, phase != .idle { return now.timeIntervalSince(start) }
+        return 0
+    }
+
     func togglePause() {
         guard phase == .live else { return }
         let command: WatchCommand = isPaused ? .resume : .pause
@@ -212,10 +223,10 @@ final class CoachSession: ObservableObject {
         phase = .idle
         status = "Séance terminée"
         if let start = sessionStartedAt {
-            let elapsed = latest?.elapsed ?? Date().timeIntervalSince(start)
+            let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
             endedSummary = SessionSummary(
                 id: ISO8601DateFormatter().string(from: start), date: start, kind: kind,
-                elapsed: max(elapsed, Date().timeIntervalSince(start) > elapsed + 120 ? elapsed : elapsed),
+                elapsed: elapsed,
                 distance: displayDistance,
                 averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
                 maxHeartRate: hrSamples.max(), feeling: nil,
@@ -428,17 +439,7 @@ final class CoachSession: ObservableObject {
             }
             if lastAnnouncedZone == nil { lastAnnouncedZone = zone }
         }
-        if phase == .live, goal.kind != .free {
-            let p = goal.progress(elapsed: snap.elapsed, distance: displayDistance)
-            if !goalReached, goal.isReached(elapsed: snap.elapsed, distance: displayDistance) {
-                goalReached = true
-                lastCueAt = .distantPast
-                cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
-            } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues {
-                halfwayAnnounced = true
-                cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))")
-            }
-        }
+        evaluateGoal()
         if phase == .live, snap.state == .ended, mode == .owned {
             log(.info, "La montre a terminé la séance.")
         }
@@ -481,8 +482,16 @@ final class CoachSession: ObservableObject {
     }
 
     private func metricsLine(prefix: String) -> String {
-        guard let s = latest else { return "\(prefix) aucune donnée reçue de la montre pour l'instant." }
-        var parts: [String] = ["temps \(Formatters.elapsed(s.elapsed))"]
+        let elapsedNow = liveElapsed()
+        guard let s = latest else {
+            var parts = ["\(prefix) temps écoulé \(Formatters.elapsed(elapsedNow)) · aucune donnée de la montre pour l'instant"]
+            if goal.kind != .free {
+                let p = goal.progress(elapsed: elapsedNow, distance: displayDistance)
+                parts.append("objectif \(goal.coachLabel()) : \(Int(p.fraction * 100)) %\(p.remaining.map { ", \($0)" } ?? "")")
+            }
+            return parts.joined(separator: " · ")
+        }
+        var parts: [String] = ["temps écoulé \(Formatters.elapsed(elapsedNow))"]
         if let hr = s.heartRate {
             let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
             let pct = Int(hr / config.maxHR * 100)
@@ -497,7 +506,7 @@ final class CoachSession: ObservableObject {
         }
         if let e = s.activeEnergy { parts.append("\(Int(e)) kcal") }
         if goal.kind != .free {
-            let p = goal.progress(elapsed: s.elapsed, distance: displayDistance)
+            let p = goal.progress(elapsed: elapsedNow, distance: displayDistance)
             parts.append("objectif \(goal.coachLabel()) : \(Int(p.fraction * 100)) %\(p.remaining.map { ", \($0)" } ?? "")\(goalReached ? " · ATTEINT" : "")")
         }
         if let r = reference, let name = referenceName {
@@ -518,8 +527,11 @@ final class CoachSession: ObservableObject {
 
     private func startTimers() {
         stopTimers()
-        metricsTimer = Timer.scheduledTimer(withTimeInterval: config.metricsInterval, repeats: true) { [weak self] _ in
+        metricsTimer = Timer.scheduledTimer(withTimeInterval: min(config.metricsInterval, 15), repeats: true) { [weak self] _ in
             Task { @MainActor in self?.injectMetricsIfChanged() }
+        }
+        goalTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.evaluateGoal() }
         }
         if config.autoCues {
             cueTimer = Timer.scheduledTimer(withTimeInterval: config.cueInterval, repeats: true) { [weak self] _ in
@@ -532,14 +544,32 @@ final class CoachSession: ObservableObject {
     private func stopTimers() {
         metricsTimer?.invalidate()
         cueTimer?.invalidate()
+        goalTimer?.invalidate()
         metricsTimer = nil
         cueTimer = nil
+        goalTimer = nil
     }
 
+    /// Le temps avance même si la montre se tait : on injecte à intervalle fixe, données nouvelles ou non.
     private func injectMetricsIfChanged() {
-        guard phase == .live, realtime.isConnected, let snap = latest, snap != lastInjectedSnapshot else { return }
-        lastInjectedSnapshot = snap
+        guard phase == .live, realtime.isConnected else { return }
+        lastInjectedSnapshot = latest
         realtime.injectText(metricsLine(prefix: "[MÉTRIQUES]"))
+    }
+
+    /// Évalue l'objectif sur le temps réel, indépendamment des messages de la montre.
+    private func evaluateGoal() {
+        guard phase == .live, goal.kind != .free else { return }
+        let elapsed = liveElapsed()
+        let p = goal.progress(elapsed: elapsed, distance: displayDistance)
+        if !goalReached, goal.isReached(elapsed: elapsed, distance: displayDistance) {
+            goalReached = true
+            lastCueAt = .distantPast
+            cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
+        } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues {
+            halfwayAnnounced = true
+            cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))")
+        }
     }
 
     /// Demande une intervention courte du coach, sauf si quelqu'un parle déjà.

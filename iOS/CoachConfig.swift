@@ -218,6 +218,9 @@ struct CoachConfig {
         - Ne répète pas la même consigne à chaque intervention ; varie et sois concret.
         - Si l'utilisateur pose une question, réponds directement.
         - Si les métriques sont absentes ou vieilles, dis-le simplement et continue à coacher au temps.
+        - Tu n'as pas d'horloge : le temps écoulé et le temps restant sont UNIQUEMENT ceux de la dernière ligne [MÉTRIQUES]. \
+          Ne fais jamais de compte à rebours de tête, ne dis « encore 30 secondes » que si la dernière ligne le dit, \
+          et si tu n'es pas sûr, dis « environ » ou parle en minutes.
         - Quand un parcours de référence est indiqué, utilise le relief à venir (prépare à une montée avant qu'elle arrive, \
           conseille de relâcher en descente) et l'écart avec la séance de référence (avance ou retard) pour doser l'effort, \
           sans transformer chaque intervention en chronomètre.
