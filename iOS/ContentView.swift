@@ -24,6 +24,7 @@ struct ContentView: View {
                             heroTimer
                             heartCard
                             statsRow
+                            if let r = coach.reference { referenceCard(r) }
                             transcriptCard
                         } else {
                             HomeView(history: history, onOpenHistory: { showHistory = true }, onOpenSettings: { showSettings = true })
@@ -250,6 +251,37 @@ struct ContentView: View {
                         .animation(.spring(duration: 0.4), value: zone)
                 }
             }
+        }
+        .card()
+    }
+
+    // MARK: Parcours de référence
+
+    private func referenceCard(_ r: ReferenceStatus) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("PARCOURS").font(.system(size: 10, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
+                Spacer()
+                if r.offRoute {
+                    Text("hors tracé").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.ember)
+                } else if let g = r.ghostText {
+                    Text(g).font(.system(size: 12, weight: .black)).foregroundStyle((r.ghostDelta ?? 0) >= 0 ? Theme.lime : Theme.ember)
+                }
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.1))
+                    Capsule().fill(Theme.ice).frame(width: geo.size.width * min(1, r.covered / max(1, r.total)))
+                }
+            }
+            .frame(height: 8)
+            HStack {
+                Text(r.progressText)
+                Spacer()
+                Image(systemName: r.gainNext >= 8 ? "arrow.up.right" : (r.lossNext >= 8 ? "arrow.down.right" : "arrow.right"))
+                Text("500 m : \(r.reliefText)")
+            }
+            .font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.muted)
         }
         .card()
     }

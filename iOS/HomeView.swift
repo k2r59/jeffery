@@ -22,6 +22,7 @@ struct HomeView: View {
             greeting
             weekCard
             if let last = history.workouts.first { lastSessionCard(last) }
+            if let ref = ReferenceRoute.load() { referenceCard(ref) }
             coachCard
         }
     }
@@ -136,6 +137,24 @@ struct HomeView: View {
         if cal.isDateInYesterday(date) { return "hier" }
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: date), to: cal.startOfDay(for: Date())).day ?? 0
         return days < 7 ? "il y a \(days) j" : date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    // MARK: Parcours de référence
+
+    private func referenceCard(_ ref: ReferenceRoute) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "flag.checkered")
+                .font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.ice)
+                .frame(width: 42, height: 42).background(Circle().fill(Theme.surfaceRaised))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("PARCOURS DE RÉFÉRENCE").font(.system(size: 10, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
+                Text(ref.name).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                Text("\(Formatters.distance(ref.totalDistance)) · D+ \(Int(ref.totalGain)) m · le coach anticipera le relief et comparera ton allure")
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted).lineLimit(2)
+            }
+            Spacer()
+        }
+        .card()
     }
 
     // MARK: Coach

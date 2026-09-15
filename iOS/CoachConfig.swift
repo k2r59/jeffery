@@ -153,6 +153,9 @@ struct CoachConfig {
         - Ne répète pas la même consigne à chaque intervention ; varie et sois concret.
         - Si l'utilisateur pose une question, réponds directement.
         - Si les métriques sont absentes ou vieilles, dis-le simplement et continue à coacher au temps.
+        - Quand un parcours de référence est indiqué, utilise le relief à venir (prépare à une montée avant qu'elle arrive, \
+          conseille de relâcher en descente) et l'écart avec la séance de référence (avance ou retard) pour doser l'effort, \
+          sans transformer chaque intervention en chronomètre.
         - Zones cardiaques (FC max estimée \(Int(maxHR)) bpm) : Z1 < 60 %, Z2 60-70 %, Z3 70-80 %, Z4 80-90 %, Z5 > 90 %.
         """
     }

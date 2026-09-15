@@ -61,6 +61,8 @@ final class RouteRecorder: NSObject, ObservableObject {
     @Published private(set) var speed: Double?             // m/s de la dernière position
     @Published private(set) var pointCount: Int = 0
     @Published private(set) var status: String = ""
+    @Published private(set) var lastLocation: CLLocation?
+    private(set) var startedAt: Date?
 
     private let manager = CLLocationManager()
     private var route: LocalRoute?
@@ -97,6 +99,8 @@ final class RouteRecorder: NSObject, ObservableObject {
         speed = nil
         pointCount = 0
         lastGood = nil
+        lastLocation = nil
+        startedAt = now
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
         manager.startUpdatingLocation()
@@ -123,6 +127,7 @@ final class RouteRecorder: NSObject, ObservableObject {
                 distance += d
             }
             lastGood = l
+            lastLocation = l
             speed = l.speed >= 0 ? l.speed : nil
             r.points.append(.init(lat: l.coordinate.latitude, lon: l.coordinate.longitude, alt: l.altitude,
                                   hAcc: l.horizontalAccuracy, vAcc: l.verticalAccuracy, t: l.timestamp))

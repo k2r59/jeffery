@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import UIKit
+import CoreLocation
 
 struct TranscriptLine: Identifiable, Equatable {
     enum Role { case user, coach, info }
@@ -23,6 +24,12 @@ final class CoachSession: ObservableObject {
     @Published private(set) var userSpeaking = false
     @Published private(set) var currentZone: HeartRateZone?
     @Published private(set) var pace: String?
+    @Published private(set) var reference: ReferenceStatus?
+    private var referenceTracker: ReferenceTracker?
+    private var referenceName: String?
+    private var lastClimbWarnAt: Date = .distantPast
+    private var lastGhostWarnAt: Date = .distantPast
+    private var cancellables = Set<AnyCancellable>()
 
     let connectivity = PhoneConnectivity()
     let gps = RouteRecorder()
@@ -56,6 +63,10 @@ final class CoachSession: ObservableObject {
         audio.onRouteChanged = { [weak self] name in
             Task { @MainActor in self?.status = "Audio : \(name)" }
         }
+        gps.$lastLocation
+            .compactMap { $0 }
+            .sink { [weak self] location in self?.handle(location: location) }
+            .store(in: &cancellables)
     }
 
     // MARK: - Démarrage / arrêt
@@ -81,6 +92,15 @@ final class CoachSession: ObservableObject {
         status = "Connexion au coach…"
         UIApplication.shared.isIdleTimerDisabled = true
         gps.start(kind: kind)
+        if let ref = ReferenceRoute.load() {
+            referenceTracker = ReferenceTracker(route: ref)
+            referenceName = ref.name
+            reference = nil
+        } else {
+            referenceTracker = nil
+            referenceName = nil
+            reference = nil
+        }
 
         realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
         Task { [weak self] in
@@ -332,6 +352,26 @@ final class CoachSession: ObservableObject {
         return gps.distance > 20 ? gps.distance : nil
     }
 
+    private func handle(location: CLLocation) {
+        guard let tracker = referenceTracker, let start = gps.startedAt else { return }
+        let status = tracker.update(location: location, elapsed: Date().timeIntervalSince(start))
+        let previous = reference
+        reference = status
+        guard phase == .live, config.autoCues, !status.offRoute else { return }
+        let now = Date()
+        // Montée significative à venir : on prévient une fois, au plus toutes les 3 minutes.
+        if status.gainNext >= 15, now.timeIntervalSince(lastClimbWarnAt) > 180, (previous?.gainNext ?? 0) < 15 || previous == nil {
+            lastClimbWarnAt = now
+            cue(reason: String(format: "montée à venir : +%.0f m sur 500 m (%.0f %%)", status.gainNext, status.gradeNext))
+            return
+        }
+        // Fantôme : décrochage ou avance nette, au plus toutes les 4 minutes.
+        if let g = status.ghostDelta, abs(g) >= 30, now.timeIntervalSince(lastGhostWarnAt) > 240 {
+            lastGhostWarnAt = now
+            cue(reason: g < 0 ? "retard de \(Int(-g)) s sur la séance de référence" : "avance de \(Int(g)) s sur la séance de référence")
+        }
+    }
+
     private func computePace(_ snap: MetricsSnapshot) -> String? {
         if let v = snap.speed, let p = Formatters.pace(speedMetersPerSecond: v) { return p }
         if snap.distance == nil, let v = gps.speed, let p = Formatters.pace(speedMetersPerSecond: v) { return p }
@@ -358,6 +398,15 @@ final class CoachSession: ObservableObject {
             if let p = pace { parts.append("allure \(p)") }
         }
         if let e = s.activeEnergy { parts.append("\(Int(e)) kcal") }
+        if let r = reference, let name = referenceName {
+            if r.offRoute {
+                parts.append("parcours de référence « \(name) » : hors tracé pour l'instant")
+            } else {
+                var ref = "parcours « \(name) » : \(r.progressText) · 500 m à venir : \(r.reliefText)"
+                if let g = r.ghostText { ref += " · vs référence : \(g)" }
+                parts.append(ref)
+            }
+        }
         if s.state == .paused { parts.append("séance EN PAUSE") }
         if s.state == .ended { parts.append("séance terminée côté montre") }
         let age = Int(Date().timeIntervalSince(s.lastSampleAt ?? s.timestamp))

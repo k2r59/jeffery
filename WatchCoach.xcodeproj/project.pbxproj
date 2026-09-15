@@ -24,6 +24,7 @@
 		88F89F6CD6F490B56D7F51C4 /* WatchCoachWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E609600A71477DB5A710B8DD /* WatchCoachWatchApp.swift */; };
 		94537B092149D76C4523AC7E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF832909FB51387ABE5722ED /* SettingsView.swift */; };
 		A336E0792D358AD246889323 /* WorkoutKind+HealthKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EA9D6E0CF16BBB2466EE8E /* WorkoutKind+HealthKit.swift */; };
+		A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */; };
 		A795789D70318C0FFA83C6C6 /* WorkoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */; };
 		AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349670EE16768E2C8346D827 /* KeychainStore.swift */; };
 		BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
@@ -62,6 +63,7 @@
 		1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManager.swift; sourceTree = "<group>"; };
 		283D571A2B12BF08F2767D09 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		28B2665DA7E7F4A3EA8AFADD /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceRoute.swift; sourceTree = "<group>"; };
 		349670EE16768E2C8346D827 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		3E589C09902B7A842396858D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
@@ -115,6 +117,7 @@
 				349670EE16768E2C8346D827 /* KeychainStore.swift */,
 				BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */,
 				FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */,
+				2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */,
 				C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */,
 				BF832909FB51387ABE5722ED /* SettingsView.swift */,
 				50D4AA1667A3275F3D77C3C7 /* Theme.swift */,
@@ -260,6 +263,7 @@
 				BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */,
 				0FCF8FACF728ECDBF3B0ADC3 /* PhoneConnectivity.swift in Sources */,
 				EDCF91F2A7B9462E66319FA6 /* RealtimeClient.swift in Sources */,
+				A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */,
 				827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */,
 				94537B092149D76C4523AC7E /* SettingsView.swift in Sources */,
 				10B71EEE9658C3AD09BBBBE1 /* Theme.swift in Sources */,

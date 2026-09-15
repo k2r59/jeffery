@@ -85,6 +85,7 @@ struct WorkoutDetailView: View {
     @State private var averageHR: Double?
     @State private var loaded = false
     @State private var routeSource: String?
+    @State private var isReference = false
 
     private var coordinates: [CLLocationCoordinate2D] {
         locations.filter { $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy < 60 }.map(\.coordinate)
@@ -96,6 +97,7 @@ struct WorkoutDetailView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     mapCard
+                    referenceButton
                     statsGrid
                 }
                 .padding(18)
@@ -116,6 +118,32 @@ struct WorkoutDetailView: View {
             }
             locations = locs
             averageHR = await hr
+        }
+    }
+
+    private var referenceButton: some View {
+        Group {
+            if coordinates.count >= 2 {
+                Button {
+                    if isReference {
+                        ReferenceRoute.clear()
+                        isReference = false
+                    } else if let ref = ReferenceRoute.make(
+                        name: "\(WorkoutKind(activityType: workout.workoutActivityType).label) du \(workout.startDate.formatted(date: .abbreviated, time: .omitted))",
+                        date: workout.startDate, locations: locations) {
+                        ref.save()
+                        isReference = true
+                    }
+                } label: {
+                    Label(isReference ? "Parcours de référence actif · retirer" : "Utiliser comme parcours de référence",
+                          systemImage: isReference ? "flag.checkered.circle.fill" : "flag.checkered")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(isReference ? Theme.background : .white)
+                        .frame(maxWidth: .infinity).frame(height: 48)
+                        .background(Capsule().fill(isReference ? Theme.lime : Theme.surfaceRaised))
+                }
+                .onAppear { isReference = ReferenceRoute.load()?.date == workout.startDate }
+            }
         }
     }
 
