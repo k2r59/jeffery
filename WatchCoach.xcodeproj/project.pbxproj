@@ -27,6 +27,7 @@
 		AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349670EE16768E2C8346D827 /* KeychainStore.swift */; };
 		BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
 		CB08DD05ED173449299454B6 /* WatchCoachWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D685F01985F4CE50FB66F970 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28B2665DA7E7F4A3EA8AFADD /* HomeView.swift */; };
 		EDCF91F2A7B9462E66319FA6 /* RealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */; };
 		FE6BE3C6B3FD3FC8AA6E0553 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
 /* End PBXBuildFile section */
@@ -59,6 +60,7 @@
 		1B72EA6338816D49A380C3D1 /* HealthProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthProfile.swift; sourceTree = "<group>"; };
 		1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManager.swift; sourceTree = "<group>"; };
 		283D571A2B12BF08F2767D09 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		28B2665DA7E7F4A3EA8AFADD /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		349670EE16768E2C8346D827 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		3E589C09902B7A842396858D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 				D002EFFA958D8FD19FC15B0A /* ContentView.swift */,
 				1B72EA6338816D49A380C3D1 /* HealthProfile.swift */,
 				B771AF7CF4644315101BFB4F /* HistoryView.swift */,
+				28B2665DA7E7F4A3EA8AFADD /* HomeView.swift */,
 				283D571A2B12BF08F2767D09 /* Info.plist */,
 				349670EE16768E2C8346D827 /* KeychainStore.swift */,
 				BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */,
@@ -249,6 +252,7 @@
 				68EC907D8F7131B3708D2656 /* ContentView.swift in Sources */,
 				621D15B63E630840EF4F1E1B /* HealthProfile.swift in Sources */,
 				75A0EB54E5503D86B74B134C /* HistoryView.swift in Sources */,
+				D685F01985F4CE50FB66F970 /* HomeView.swift in Sources */,
 				AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */,
 				BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */,
 				0FCF8FACF728ECDBF3B0ADC3 /* PhoneConnectivity.swift in Sources */,

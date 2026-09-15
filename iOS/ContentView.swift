@@ -6,6 +6,7 @@ struct ContentView: View {
     @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @State private var showSettings = false
     @State private var showHistory = false
+    @StateObject private var history = WorkoutHistory()
 
     private var kind: WorkoutKind { WorkoutKind(rawValue: kindRaw) ?? .running }
     private var mode: CaptureMode { CaptureMode(rawValue: modeRaw) ?? .companion }
@@ -19,10 +20,15 @@ struct ContentView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 14) {
                         watchDiagnostics
-                        heroTimer
-                        heartCard
-                        statsRow
-                        transcriptCard
+                        if isLive {
+                            heroTimer
+                            heartCard
+                            statsRow
+                            transcriptCard
+                        } else {
+                            HomeView(history: history, onOpenHistory: { showHistory = true }, onOpenSettings: { showSettings = true })
+                            if coach.transcript.contains(where: { $0.role == .coach }) { transcriptCard }
+                        }
                     }
                 }
                 controls
@@ -34,6 +40,10 @@ struct ContentView: View {
         .tint(Theme.lime)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showHistory) { HistoryView() }
+        .task { await history.load() }
+        .onChange(of: coach.phase) { _, phase in
+            if phase == .idle { Task { await history.load() } }
+        }
         .task {
             #if DEBUG
             // Test sans interaction (simulateur) : WATCHCOACH_AUTOSTART=1 lance le coach au démarrage.
