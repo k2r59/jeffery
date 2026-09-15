@@ -1,0 +1,10 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+.DS_Store
+# Le projet est régénéré avec `xcodegen generate` ; on le versionne quand même pour ouvrir directement.
+# Secrets : jamais de clé API dans le dépôt (elle est saisie dans l'app et stockée dans le trousseau).
