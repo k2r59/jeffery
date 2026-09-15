@@ -14,6 +14,7 @@ enum Prefs {
     static let mode = "pref.mode"
     static let weightKg = "pref.weightKg"
     static let heightCm = "pref.heightCm"
+    static let duckMusic = "pref.duckMusic"
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
@@ -45,6 +46,7 @@ enum Prefs {
             mode: CaptureMode.companion.rawValue,
             weightKg: 0.0,
             heightCm: 0.0,
+            duckMusic: true,
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,

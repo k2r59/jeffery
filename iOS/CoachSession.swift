@@ -20,7 +20,9 @@ final class CoachSession: ObservableObject {
     @Published private(set) var transcript: [TranscriptLine] = []
     @Published private(set) var status: String = "Prêt"
     @Published private(set) var errorMessage: String?
-    @Published private(set) var coachSpeaking = false
+    @Published private(set) var coachSpeaking = false {
+        didSet { if coachSpeaking != oldValue { audio.setDucking(coachSpeaking) } }
+    }
     @Published private(set) var userSpeaking = false
     @Published private(set) var currentZone: HeartRateZone?
     @Published private(set) var pace: String?
@@ -91,6 +93,7 @@ final class CoachSession: ObservableObject {
         phase = .connecting
         status = "Connexion au coach…"
         UIApplication.shared.isIdleTimerDisabled = true
+        audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
         gps.start(kind: kind)
         if let ref = ReferenceRoute.load() {
             referenceTracker = ReferenceTracker(route: ref)

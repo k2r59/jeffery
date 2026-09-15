@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>WatchCoach affiche le titre en cours et permet de le mettre en pause ou de passer au suivant pendant la séance.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>WatchCoach lit tes données d'entraînement pour le coaching en direct.</string>
 	<key>NSHealthUpdateUsageDescription</key>

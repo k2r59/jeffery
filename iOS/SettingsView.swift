@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.weightKg) private var weightKg: Double = 0
     @AppStorage(Prefs.heightCm) private var heightCm: Double = 0
     @State private var healthNotice: String?
+    @AppStorage(Prefs.duckMusic) private var duckMusic: Bool = true
     @AppStorage(Prefs.level) private var level: String = AthleteLevel.amateur.rawValue
     @AppStorage(Prefs.athleteNotes) private var athleteNotes: String = ""
     @AppStorage(Prefs.basePrompt) private var basePrompt: String = Prefs.defaultBasePrompt
@@ -107,6 +108,7 @@ struct SettingsView: View {
                     TextField("Objectif (ex. 45 min en zone 2, ou 6 × 400 m)", text: $goal, axis: .vertical)
                         .lineLimit(2...4)
                     Toggle("Interventions automatiques du coach", isOn: $autoCues)
+                    Toggle("Baisser la musique quand le coach parle", isOn: $duckMusic)
                     Stepper("Toutes les \(Int(cueInterval)) s", value: $cueInterval, in: 20...300, step: 10)
                         .disabled(!autoCues)
                     Stepper("Métriques envoyées toutes les \(Int(metricsInterval)) s", value: $metricsInterval, in: 5...60, step: 5)

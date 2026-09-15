@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showHistory = false
     @StateObject private var history = WorkoutHistory()
+    @StateObject private var music = MusicController()
 
     private var kind: WorkoutKind { WorkoutKind(rawValue: kindRaw) ?? .running }
     private var mode: CaptureMode { CaptureMode(rawValue: modeRaw) ?? .companion }
@@ -25,6 +26,7 @@ struct ContentView: View {
                             heartCard
                             statsRow
                             if let r = coach.reference { referenceCard(r) }
+                            musicCard
                             transcriptCard
                         } else {
                             HomeView(history: history, onOpenHistory: { showHistory = true }, onOpenSettings: { showSettings = true })
@@ -284,6 +286,50 @@ struct ContentView: View {
             .font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.muted)
         }
         .card()
+    }
+
+    // MARK: Musique
+
+    private var musicCard: some View {
+        HStack(spacing: 12) {
+            Group {
+                if let art = music.artwork {
+                    Image(uiImage: art).resizable().scaledToFill()
+                } else {
+                    Image(systemName: "music.note").font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.muted)
+                }
+            }
+            .frame(width: 48, height: 48)
+            .background(Theme.surfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(music.title ?? (music.authorized ? "Rien en lecture" : "Musique"))
+                    .font(.system(size: 14, weight: .bold)).foregroundStyle(.white).lineLimit(1)
+                Text(music.artist ?? (music.authorized ? "Lance un titre dans Musique ou Spotify" : "Touche ▶ pour autoriser l'accès"))
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted).lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            HStack(spacing: 4) {
+                musicButton("backward.fill") { music.previous() }
+                musicButton(music.isPlaying ? "pause.fill" : "play.fill", prominent: true) {
+                    if !music.authorized { music.requestAuthorization() }
+                    music.togglePlayPause()
+                }
+                musicButton("forward.fill") { music.next() }
+            }
+        }
+        .card()
+        .onAppear { music.requestAuthorization() }
+    }
+
+    private func musicButton(_ icon: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: prominent ? 16 : 13, weight: .bold))
+                .foregroundStyle(prominent ? Theme.background : .white)
+                .frame(width: prominent ? 40 : 34, height: prominent ? 40 : 34)
+                .background(Circle().fill(prominent ? Theme.lime : Theme.surfaceRaised))
+        }
     }
 
     // MARK: Stats

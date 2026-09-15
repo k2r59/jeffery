@@ -100,11 +100,39 @@ final class AudioPipeline {
 
     // MARK: - Interne
 
+    /// Atténuer la musique des autres apps pendant que le coach parle.
+    var duckOthersWhileSpeaking = true
+    private var ducking = false
+
+    private var baseOptions: AVAudioSession.CategoryOptions {
+        // .mixWithOthers : la musique (Apple Music, Spotify…) continue pendant la séance.
+        [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
+    }
+
+    private func applyCategory(duck: Bool) throws {
+        var options = baseOptions
+        if duck { options.insert(.duckOthers) }
+        // .voiceChat active l'annulation d'écho : indispensable pour que le coach ne s'entende pas lui-même.
+        try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: options)
+    }
+
+    /// Active ou retire l'atténuation des autres apps (appelé quand le coach commence / finit de parler).
+    func setDucking(_ on: Bool) {
+        guard isRunning, duckOthersWhileSpeaking || !on, on != ducking else { return }
+        ducking = on
+        do {
+            try applyCategory(duck: on)
+            // La réactivation applique le nouveau réglage aux autres apps (retour du volume quand on cesse d'atténuer).
+            try AVAudioSession.sharedInstance().setActive(true, options: [])
+        } catch {
+            // Sans gravité : la musique reste à son niveau.
+        }
+    }
+
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
-        // .voiceChat active l'annulation d'écho : indispensable pour que le coach ne s'entende pas lui-même.
-        try session.setCategory(.playAndRecord, mode: .voiceChat,
-                                options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker])
+        ducking = false
+        try applyCategory(duck: false)
         try session.setPreferredSampleRate(24_000)
         try session.setPreferredIOBufferDuration(0.02)
         try session.setActive(true, options: [])
