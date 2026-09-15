@@ -2,17 +2,70 @@ import SwiftUI
 
 struct WatchContentView: View {
     @EnvironmentObject private var workout: WorkoutManager
+    @State private var page = 1
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                if workout.isActive {
-                    liveView
+        if workout.isActive {
+            // Glisser vers la droite depuis les métriques révèle les commandes, comme l'app Exercice.
+            TabView(selection: $page) {
+                controlsPage.tag(0)
+                ScrollView { liveView }.tag(1)
+            }
+            .tabViewStyle(.page)
+            .onAppear { page = 1 }
+        } else {
+            NavigationStack {
+                ScrollView { startView }
+                    .navigationTitle("WatchCoach")
+            }
+        }
+    }
+
+    // MARK: Panneau de commandes (page de gauche)
+
+    private var controlsPage: some View {
+        let s = workout.snapshot
+        return VStack(spacing: 14) {
+            HStack(spacing: 18) {
+                controlButton("xmark", "Terminer", .red) {
+                    workout.end()
+                }
+                if s.state == .paused {
+                    controlButton("play.fill", "Reprendre", .green) {
+                        workout.resume(); page = 1
+                    }
                 } else {
-                    startView
+                    controlButton("pause.fill", "Pause", .yellow) {
+                        workout.pause()
+                    }
                 }
             }
-            .navigationTitle("WatchCoach")
+            if workout.needsBackgroundExtension {
+                Button {
+                    workout.extendBackground(); page = 1
+                } label: {
+                    Label("Prolonger", systemImage: "clock.arrow.circlepath")
+                }
+                .tint(.green)
+            }
+            Text(s.mode == .companion ? "Compagnon Exercice" : "Séance WatchCoach")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 6)
+    }
+
+    private func controlButton(_ icon: String, _ title: String, _ color: Color, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 6) {
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: 26, weight: .bold))
+                    .frame(width: 64, height: 64)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(color)
+            .background(Circle().fill(color.opacity(0.25)))
+            .clipShape(Circle())
+            Text(title).font(.caption2)
         }
     }
 
@@ -79,21 +132,8 @@ struct WatchContentView: View {
                 Text(workout.statusMessage).font(.caption2).foregroundStyle(.secondary)
             }
 
-            if workout.needsBackgroundExtension {
-                Button("Prolonger l'arrière-plan") { workout.extendBackground() }
-                    .tint(.green)
-            }
-
-            HStack {
-                if s.mode == .owned {
-                    if s.state == .paused {
-                        Button { workout.resume() } label: { Image(systemName: "play.fill") }.tint(.green)
-                    } else {
-                        Button { workout.pause() } label: { Image(systemName: "pause.fill") }.tint(.yellow)
-                    }
-                }
-                Button { workout.end() } label: { Image(systemName: "stop.fill") }.tint(.red)
-            }
+            Text("← glisse pour les commandes")
+                .font(.caption2).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 4)
     }

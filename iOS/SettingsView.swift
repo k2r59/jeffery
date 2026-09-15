@@ -10,6 +10,9 @@ struct SettingsView: View {
     @AppStorage(Prefs.cueInterval) private var cueInterval: Double = 60
     @AppStorage(Prefs.metricsInterval) private var metricsInterval: Double = 15
     @AppStorage(Prefs.autoCues) private var autoCues: Bool = true
+    @AppStorage(Prefs.level) private var level: String = AthleteLevel.amateur.rawValue
+    @AppStorage(Prefs.athleteNotes) private var athleteNotes: String = ""
+    @AppStorage(Prefs.basePrompt) private var basePrompt: String = Prefs.defaultBasePrompt
     @State private var apiKey: String = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
     @State private var saveNotice: String?
 
@@ -55,6 +58,19 @@ struct SettingsView: View {
                     }
                     Text("Laisse 0 pour estimer automatiquement (\(220 - age) bpm).")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Coach") {
+                    Picker("Niveau", selection: $level) {
+                        ForEach(AthleteLevel.allCases) { Text($0.label).tag($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    TextField("À propos de toi : forme du jour, blessures, contexte…", text: $athleteNotes, axis: .vertical)
+                        .lineLimit(2...5)
+                    TextField("Prompt de base du coach", text: $basePrompt, axis: .vertical)
+                        .font(.footnote)
+                        .lineLimit(5...14)
+                    Button("Rétablir le prompt par défaut") { basePrompt = Prefs.defaultBasePrompt }
+                        .font(.footnote)
                 }
                 Section("Séance") {
                     TextField("Objectif (ex. 45 min en zone 2, ou 6 × 400 m)", text: $goal, axis: .vertical)
