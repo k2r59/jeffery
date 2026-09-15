@@ -17,9 +17,24 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("OpenAI") {
-                    SecureField("Clé API (sk-…)", text: $apiKey)
+                    TextField("Clé API (sk-…)", text: $apiKey, axis: .vertical)
+                        .font(.system(.footnote, design: .monospaced))
+                        .lineLimit(3...8)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .keyboardType(.asciiCapable)
+                    HStack {
+                        Button {
+                            if let pasted = UIPasteboard.general.string {
+                                apiKey = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+                            }
+                        } label: {
+                            Label("Coller depuis le presse-papiers", systemImage: "doc.on.clipboard")
+                        }
+                        Spacer()
+                        Text("\(apiKey.count) car.")
+                            .font(.caption).foregroundStyle(apiKey.hasPrefix("sk-") ? .green : .orange)
+                    }
                     TextField("Modèle", text: $model)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -50,7 +65,7 @@ struct SettingsView: View {
                     Stepper("Métriques envoyées toutes les \(Int(metricsInterval)) s", value: $metricsInterval, in: 5...60, step: 5)
                 }
                 Section {
-                    Text(apiKey.isEmpty ? "Aucune clé enregistrée." : "Clé enregistrée (\(apiKey.prefix(7))…\(apiKey.suffix(4))).")
+                    Text(apiKey.isEmpty ? "Aucune clé enregistrée." : "Clé enregistrée : \(apiKey.prefix(7))…\(apiKey.suffix(4)), \(apiKey.count) caractères.")
                         .font(.caption).foregroundStyle(apiKey.isEmpty ? .red : .green)
                     if let saveNotice {
                         Text(saveNotice).font(.caption).foregroundStyle(.orange)
