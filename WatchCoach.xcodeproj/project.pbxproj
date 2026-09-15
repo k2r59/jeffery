@@ -45,6 +45,7 @@
 		BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
 		CB08DD05ED173449299454B6 /* WatchCoachWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E26AB3EAECF37CF14F030331 /* VoicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = D501B5BC019DE9395044ADA3 /* VoicePreview.swift */; };
+		EC0901101D1F3616937B0785 /* ProfileImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF934BA7DEFCAB03A6719FF /* ProfileImage.swift */; };
 		EDCF91F2A7B9462E66319FA6 /* RealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */; };
 		F2DC8CB0D16F9403F45983B8 /* JeffreyMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D7D2911298C496B06F52EA /* JeffreyMark.swift */; };
 		FE6BE3C6B3FD3FC8AA6E0553 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
@@ -93,6 +94,7 @@
 		7E02BD34C7EDAE2584384F97 /* WatchSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSender.swift; sourceTree = "<group>"; };
 		82D7D2911298C496B06F52EA /* JeffreyMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyMark.swift; sourceTree = "<group>"; };
 		892B4D5B0C8155C590E5D7C7 /* WatchCoachWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WatchCoachWatch.entitlements; sourceTree = "<group>"; };
+		8BF934BA7DEFCAB03A6719FF /* ProfileImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileImage.swift; sourceTree = "<group>"; };
 		915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHistory.swift; sourceTree = "<group>"; };
 		A2097E145A239323A219EBC1 /* CoachConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachConfig.swift; sourceTree = "<group>"; };
 		A433BC192FA6379ABE91035B /* ObjectiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveView.swift; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 				A433BC192FA6379ABE91035B /* ObjectiveView.swift */,
 				CD82806422AB8276FBD93DB2 /* OnboardingView.swift */,
 				BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */,
+				8BF934BA7DEFCAB03A6719FF /* ProfileImage.swift */,
 				FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */,
 				2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */,
 				D5A63CF06A05D2BA57DB5461 /* RootView.swift */,
@@ -334,6 +337,7 @@
 				AA8054D04A39FFBD9DEA1CBA /* ObjectiveView.swift in Sources */,
 				48A9A39515C84655284DF338 /* OnboardingView.swift in Sources */,
 				0FCF8FACF728ECDBF3B0ADC3 /* PhoneConnectivity.swift in Sources */,
+				EC0901101D1F3616937B0785 /* ProfileImage.swift in Sources */,
 				EDCF91F2A7B9462E66319FA6 /* RealtimeClient.swift in Sources */,
 				A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */,
 				48B34E824CC2E58A4B52982A /* RootView.swift in Sources */,

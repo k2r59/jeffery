@@ -20,7 +20,7 @@ struct TodayView: View {
             Theme.background.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    JeffreyHeader(trailing: AnyView(watchBadge))
+                    JeffreyHeader(trailing: AnyView(HStack(spacing: 10) { watchBadge; ProfileAvatar(name: userName, size: 40) }))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Salut\(userName.isEmpty ? "" : ", \(userName)").").font(.display(22, weight: .bold)).foregroundStyle(Theme.muted)
                         Text("On bouge ?").font(.display(32, weight: .black)).foregroundStyle(.white)

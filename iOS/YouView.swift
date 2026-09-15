@@ -28,6 +28,7 @@ struct YouView: View {
                         Text("Ce que Jeffrey sait de toi pour s'adapter.").font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted)
 
                         section("Profil") {
+                            ProfilePhotoPicker(name: userName)
                             field("Prénom", text: $userName)
                             HStack(spacing: 8) {
                                 ForEach(Intent.allCases) { i in
