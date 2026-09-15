@@ -28,7 +28,7 @@ enum SessionAnalyst {
 
     static func healthContext() async -> HealthContext {
         var ctx = HealthContext()
-        guard HKHealthStore.isHealthDataAvailable() else { return ctx }
+        guard HKHealthStore.isHealthDataAvailable(), ProcessInfo.processInfo.environment["WATCHCOACH_NO_HEALTH"] == nil else { return ctx }
         let store = HKHealthStore()
         _ = try? await store.requestAuthorization(toShare: [], read: readTypes)
         ctx.restingHR = await latest(store, HKQuantityType(.restingHeartRate), .count().unitDivided(by: .minute()))

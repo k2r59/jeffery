@@ -28,19 +28,20 @@ struct YouView: View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
+                ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
-                        JeffreyWordmark(size: 22)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Toi").font(.display(34, weight: .black)).foregroundStyle(Theme.creme)
-                            Text("Pour un coaching qui te ressemble.").font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted)
+                        JeffreyWordmark(size: 22).padding(.top, 4)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Toi").font(.display(40, weight: .black)).foregroundStyle(Theme.creme)
+                            Text("Pour un coaching qui te ressemble.").font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.muted)
                         }
 
                         profileCard
                         titled("Ton objectif personnel") { intentList }
                         titled("Ton niveau") { levelSegments }
                         titled("Tes mesures", trailing: AnyView(editButton)) { measuresGrid }
-                        healthCard
+                        healthCard.id("sante")
                         fitnessCard
                         last30Card
                         aboutCard
@@ -51,6 +52,14 @@ struct YouView: View {
                     .padding(.bottom, 70)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .onAppear {
+                    #if DEBUG
+                    if ProcessInfo.processInfo.environment["WATCHCOACH_SCROLL"] == "sante" {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { proxy.scrollTo("sante", anchor: .top) }
+                    }
+                    #endif
+                }
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .task { await loadHealth() }
@@ -65,20 +74,20 @@ struct YouView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if editingName {
                     TextField("Ton prénom", text: $userName)
-                        .font(.display(24, weight: .black)).foregroundStyle(Theme.creme)
+                        .font(.display(26, weight: .black)).foregroundStyle(Theme.creme)
                         .onSubmit { editingName = false }
                 } else {
                     Button { editingName = true } label: {
                         Text(userName.isEmpty ? "Ton prénom" : userName)
-                            .font(.display(24, weight: .black)).foregroundStyle(userName.isEmpty ? Theme.muted : Theme.creme)
+                            .font(.display(26, weight: .black)).foregroundStyle(userName.isEmpty ? Theme.muted : Theme.creme)
                     }
                 }
                 PhotosPicker(selection: $photoSelection, matching: .images, photoLibrary: .shared()) {
                     HStack(spacing: 8) {
-                        JIcon("profil", size: 16)
+                        Image(systemName: "camera").font(.system(size: 15, weight: .semibold))
                         Text(photos.image == nil ? "Ajouter une photo" : "Modifier la photo")
                     }
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.creme)
+                    .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.creme)
                 }
                 if photos.image != nil {
                     Button { photos.clear() } label: { Text("Retirer la photo").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted) }
@@ -100,6 +109,14 @@ struct YouView: View {
 
     private var intentList: some View {
         VStack(spacing: 8) {
+            intentRows
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface))
+    }
+
+    private var intentRows: some View {
+        VStack(spacing: 8) {
             ForEach(Intent.allCases) { i in
                 let selected = intentRaw == i.rawValue
                 Button {
@@ -115,8 +132,8 @@ struct YouView: View {
                             if selected { Circle().fill(Theme.citron).frame(width: 12, height: 12) }
                         }
                     }
-                    .padding(.horizontal, 14).frame(height: 52)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(selected ? Theme.citron.opacity(0.14) : Theme.surfaceRaised))
+                    .padding(.horizontal, 14).frame(height: 50)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(selected ? Theme.citron.opacity(0.16) : Theme.surfaceRaised))
                 }
             }
         }
@@ -142,51 +159,51 @@ struct YouView: View {
     private var editButton: some View {
         Button { withAnimation(.snappy) { editingMeasures.toggle() } } label: {
             HStack(spacing: 6) {
-                JIcon(editingMeasures ? "valider" : "reglages", size: 14)
+                Image(systemName: editingMeasures ? "checkmark" : "pencil").font(.system(size: 13, weight: .bold))
                 Text(editingMeasures ? "Terminé" : "Modifier")
             }
-            .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.citron)
+            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.citron)
         }
     }
 
     private var measuresGrid: some View {
         let cols = [GridItem(.flexible()), GridItem(.flexible())]
         return LazyVGrid(columns: cols, spacing: 10) {
-            measureTile("profil", "Âge", value: age > 0 ? "\(age)" : nil, unit: "ans") {
+            measureTile("person", "Âge", value: age > 0 ? "\(age)" : nil, unit: "ans") {
                 Stepper("\(age) ans", value: $age, in: 10...100).font(.system(size: 13, weight: .semibold))
             }
-            measureTile("energie", "Poids", value: weightKg > 0 ? String(format: "%.0f", weightKg) : nil, unit: "kg") {
+            measureTile("bag", "Poids", value: weightKg > 0 ? String(format: "%.0f", weightKg) : nil, unit: "kg") {
                 numberField(value: $weightKg, unit: "kg")
             }
-            measureTile("distance", "Taille", value: heightCm > 0 ? "\(Int(heightCm))" : nil, unit: "cm") {
+            measureTile("ruler", "Taille", value: heightCm > 0 ? "\(Int(heightCm))" : nil, unit: "cm") {
                 numberField(value: $heightCm, unit: "cm")
             }
-            measureTile("frequence-cardiaque", "FC maximale", value: "\(maxHR > 0 ? Int(maxHR) : 220 - age)", unit: "bpm") {
+            measureTile("heart", "FC maximale", value: "\(maxHR > 0 ? Int(maxHR) : 220 - age)", unit: "bpm") {
                 numberField(value: $maxHR, unit: "bpm")
             }
         }
     }
 
     private func measureTile<Editor: View>(_ icon: String, _ title: String, value: String?, unit: String, @ViewBuilder editor: () -> Editor) -> some View {
-        HStack(spacing: 12) {
-            JIcon(icon, size: 20).foregroundStyle(Theme.creme)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).font(.system(size: 20, weight: .regular)).foregroundStyle(Theme.creme).frame(width: 26).padding(.top, 2)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
+                Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
                 if editingMeasures {
                     editor()
                 } else if let value {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(value).font(.display(20, weight: .black).monospacedDigit()).foregroundStyle(Theme.creme)
-                        Text(unit).font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.creme)
+                        Text(value).font(.system(size: 22, weight: .bold).monospacedDigit()).foregroundStyle(Theme.creme)
+                        Text(unit).font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.creme)
                     }
                 } else {
-                    Text("À renseigner").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.creme)
+                    Text("À renseigner").font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.creme)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(14).frame(minHeight: 72)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surfaceRaised))
+        .padding(14).frame(minHeight: 74)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface))
     }
 
     private func numberField(value: Binding<Double>, unit: String) -> some View {
@@ -203,9 +220,9 @@ struct YouView: View {
 
     private var healthCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                JIcon("frequence-cardiaque", size: 18).foregroundStyle(Theme.creme)
-                Text("Données Santé").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme)
+            HStack(spacing: 10) {
+                Image(systemName: "heart").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.creme)
+                Text("Données Santé").font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.creme)
             }
             Button {
                 Task {
@@ -217,8 +234,8 @@ struct YouView: View {
                     healthNotice = (r.age == nil && r.weightKg == nil && r.heightCm == nil && health?.restingHR == nil) ? "Rien trouvé dans Santé." : "Mis à jour depuis Santé."
                 }
             } label: {
-                HStack(spacing: 8) { JIcon("frequence-cardiaque", size: 16); Text("Actualiser depuis Santé") }
-                    .font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.creme)
+                HStack(spacing: 8) { Image(systemName: "heart").font(.system(size: 15, weight: .semibold)); Text("Actualiser depuis Santé") }
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.creme)
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surfaceRaised))
             }
@@ -229,7 +246,7 @@ struct YouView: View {
 
     private var fitnessCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Ta forme").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme).padding(.bottom, 8)
+            Text("Ta forme").font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.creme).padding(.bottom, 8)
             fitnessRow("Fréquence au repos", value: health?.restingHR.map { "\(Int($0))" }, unit: "bpm")
             Divider().overlay(Theme.creme.opacity(0.08))
             fitnessRow("VO₂ max", value: health?.vo2Max.map { String(format: "%.0f", $0) }, unit: "ml/kg/min")
@@ -253,7 +270,7 @@ struct YouView: View {
 
     private var last30Card: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Tes 30 derniers jours").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme)
+            Text("Tes 30 derniers jours").font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.creme)
             HStack(spacing: 0) {
                 bigStat("\(health?.last30DaysWorkouts ?? 0)", "séances")
                 Divider().overlay(Theme.creme.opacity(0.1)).frame(height: 44)
@@ -279,9 +296,9 @@ struct YouView: View {
     private var aboutCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("À propos de toi").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme)
+                Text("À propos de toi").font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.creme)
                 Spacer()
-                Button { notesFocused = true } label: { JIcon("reglages", size: 16).foregroundStyle(Theme.creme) }
+                Button { notesFocused = true } label: { Image(systemName: "pencil").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.creme) }
             }
             TextField("Ta forme du jour, tes contraintes, ce que Jeffrey doit savoir…", text: $athleteNotes, axis: .vertical)
                 .lineLimit(3...6).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.creme)
@@ -354,7 +371,7 @@ struct YouView: View {
     private func titled<Content: View>(_ title: String, trailing: AnyView? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(title).font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme)
+                Text(title).font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.creme)
                 Spacer()
                 if let trailing { trailing }
             }

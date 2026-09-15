@@ -16,7 +16,7 @@ enum HealthProfile {
     ]
 
     static func fetch(store: HKHealthStore = HKHealthStore()) async -> Result {
-        guard HKHealthStore.isHealthDataAvailable() else { return Result() }
+        guard HKHealthStore.isHealthDataAvailable(), ProcessInfo.processInfo.environment["WATCHCOACH_NO_HEALTH"] == nil else { return Result() }
         _ = try? await store.requestAuthorization(toShare: [], read: readTypes)
         var result = Result()
         if let dob = try? store.dateOfBirthComponents(), let date = Calendar.current.date(from: dob) {
