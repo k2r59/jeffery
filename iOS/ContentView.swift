@@ -17,6 +17,7 @@ struct ContentView: View {
                 header
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 14) {
+                        watchDiagnostics
                         heroTimer
                         heartCard
                         statsRow
@@ -102,6 +103,36 @@ struct ContentView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Capsule().fill(Theme.surfaceRaised))
+    }
+
+    // MARK: Diagnostic montre
+
+    private var watchDiagnostics: some View {
+        let c = coach.connectivity
+        return HStack(spacing: 10) {
+            diagChip("Appairée", ok: c.isPaired)
+            diagChip("App installée", ok: c.isWatchAppInstalled)
+            diagChip("Joignable", ok: c.isReachable)
+            Spacer()
+            Button {
+                if let url = URL(string: "itms-watch://") { UIApplication.shared.open(url) }
+            } label: {
+                Image(systemName: "applewatch.side.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Theme.surfaceRaised))
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func diagChip(_ title: String, ok: Bool) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(ok ? Theme.lime : Theme.pulse).frame(width: 6, height: 6)
+            Text(title).font(.system(size: 10, weight: .heavy)).tracking(0.5)
+        }
+        .foregroundStyle(ok ? .white : Theme.muted)
     }
 
     // MARK: Chrono
