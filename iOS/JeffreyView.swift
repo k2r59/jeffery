@@ -9,6 +9,7 @@ struct JeffreyView: View {
     @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var showAdvanced = false
+    @StateObject private var preview = VoicePreview()
 
     var body: some View {
         NavigationStack {
@@ -30,13 +31,31 @@ struct JeffreyView: View {
                             .padding(4).background(Capsule().fill(Theme.surfaceRaised))
                         }
                         section("Voix du coach") {
-                            HStack {
-                                Text(voice.capitalized).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                                Spacer()
+                            HStack(spacing: 10) {
                                 Picker("Voix", selection: $voice) {
                                     ForEach(Prefs.voices, id: \.self) { Text($0.capitalized).tag($0) }
                                 }
-                                .pickerStyle(.menu).tint(Theme.lime).labelsHidden()
+                                .pickerStyle(.menu).tint(.white).labelsHidden()
+                                Spacer()
+                                Button {
+                                    preview.play(voice: voice, name: userName)
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        if preview.isLoading {
+                                            ProgressView().tint(Theme.background).scaleEffect(0.8)
+                                        } else {
+                                            Image(systemName: preview.isPlaying ? "speaker.wave.2.fill" : "play.fill")
+                                        }
+                                        Text(preview.isLoading ? "Jeffrey arrive…" : "Écouter")
+                                    }
+                                    .font(.system(size: 13, weight: .black)).foregroundStyle(Theme.background)
+                                    .padding(.horizontal, 14).frame(height: 38)
+                                    .background(Capsule().fill(Theme.lime))
+                                }
+                                .disabled(preview.isLoading || coach.phase != .idle)
+                            }
+                            if let err = preview.error {
+                                Text(err).font(.caption).foregroundStyle(Theme.pulse)
                             }
                         }
                         section("Pendant la séance") {
