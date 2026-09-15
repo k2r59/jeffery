@@ -80,6 +80,12 @@ final class CoachSession: ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = true
 
         realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+            guard let self, self.phase == .connecting else { return }
+            self.errorMessage = self.errorMessage ?? "Connexion au coach impossible (délai dépassé)."
+            self.stop()
+        }
 
         // Côté montre : lancement de la séance pilotée, ou demande de suivi de l'app Exercice.
         switch mode {
@@ -154,7 +160,7 @@ final class CoachSession: ObservableObject {
                     "format": ["type": "audio/pcm", "rate": 24_000],
                     "turn_detection": [
                         "type": "server_vad",
-                        "threshold": 0.6,
+                        "threshold": NSDecimalNumber(string: "0.6"),
                         "prefix_padding_ms": 300,
                         "silence_duration_ms": 700,
                         "create_response": true,
@@ -165,7 +171,7 @@ final class CoachSession: ObservableObject {
                 "output": [
                     "format": ["type": "audio/pcm", "rate": 24_000],
                     "voice": config.voice,
-                    "speed": 1.05,
+                    "speed": NSDecimalNumber(string: "1.05"),
                 ],
             ],
         ]
