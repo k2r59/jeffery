@@ -24,6 +24,7 @@ enum Prefs {
     static let voiceBoost = "pref.voiceBoost"
     static let analysisModel = "pref.analysisModel"
     static let analysisProvider = "pref.analysisProvider"   // apple | openai
+    static let voiceEngine = "pref.voiceEngine"             // openai | apple (voix de sortie uniquement)
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
@@ -66,6 +67,7 @@ enum Prefs {
             voiceBoost: true,
             analysisModel: "gpt-5-mini",
             analysisProvider: "apple",
+            voiceEngine: "openai",
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,
@@ -130,6 +132,7 @@ enum MicSensitivity: String, CaseIterable, Identifiable {
 
 struct CoachConfig {
     var apiKey: String
+    var voiceEngine: String
     var micSensitivity: MicSensitivity
     var presence: String
     var goalCues: Bool
@@ -172,6 +175,7 @@ struct CoachConfig {
         let base = d.string(forKey: Prefs.basePrompt)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return CoachConfig(
             apiKey: KeychainStore.read(KeychainStore.apiKeyAccount) ?? "",
+            voiceEngine: d.string(forKey: Prefs.voiceEngine) ?? "openai",
             micSensitivity: MicSensitivity(rawValue: d.string(forKey: Prefs.micSensitivity) ?? "") ?? .medium,
             presence: d.string(forKey: Prefs.presence) ?? "present",
             goalCues: d.object(forKey: Prefs.goalCues) as? Bool ?? true,

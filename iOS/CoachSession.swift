@@ -59,6 +59,10 @@ final class CoachSession: ObservableObject {
     let connectivity = PhoneConnectivity()
     let gps = RouteRecorder()
     let activity = ActivityMonitor()
+    let appleVoice = AppleVoice()
+    private var useAppleVoice = false
+    private var sentenceBuffer = ""
+    private var textResponseBuffer = ""
     private var lastEventCueAt: Date = .distantPast
     private var hrHistory: [(Date, Double)] = []
     private var speedHistory: [(Date, Double)] = []
@@ -104,6 +108,13 @@ final class CoachSession: ObservableObject {
             .compactMap { $0 }
             .sink { [weak self] location in self?.handle(location: location) }
             .store(in: &cancellables)
+        appleVoice.onIdle = { [weak self] in
+            Task { @MainActor in
+                guard let self, self.useAppleVoice else { return }
+                self.coachSpeaking = false
+                if self.phase == .ending, !self.responseInProgress { self.finishTeardown() }
+            }
+        }
         activity.distanceProvider = { [weak self] in self?.displayDistance ?? 0 }
         activity.onEvent = { [weak self] event in self?.handle(activityEvent: event) }
     }
@@ -193,6 +204,9 @@ final class CoachSession: ObservableObject {
         audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
         audio.noiseGate = config.micSensitivity.noiseGate
         audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
+        useAppleVoice = config.voiceEngine == "apple"
+        appleVoice.refresh()
+        sentenceBuffer = ""; textResponseBuffer = ""
         gps.start(kind: kind)
         activity.start()
         lastEventCueAt = .distantPast
@@ -352,6 +366,7 @@ final class CoachSession: ObservableObject {
         endTimeoutTask?.cancel()
         endTimeoutTask = nil
         realtime.disconnect()
+        appleVoice.stop()
         audio.stop()
         audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
         UIApplication.shared.isIdleTimerDisabled = false
@@ -387,7 +402,7 @@ final class CoachSession: ObservableObject {
         [
             "type": "realtime",
             "instructions": config.instructions(kind: kind, mode: mode),
-            "output_modalities": ["audio"],
+            "output_modalities": [useAppleVoice ? "text" : "audio"],
             "tools": [[
                 "type": "function",
                 "name": "propose_goal",
@@ -478,9 +493,19 @@ final class CoachSession: ObservableObject {
                     if self.pendingGreeting { self.pendingGreeting = false; self.sendGreeting() }
                     return
                 }
-                self.scheduleSpeakingReset()
-                if self.phase == .ending { self.scheduleTeardownAfterPlayback() }
+                if self.useAppleVoice {
+                    if self.phase == .ending, !self.appleVoice.isSpeaking { self.finishTeardown() }
+                } else {
+                    self.scheduleSpeakingReset()
+                    if self.phase == .ending { self.scheduleTeardownAfterPlayback() }
+                }
             }
+        }
+        realtime.callbacks.onTextDelta = { [weak self] delta in
+            Task { @MainActor in self?.handleTextDelta(delta) }
+        }
+        realtime.callbacks.onTextDone = { [weak self] full in
+            Task { @MainActor in self?.handleTextDone(full) }
         }
         realtime.callbacks.onFunctionCall = { [weak self] name, callId, arguments in
             Task { @MainActor in self?.handleFunctionCall(name: name, callId: callId, arguments: arguments) }
@@ -500,6 +525,41 @@ final class CoachSession: ObservableObject {
         realtime.callbacks.onDisconnected = { [weak self] reason in
             Task { @MainActor in self?.handleDisconnect(reason) }
         }
+    }
+
+    /// Mode voix Apple : le texte de Jeffrey est lu phrase par phrase dès qu'il arrive.
+    private func handleTextDelta(_ delta: String) {
+        guard useAppleVoice else { return }
+        if capturingAck { return }
+        appendCoachDelta(delta)
+        textResponseBuffer += delta
+        sentenceBuffer += delta
+        // Fin de phrase : on envoie à la synthèse sans attendre la suite.
+        if let range = sentenceBuffer.rangeOfCharacter(from: CharacterSet(charactersIn: ".!?…"), options: .backwards) {
+            let end = range.upperBound
+            let sentence = String(sentenceBuffer[..<end])
+            let rest = String(sentenceBuffer[end...])
+            if sentence.count >= 2 {
+                sentenceBuffer = rest
+                speakApple(sentence)
+            }
+        }
+    }
+
+    private func handleTextDone(_ full: String) {
+        guard useAppleVoice else { return }
+        if capturingAck { return }
+        let tail = sentenceBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty { speakApple(tail) }
+        sentenceBuffer = ""
+        finishCoachLine(full.isEmpty ? textResponseBuffer : full)
+        textResponseBuffer = ""
+    }
+
+    private func speakApple(_ text: String) {
+        lastAudioDeltaAt = Date()
+        coachSpeaking = true
+        appleVoice.enqueue(text)
     }
 
     private func handleFunctionCall(name: String, callId: String, arguments: String) {
@@ -541,7 +601,9 @@ final class CoachSession: ObservableObject {
             startTimers()
             sendMirror(force: true)
             realtime.injectText("La séance de \(kind.coachLabel) démarre maintenant. Objectif du jour : \(goal.coachLabel()). " + metricsLine(prefix: "[MÉTRIQUES]"))
-            if let cached = try? Data(contentsOf: ackFileURL), cached.count > 4_800 {
+            if useAppleVoice {
+                sendGreeting()
+            } else if let cached = try? Data(contentsOf: ackFileURL), cached.count > 4_800 {
                 ackAudio = cached
                 sendGreeting()
             } else {
@@ -574,9 +636,15 @@ final class CoachSession: ObservableObject {
         let stoppedAt = Date()
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_100_000_000)
-            guard let self, self.phase == .live, let ack = self.ackAudio else { return }
-            guard self.lastAudioDeltaAt < stoppedAt, !self.audio.isPlaying,
-                  Date().timeIntervalSince(self.lastAckAt) > 8 else { return }
+            guard let self, self.phase == .live else { return }
+            guard self.lastAudioDeltaAt < stoppedAt, Date().timeIntervalSince(self.lastAckAt) > 8 else { return }
+            if self.useAppleVoice {
+                guard !self.appleVoice.isSpeaking else { return }
+                self.lastAckAt = Date()
+                self.speakApple("Je regarde.")
+                return
+            }
+            guard let ack = self.ackAudio, !self.audio.isPlaying else { return }
             self.lastAckAt = Date()
             self.audio.enqueuePlayback(pcm16: ack)
             self.coachSpeaking = true

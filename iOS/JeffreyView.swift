@@ -11,6 +11,7 @@ struct JeffreyView: View {
     @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @AppStorage(Prefs.userName) private var userName: String = ""
     @AppStorage(Prefs.analysisProvider) private var analysisProvider: String = "apple"
+    @AppStorage(Prefs.voiceEngine) private var voiceEngine: String = "openai"
     @State private var showAdvanced = false
     @StateObject private var preview = VoicePreview()
     @StateObject private var appleVoice = AppleVoice()
@@ -35,6 +36,15 @@ struct JeffreyView: View {
                             .padding(4).background(Capsule().fill(Theme.surfaceRaised))
                         }
                         section("Voix du coach") {
+                            HStack(spacing: 4) {
+                                segment("OpenAI", selected: voiceEngine == "openai") { voiceEngine = "openai" }
+                                segment("Apple (iPhone)", selected: voiceEngine == "apple") { voiceEngine = "apple" }
+                            }
+                            .padding(4).background(Capsule().fill(Theme.surfaceRaised))
+                            Text(voiceEngine == "apple"
+                                 ? "Jeffrey réfléchit et écoute via OpenAI, mais parle avec une voix Apple lue sur l'iPhone : sortie gratuite, voix moins expressive, une phrase à la fois."
+                                 : "Voix naturelle d'OpenAI, la plus expressive.")
+                                .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
                             HStack(spacing: 10) {
                                 Picker("Voix", selection: $voice) {
                                     ForEach(Prefs.voices, id: \.self) { Text($0.capitalized).tag($0) }
@@ -58,11 +68,12 @@ struct JeffreyView: View {
                                 }
                                 .disabled(preview.isLoading || coach.phase != .idle)
                             }
+                            .opacity(voiceEngine == "openai" ? 1 : 0.5)
                             if let err = preview.error {
                                 Text(err).font(.caption).foregroundStyle(Theme.pulse)
                             }
                             Divider().overlay(Theme.creme.opacity(0.08))
-                            Text("Test : voix Apple sur l'iPhone (sans réseau)").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
+                            Text(voiceEngine == "apple" ? "Voix Apple utilisée en séance" : "Voix Apple (essai)").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
                             HStack(spacing: 10) {
                                 Picker("Voix Apple", selection: $appleVoice.selectedIdentifier) {
                                     ForEach(appleVoice.voices, id: \.identifier) { v in

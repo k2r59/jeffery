@@ -14,6 +14,8 @@ final class RealtimeClient: NSObject {
         var onResponseDone: () -> Void = {}
         var onError: (String) -> Void = { _ in }
         var onFunctionCall: (_ name: String, _ callId: String, _ arguments: String) -> Void = { _, _, _ in }
+        var onTextDelta: (String) -> Void = { _ in }
+        var onTextDone: (String) -> Void = { _ in }
         var onDisconnected: (String) -> Void = { _ in }
     }
 
@@ -149,6 +151,10 @@ final class RealtimeClient: NSObject {
             if let b64 = json["delta"] as? String, let audio = Data(base64Encoded: b64) {
                 callbacks.onAudioDelta(audio)
             }
+        case "response.output_text.delta", "response.text.delta":
+            if let delta = json["delta"] as? String { callbacks.onTextDelta(delta) }
+        case "response.output_text.done", "response.text.done":
+            callbacks.onTextDone(json["text"] as? String ?? "")
         case "response.output_audio_transcript.delta", "response.audio_transcript.delta":
             if let delta = json["delta"] as? String { callbacks.onAssistantTranscriptDelta(delta) }
         case "response.output_audio_transcript.done", "response.audio_transcript.done":
