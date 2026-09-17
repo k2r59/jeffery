@@ -17,6 +17,7 @@
 		2ACB625130B2D0D66AD0772C /* AppleAnalyst.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F9EC583F66EEBE0A4F6A881 /* AppleAnalyst.swift */; };
 		2CD4BE415E6407756280E286 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E815CF64D6BC9EC9969F4101 /* Assets.xcassets */; };
 		3856BEC48F6C967B792BF246 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3E1F94AF9504750D0AC84335 /* Assets.xcassets */; };
+		386E28887225C03332FE61BB /* AppleVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = E062557903F7829899F6BCFE /* AppleVoice.swift */; };
 		3C0DA67E865FD64FA0A8BBC6 /* CoachConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2097E145A239323A219EBC1 /* CoachConfig.swift */; };
 		3E0BED32725F9FD516A9645A /* WorkoutKind+HealthKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EA9D6E0CF16BBB2466EE8E /* WorkoutKind+HealthKit.swift */; };
 		48A9A39515C84655284DF338 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD82806422AB8276FBD93DB2 /* OnboardingView.swift */; };
@@ -119,6 +120,7 @@
 		D5A63CF06A05D2BA57DB5461 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		DC42CFE418F8BE04A8F90575 /* WatchCoach.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WatchCoach.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DEA482D9F644EE21C7810B1F /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		E062557903F7829899F6BCFE /* AppleVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleVoice.swift; sourceTree = "<group>"; };
 		E436D5C4A739476728581A22 /* SessionLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLog.swift; sourceTree = "<group>"; };
 		E609600A71477DB5A710B8DD /* WatchCoachWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachWatchApp.swift; sourceTree = "<group>"; };
 		E815CF64D6BC9EC9969F4101 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -151,6 +153,7 @@
 			children = (
 				5679A20688F985B95732882B /* ActivityMonitor.swift */,
 				2F9EC583F66EEBE0A4F6A881 /* AppleAnalyst.swift */,
+				E062557903F7829899F6BCFE /* AppleVoice.swift */,
 				3E1F94AF9504750D0AC84335 /* Assets.xcassets */,
 				D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */,
 				A2097E145A239323A219EBC1 /* CoachConfig.swift */,
@@ -338,6 +341,7 @@
 			files = (
 				C7908D583D26CC144A48A6B9 /* ActivityMonitor.swift in Sources */,
 				2ACB625130B2D0D66AD0772C /* AppleAnalyst.swift in Sources */,
+				386E28887225C03332FE61BB /* AppleVoice.swift in Sources */,
 				509C76BD84E7D18BBD014B3F /* AudioPipeline.swift in Sources */,
 				3C0DA67E865FD64FA0A8BBC6 /* CoachConfig.swift in Sources */,
 				82C1230E51C0C277FC02F078 /* CoachSession.swift in Sources */,

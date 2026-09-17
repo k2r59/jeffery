@@ -13,6 +13,7 @@ struct JeffreyView: View {
     @AppStorage(Prefs.analysisProvider) private var analysisProvider: String = "apple"
     @State private var showAdvanced = false
     @StateObject private var preview = VoicePreview()
+    @StateObject private var appleVoice = AppleVoice()
 
     var body: some View {
         NavigationStack {
@@ -60,7 +61,35 @@ struct JeffreyView: View {
                             if let err = preview.error {
                                 Text(err).font(.caption).foregroundStyle(Theme.pulse)
                             }
+                            Divider().overlay(Theme.creme.opacity(0.08))
+                            Text("Test : voix Apple sur l'iPhone (sans réseau)").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
+                            HStack(spacing: 10) {
+                                Picker("Voix Apple", selection: $appleVoice.selectedIdentifier) {
+                                    ForEach(appleVoice.voices, id: \.identifier) { v in
+                                        Text("\(v.name) · \(AppleVoice.qualityLabel(v.quality))").tag(v.identifier)
+                                    }
+                                }
+                                .pickerStyle(.menu).tint(.white).labelsHidden()
+                                Spacer()
+                                Button {
+                                    appleVoice.isSpeaking ? appleVoice.stop() : appleVoice.speak("Salut\(userName.isEmpty ? "" : " \(userName)"), moi c'est Jeffrey. On y va à ton rythme. Tu passes le kilomètre trois en seize minutes vingt, belle régularité.")
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        JIcon(appleVoice.isSpeaking ? "arreter" : "lecture", size: 14)
+                                        Text(appleVoice.isSpeaking ? "Stop" : "Écouter")
+                                    }
+                                    .font(.system(size: 13, weight: .black)).foregroundStyle(Theme.creme)
+                                    .padding(.horizontal, 14).frame(height: 38)
+                                    .background(Capsule().fill(Theme.surfaceRaised))
+                                }
+                                .disabled(appleVoice.voices.isEmpty || coach.phase != .idle)
+                            }
+                            Text(appleVoice.voices.contains { $0.quality == .premium }
+                                 ? "Les voix Premium sont les voix neuronales. Pour en ajouter : Réglages › Accessibilité › Contenu énoncé › Voix › Français."
+                                 : "Aucune voix Premium installée : Réglages › Accessibilité › Contenu énoncé › Voix › Français, télécharger une voix Premium (ex. Thomas, Audrey).")
+                                .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
                         }
+                        .onAppear { appleVoice.refresh() }
                         section("Pendant la séance") {
                             toggleRow("Encouragements", "valider", $autoCues)
                             toggleRow("Points sur l'objectif", "objectif", $goalCues)
