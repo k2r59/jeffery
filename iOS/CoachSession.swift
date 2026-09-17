@@ -71,6 +71,12 @@ final class CoachSession: ObservableObject {
     private var timerRestSeconds = 0
     private var timerWorkSeconds = 0
     private var timerPhaseIsWork = true
+    /// Programme de séance (catalogue) déroulé bloc par bloc par le chronomètre.
+    @Published private(set) var planTitle: String?
+    @Published private(set) var planStep: String?
+    private var planQueue: [WorkoutBlock] = []
+    private var planTotal = 0
+    private var planIndex = 0
     private var useAppleVoice = false
     private var sentenceBuffer = ""
     private var textResponseBuffer = ""
@@ -360,7 +366,12 @@ final class CoachSession: ObservableObject {
                            goalLabel: goal.kind == .free ? nil : goal.label, remaining: p.remaining, progress: p.fraction,
                            goalReached: goalReached, coachSpeaking: coachSpeaking, userSpeaking: userSpeaking,
                            lastLine: lastCoachLine.map { String($0.prefix(140)) }, heartRate: latest?.heartRate,
-                           distance: displayDistance, paused: isPaused, timerLabel: timerLabel, timerEndsAt: timerEndsAt)
+                           distance: displayDistance, paused: isPaused, timerLabel: mirrorTimerLabel, timerEndsAt: timerEndsAt)
+    }
+
+    private var mirrorTimerLabel: String? {
+        guard let timerLabel else { return nil }
+        return planStep.map { "\(timerLabel) · \($0)" } ?? timerLabel
     }
 
     // MARK: - Live Activity (écran verrouillé, Dynamic Island, Smart Stack de la montre)
@@ -373,7 +384,7 @@ final class CoachSession: ObservableObject {
             heartRate: latest?.heartRate.map { Int($0) }, distanceMeters: displayDistance,
             goalLabel: goal.kind == .free ? nil : goal.label, remaining: p.remaining, progress: p.fraction,
             coachState: phase == .connecting ? "arrive" : (coachSpeaking ? "parle" : "ecoute"),
-            lastLine: lastCoachLine.map { String($0.prefix(120)) }, timerLabel: timerLabel, timerEndsAt: timerEndsAt)
+            lastLine: lastCoachLine.map { String($0.prefix(120)) }, timerLabel: mirrorTimerLabel, timerEndsAt: timerEndsAt)
     }
 
     private func startLiveActivity() {
@@ -543,8 +554,27 @@ final class CoachSession: ObservableObject {
                 ],
             ], [
                 "type": "function",
+                "name": "suggest_workouts",
+                "description": "Quand l'utilisateur demande des exercices, une idée de séance ou un programme : renvoie deux séances types adaptées au sport en cours et à un niveau. Le niveau connu de son profil est renvoyé (known_level) ; si l'utilisateur n'a rien précisé, demande-lui d'abord en une question courte s'il veut « comme d'habitude, plus doux ou plus costaud », puis appelle avec le niveau choisi. Présente ensuite les deux options à l'oral, une phrase chacune, et laisse-le choisir.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "level": ["type": "string", "enum": ["beginner", "amateur", "confirmed"], "description": "Niveau voulu ; omis = niveau du profil"],
+                    ],
+                ],
+            ], [
+                "type": "function",
+                "name": "start_workout",
+                "description": "Lancer une séance type choisie à l'oral (id renvoyé par suggest_workouts). L'app enchaîne les blocs avec le chronomètre et te prévient à chaque changement ; tu annonces chaque bloc et sa consigne. Rien à faire sur le téléphone.",
+                "parameters": [
+                    "type": "object",
+                    "properties": ["id": ["type": "string"]],
+                    "required": ["id"],
+                ],
+            ], [
+                "type": "function",
                 "name": "cancel_timer",
-                "description": "Arrêter le chronomètre en cours.",
+                "description": "Arrêter le chronomètre en cours (et le programme s'il y en a un).",
                 "parameters": ["type": "object", "properties": [:]],
             ], [
                 "type": "function",
@@ -750,6 +780,27 @@ final class CoachSession: ObservableObject {
             realtime.sendFunctionOutput(callId: callId, output: out)
             return
         }
+        if name == "suggest_workouts" {
+            let level = (json["level"] as? String).flatMap(AthleteLevel.init(rawValue:)) ?? config.level
+            let list = WorkoutLibrary.workouts(kind: kind, level: level).prefix(2).map(\.toolPayload)
+            log(.info, "Séances proposées (\(level.label)) : " + list.compactMap { $0["title"] as? String }.joined(separator: ", "))
+            realtime.sendFunctionOutput(callId: callId, output: [
+                "known_level": config.level.rawValue, "level": level.rawValue, "sport": kind.coachLabel, "workouts": list,
+            ])
+            return
+        }
+        if name == "start_workout" {
+            guard let id = json["id"] as? String, let w = WorkoutLibrary.workout(id: id) else {
+                realtime.sendFunctionOutput(callId: callId, output: ["error": "séance inconnue, rappelle suggest_workouts"])
+                return
+            }
+            startWorkout(w)
+            var out = timeStatus()
+            out["started"] = true
+            out["first_block"] = planQueue.isEmpty ? timerLabel ?? "" : "\(timerLabel ?? "") puis \(planQueue.first?.summary ?? "")"
+            realtime.sendFunctionOutput(callId: callId, output: out)
+            return
+        }
         if name == "save_note" {
             let json = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8)) as? [String: Any]) ?? [:]
             let text = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -800,11 +851,41 @@ final class CoachSession: ObservableObject {
             out["timer"] = label
             out["timer_remaining_seconds"] = Int(max(0, end.timeIntervalSinceNow))
         }
+        if let planTitle {
+            out["workout"] = planTitle
+            out["workout_step"] = planStep ?? ""
+            if let next = planQueue.first { out["workout_next_block"] = next.summary }
+        }
         return out
     }
 
-    func startTimer(seconds: Int, label: String, rest: Int = 0, repeats: Int = 1) {
+    // MARK: - Programme de séance (catalogue)
+
+    func startWorkout(_ w: Workout) {
         cancelTimer()
+        planTitle = w.title
+        planQueue = w.blocks
+        planTotal = w.blocks.count
+        planIndex = 0
+        if goal.kind == .free {
+            goal = SessionGoal(kind: .duration, target: Double(w.totalSeconds), note: w.title)
+            goalReached = false
+            halfwayAnnounced = false
+        }
+        log(.info, "Programme : \(w.title) (\(w.summary))")
+        startNextPlanBlock()
+    }
+
+    private func startNextPlanBlock() {
+        guard !planQueue.isEmpty else { return }
+        let block = planQueue.removeFirst()
+        planIndex += 1
+        planStep = "bloc \(planIndex)/\(planTotal)"
+        startTimer(seconds: block.seconds, label: block.label, rest: block.restSeconds, repeats: block.repeats, keepPlan: true)
+    }
+
+    func startTimer(seconds: Int, label: String, rest: Int = 0, repeats: Int = 1, keepPlan: Bool = false) {
+        if keepPlan { stopTimer() } else { cancelTimer() }
         timerWorkSeconds = seconds
         timerRestSeconds = rest
         timerRepeatsLeft = repeats
@@ -866,17 +947,48 @@ final class CoachSession: ObservableObject {
             return
         }
         timerRepeatsLeft = 0
+        if let planTitle {
+            if let next = planQueue.first {
+                let step = planIndex + 1
+                realtime.injectText("[PROGRAMME « \(planTitle) »] bloc « \(finished) » terminé. Bloc \(step)/\(planTotal) qui démarre : \(next.summary). " + metricsLine(prefix: "[MÉTRIQUES]"))
+                realtime.requestResponse(instructions: "Le bloc « \(finished) » vient de sonner : annonce le bloc suivant « \(next.label) » (\(next.summary)) et sa consigne d'intensité en une ou deux phrases.")
+                startNextPlanBlock()
+                return
+            }
+            let title = planTitle
+            self.planTitle = nil
+            planStep = nil
+            planIndex = 0
+            planTotal = 0
+            log(.info, "Programme terminé : \(title)")
+            sendMirror(force: true)
+            realtime.injectText("[PROGRAMME terminé] « \(title) », tous les blocs sont faits. " + metricsLine(prefix: "[MÉTRIQUES]"))
+            realtime.requestResponse(instructions: "Le programme « \(title) » est terminé : félicite-le en une phrase et dis ce qu'on fait maintenant (retour au calme, fin de séance, ou continuer libre).")
+            return
+        }
         sendMirror(force: true)
         realtime.injectText("[CHRONO terminé] « \(finished) ». " + metricsLine(prefix: "[MÉTRIQUES]"))
         realtime.requestResponse(instructions: "Le chrono « \(finished) » vient de sonner : annonce-le et donne la consigne suivante en une ou deux phrases.")
     }
 
-    func cancelTimer() {
+    /// Arrête le bloc en cours sans toucher au programme (enchaînement interne).
+    private func stopTimer() {
         timerTask?.cancel()
         timerTask = nil
         timerLabel = nil
         timerEndsAt = nil
         timerRepeatsLeft = 0
+    }
+
+    /// Arrêt demandé (bouton, outil cancel_timer) : chrono et programme.
+    func cancelTimer() {
+        stopTimer()
+        if let planTitle { log(.info, "Programme arrêté : \(planTitle)") }
+        planTitle = nil
+        planStep = nil
+        planQueue = []
+        planIndex = 0
+        planTotal = 0
         sendMirror(force: true)
     }
 
@@ -960,6 +1072,7 @@ final class CoachSession: ObservableObject {
                 .map { ($0.role == .user ? "Lui : " : "Toi : ") + $0.text }.joined(separator: "\n")
             var resume = "Reconnexion après une coupure réseau ; la séance continue sans changement. Objectif : \(goal.coachLabel())."
             if let label = timerLabel, let end = timerEndsAt { resume += " Chrono en cours « \(label) », \(Int(max(0, end.timeIntervalSinceNow))) s restantes." }
+            if let planTitle { resume += " Programme « \(planTitle) » en cours, \(planStep ?? "")." }
             if !recent.isEmpty { resume += "\nDernières répliques :\n" + recent }
             realtime.injectText(resume + "\n" + metricsLine(prefix: "[MÉTRIQUES]"))
         }
@@ -967,7 +1080,8 @@ final class CoachSession: ObservableObject {
 
     private func sendGreeting() {
         let name = config.userName.isEmpty ? "" : " Appelle-le \(config.userName)."
-        realtime.requestResponse(instructions: "Présente-toi comme Jeffrey en une phrase chaleureuse.\(name) Rappelle l'objectif s'il y en a un (sinon demande-le en une question courte), et lance la séance.")
+        let goalPart = goal.kind == .free ? "" : " Rappelle l'objectif en quelques mots."
+        realtime.requestResponse(instructions: "Présente-toi comme Jeffrey en une phrase chaleureuse.\(name)\(goalPart) Puis pose une seule question courte : il fait sa séance à sa façon, ou tu lui proposes un exercice adapté ? S'il veut une proposition, suis la règle 10 (suggest_workouts). S'il préfère sa façon, lance la séance sans insister.")
     }
 
     /// Si aucune parole de Jeffrey n'arrive dans la seconde qui suit la fin de la tienne, on joue « Je regarde. ».
@@ -1171,6 +1285,7 @@ final class CoachSession: ObservableObject {
             }
         }
         if let label = timerLabel, let end = timerEndsAt { parts.append("chrono « \(label) » : \(Int(max(0, end.timeIntervalSinceNow))) s restantes") }
+        if let planTitle { parts.append("programme « \(planTitle) » \(planStep ?? "")") }
         if s.state == .paused { parts.append("séance EN PAUSE") }
         if s.state == .ended { parts.append("séance terminée côté montre") }
         let age = Int(Date().timeIntervalSince(s.lastSampleAt ?? s.timestamp))

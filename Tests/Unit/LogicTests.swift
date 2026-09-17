@@ -119,3 +119,29 @@ final class MemoryAndSessionTests: XCTestCase {
         XCTAssertEqual(back.timerLabel, "sprint")
     }
 }
+
+final class WorkoutLibraryTests: XCTestCase {
+    func testEverySportAndLevelHasWorkouts() {
+        for kind in WorkoutKind.allCases {
+            for level in AthleteLevel.allCases {
+                let list = WorkoutLibrary.workouts(kind: kind, level: level)
+                XCTAssertFalse(list.isEmpty, "\(kind) \(level)")
+                for w in list {
+                    XCTAssertFalse(w.blocks.isEmpty, w.id)
+                    XCTAssertGreaterThan(w.totalSeconds, 5 * 60, w.id)
+                    XCTAssertLessThan(w.totalSeconds, 3 * 3600, w.id)
+                    XCTAssertEqual(WorkoutLibrary.workout(id: w.id)?.id, w.id)
+                }
+            }
+        }
+        XCTAssertEqual(Set(WorkoutLibrary.all.map(\.id)).count, WorkoutLibrary.all.count, "identifiants uniques")
+    }
+
+    func testIntervalBlockSummaryAndTotal() {
+        let b = WorkoutBlock(label: "vite", seconds: 30, repeats: 8, restSeconds: 30)
+        XCTAssertEqual(b.totalSeconds, 30 * 8 + 30 * 7)
+        XCTAssertTrue(b.summary.hasPrefix("8 × (vite"))
+        let w = WorkoutLibrary.workout(id: "run-a2")!
+        XCTAssertEqual(w.toolPayload["minutes"] as? Int, Int((Double(w.totalSeconds) / 60).rounded()))
+    }
+}

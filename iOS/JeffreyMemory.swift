@@ -26,7 +26,7 @@ final class JeffreyMemory: ObservableObject {
     var testFileURL: URL { url }
 
     func load() {
-        guard let data = try? Data(contentsOf: url) else { return }
+        guard let data = try? Data(contentsOf: url) else { notes = []; return }
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
         if let list = try? d.decode([MemoryNote].self, from: data) { notes = list }
         else { try? FileManager.default.moveItem(at: url, to: url.appendingPathExtension("bak-\(Int(Date().timeIntervalSince1970))")) }

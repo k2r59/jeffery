@@ -86,7 +86,12 @@ struct LiveSessionView: View {
             let remaining = max(0, end.timeIntervalSince(ctx.date))
             HStack(spacing: 12) {
                 JIcon("chronometre", size: 18).foregroundStyle(Theme.citron)
-                Text(label.capitalized).font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.creme)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label.capitalized).font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.creme)
+                    if let plan = coach.planTitle {
+                        Text("\(plan) · \(coach.planStep ?? "")").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.muted)
+                    }
+                }
                 Spacer()
                 Text(Formatters.elapsed(remaining)).font(.display(28, weight: .black).monospacedDigit()).foregroundStyle(Theme.citron)
                 Button { coach.cancelTimer() } label: { JIcon("fermer", size: 14).foregroundStyle(Theme.muted) }

@@ -72,6 +72,8 @@ final class FakeRealtimeBackend {
     private var responseCounter = 0
     private var lastConsigne = ""
     private var pendingTimerCall = false
+    private var workoutsAsked = false
+    private var pendingWorkoutId: String?
     private let queue = DispatchQueue(label: "fake.realtime")
 
     func handle(_ event: [String: Any]) {
@@ -82,6 +84,13 @@ final class FakeRealtimeBackend {
         case "conversation.item.create":
             if let item = event["item"] as? [String: Any], let content = item["content"] as? [[String: Any]],
                let text = content.first?["text"] as? String, text.hasPrefix("[CONSIGNE]") { lastConsigne = text }
+            // Sortie de suggest_workouts : on retient la première séance pour la lancer à la réponse suivante.
+            if let item = event["item"] as? [String: Any], item["type"] as? String == "function_call_output",
+               let out = item["output"] as? String, let data = out.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let list = json["workouts"] as? [[String: Any]], let id = list.first?["id"] as? String {
+                pendingWorkoutId = id
+            }
         case "response.create":
             respond()
         case "input_audio_buffer.append":
@@ -103,7 +112,21 @@ final class FakeRealtimeBackend {
             emit(["type": "response.done", "response": ["id": "resp_\(n)", "status": "completed"]], after: 0.9)
             return
         }
+        // Après le premier chrono : « demande d'exercices » simulée → suggest_workouts, puis start_workout.
+        if consigne.contains("chrono"), !workoutsAsked {
+            workoutsAsked = true
+            emit(["type": "response.function_call_arguments.done", "name": "suggest_workouts", "call_id": "call_\(n)", "arguments": "{\"level\": \"beginner\"}"], after: 0.6)
+            emit(["type": "response.done", "response": ["id": "resp_\(n)", "status": "completed"]], after: 0.9)
+            return
+        }
+        if let id = pendingWorkoutId {
+            pendingWorkoutId = nil
+            emit(["type": "response.function_call_arguments.done", "name": "start_workout", "call_id": "call_\(n)", "arguments": "{\"id\": \"\(id)\"}"], after: 0.6)
+            emit(["type": "response.done", "response": ["id": "resp_\(n)", "status": "completed"]], after: 0.9)
+            return
+        }
         let text: String = consigne.contains("débrief") ? "Bien joué, belle séance, on se revoit bientôt."
+            : consigne.contains("programme") || consigne.contains("bloc suivant") ? "Bloc suivant, on y va."
             : consigne.contains("chrono") ? "Le chrono a sonné, on enchaîne tranquillement."
             : "Réponse simulée numéro \(n), tout va bien."
         var t = 1.0

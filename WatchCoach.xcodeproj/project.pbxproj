@@ -49,6 +49,7 @@
 		A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */; };
 		A795789D70318C0FFA83C6C6 /* WorkoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */; };
 		AA8054D04A39FFBD9DEA1CBA /* ObjectiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A433BC192FA6379ABE91035B /* ObjectiveView.swift */; };
+		AF21B4369DE8C663A6C3113E /* WorkoutLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4258493F240A344A20E69581 /* WorkoutLibrary.swift */; };
 		AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349670EE16768E2C8346D827 /* KeychainStore.swift */; };
 		BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
 		C3BDDD0BA985AC4037D19FEE /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
@@ -140,6 +141,7 @@
 		3E565DD4B3701C8EEC7FD653 /* SessionAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAnalysisService.swift; sourceTree = "<group>"; };
 		3E589C09902B7A842396858D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		404CFB6572CFA845E57B2EFD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4258493F240A344A20E69581 /* WorkoutLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLibrary.swift; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
 		4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeepPlayer.swift; sourceTree = "<group>"; };
 		50D4AA1667A3275F3D77C3C7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -273,6 +275,7 @@
 				F16EC8AB3E3AFC4B4D7E2C88 /* WatchCoach.entitlements */,
 				4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */,
 				915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */,
+				4258493F240A344A20E69581 /* WorkoutLibrary.swift */,
 				FD8EE1F43250706F36FF0C16 /* YouView.swift */,
 			);
 			path = iOS;
@@ -595,6 +598,7 @@
 				866DA61EF35ADFC8E9C783B8 /* WatchCoachApp.swift in Sources */,
 				57D26E3739DEBCE115D10AEB /* WorkoutHistory.swift in Sources */,
 				A336E0792D358AD246889323 /* WorkoutKind+HealthKit.swift in Sources */,
+				AF21B4369DE8C663A6C3113E /* WorkoutLibrary.swift in Sources */,
 				4EC84103B5AB0B8C3C3CB051 /* YouView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

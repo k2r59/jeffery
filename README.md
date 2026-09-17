@@ -21,6 +21,11 @@ Projet personnel, installé hors App Store en signature de développement.
 - Objectif de séance (durée, distance ou libre) fixé avant de partir, dicté en langage naturel ou par boutons ; en cours
   de route, Jeffrey peut le changer après ton accord à l'oral, rien à toucher sur le téléphone.
 - Chronomètre piloté par Jeffrey (blocs, fractionné travail/récup) : l'app sonne et le prévient, il n'a jamais à compter.
+- Séances types : à l'accueil, Jeffrey demande si on fait la séance à sa façon ou s'il propose un exercice (on peut aussi
+  le lui demander à tout moment). S'il propose, il demande juste « comme d'habitude, plus doux ou plus
+  costaud ? », propose deux séances adaptées au sport choisi et au niveau (catalogue `iOS/WorkoutLibrary.swift`,
+  7 sports × 3 niveaux), et déroule celle qu'on choisit bloc par bloc avec le chronomètre. Tout à l'oral, rien à valider
+  sur le téléphone ; la carte chrono (iPhone, montre, écran verrouillé) montre le bloc en cours et sa position.
 - La montre est obligatoire : sans montre joignable, pas de départ ; montre perdue plus de deux minutes, séance arrêtée.
 - Parcours de référence : rejouer une sortie précédente avec le relief à venir et un « fantôme » (avance ou retard).
 - Musique : elle continue, s'atténue quand Jeffrey parle, et sa voix passe au-dessus.
