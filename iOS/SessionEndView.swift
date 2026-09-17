@@ -6,9 +6,10 @@ struct SessionEndView: View {
     @State var summary: SessionSummary
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var route: LocalRoute?
-    @State private var analyzing = false
-    @State private var analysisError: String?
-    @State private var analysisSource: String?
+    @ObservedObject private var service = SessionAnalysisService.shared
+    private var analyzing: Bool { service.runningFor == summary.id }
+    private var analysisError: String? { service.lastError }
+    private var analysisSource: String? { service.lastSource }
 
     private var coordinates: [CLLocationCoordinate2D] {
         route?.locations.filter { $0.horizontalAccuracy < 60 }.map(\.coordinate) ?? []
@@ -110,6 +111,11 @@ struct SessionEndView: View {
             SessionSummary.upsert(summary)
             if summary.analysis == nil { runAnalysis() }
         }
+        .onChange(of: service.version) { _, _ in
+            if let fresh = SessionSummary.loadAll().first(where: { $0.id == summary.id }) {
+                summary.analysis = fresh.analysis; summary.advice = fresh.advice; summary.caution = fresh.caution; summary.memoryUpdated = fresh.memoryUpdated
+            }
+        }
     }
 
     private var analysisCard: some View {
@@ -151,50 +157,6 @@ struct SessionEndView: View {
     }
 
     private func runAnalysis() {
-        guard !analyzing else { return }
-        analyzing = true
-        analysisError = nil
-        Task {
-            let config = CoachConfig.load()
-            guard !config.apiKey.isEmpty else { analysisError = "clé API manquante"; analyzing = false; return }
-            let health = await SessionAnalyst.healthContext()
-            let dossier = SessionAnalyst.dossier(summary: summary, config: config, health: health, zones: summary.zoneCounts ?? [])
-            do {
-                let model = UserDefaults.standard.string(forKey: Prefs.analysisModel) ?? "gpt-5-mini"
-                let provider = UserDefaults.standard.string(forKey: Prefs.analysisProvider) ?? "apple"
-                var r: SessionAnalyst.Result
-                // Apple Intelligence d'abord (cloud privé Apple, sinon modèle local), OpenAI en secours.
-                if provider == "apple", let (apple, backend) = try? await AppleAnalyst.analyze(dossier: dossier, userName: userName) {
-                    r = apple
-                    analysisSource = backend == .privateCloud ? "Apple Private Cloud Compute" : "Modèle Apple sur l'iPhone"
-                } else {
-                    r = try await SessionAnalyst.analyze(dossier: dossier, apiKey: config.apiKey, model: model, userName: userName)
-                    analysisSource = provider == "apple" ? "OpenAI \(model) (Apple indisponible)" : "OpenAI \(model)"
-                }
-                summary.analysis = r.analysis
-                summary.advice = r.advice
-                summary.caution = r.caution
-                SessionSummary.upsert(summary)
-                // Mémoire longue : ce que la conversation apprend de durable sur la personne.
-                if summary.memoryUpdated != true, let lines = summary.transcriptExcerpt, lines.contains(where: { $0.hasPrefix("Lui :") }) {
-                    let memory = JeffreyMemory.shared
-                    let line = "\(summary.kind.coachLabel), \(Formatters.elapsed(summary.elapsed))\(summary.feeling.map { ", ressenti \($0.coachLabel)" } ?? "")"
-                    var notes: [String]?
-                    if provider == "apple", let (n, _) = try? await AppleAnalyst.updateMemory(transcript: lines, existing: memory.notes.map(\.text), summaryLine: line) {
-                        notes = n
-                    } else {
-                        notes = try? await SessionAnalyst.updateMemory(transcript: lines, existing: memory.notes.map(\.text), summaryLine: line, apiKey: config.apiKey, model: model)
-                    }
-                    if let notes {
-                        memory.replace(with: notes)
-                        summary.memoryUpdated = true
-                        SessionSummary.upsert(summary)
-                    }
-                }
-            } catch {
-                analysisError = error.localizedDescription
-            }
-            analyzing = false
-        }
+        SessionAnalysisService.shared.analyze(summary, force: summary.analysis != nil)
     }
 }

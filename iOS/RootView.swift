@@ -25,7 +25,7 @@ struct RootView: View {
         }
         .sheet(item: $coach.endedSummary) { summary in SessionEndView(summary: summary) }
         .fullScreenCover(isPresented: Binding(get: { !onboarded }, set: { _ in })) { OnboardingView() }
-        .task { await history.load() }
+        .task { await history.load(); SessionAnalysisService.shared.catchUp() }
         .onChange(of: coach.phase) { _, phase in
             if phase == .idle { Task { await history.load() } }
         }

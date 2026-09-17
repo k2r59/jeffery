@@ -270,6 +270,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     // MARK: - Suivi du temps et publication
 
     private func beginTracking(kind: WorkoutKind, mode: CaptureMode, start: Date) {
+        // L'app reste au premier plan bien plus longtemps après le poignet baissé (limite système ~8 min).
+        WKExtension.shared().isFrontmostTimeoutExtended = true
         startDate = start
         pausedAccumulated = 0
         pauseStartedAt = nil
@@ -287,6 +289,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private func finishTracking() {
+        WKExtension.shared().isFrontmostTimeoutExtended = false
         tickTimer?.invalidate()
         tickTimer = nil
         var snap = snapshot

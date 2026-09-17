@@ -138,7 +138,9 @@ enum SessionAnalyst {
             "model": model,
             "instructions": system,
             "input": "Prénom : \(userName.isEmpty ? "inconnu" : userName)\n\n\(dossier)",
-            "max_output_tokens": 600,
+            "max_output_tokens": 2000,
+            "reasoning": ["effort": "low"],
+            "text": ["verbosity": "low"],
         ]
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
         request.httpMethod = "POST"
@@ -174,7 +176,8 @@ enum SessionAnalyst {
         """
         let input = "NOTES EXISTANTES :\n" + (existing.isEmpty ? "(aucune)" : existing.map { "- \($0)" }.joined(separator: "\n"))
             + "\n\nSÉANCE : \(summaryLine)\n\nTRANSCRIPTION :\n" + transcript.joined(separator: "\n")
-        let body: [String: Any] = ["model": model, "instructions": system, "input": input, "max_output_tokens": 900]
+        let body: [String: Any] = ["model": model, "instructions": system, "input": input, "max_output_tokens": 2500,
+                                   "reasoning": ["effort": "low"], "text": ["verbosity": "low"]]
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")

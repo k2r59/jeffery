@@ -60,6 +60,14 @@ final class CoachSession: ObservableObject {
     let gps = RouteRecorder()
     let activity = ActivityMonitor()
     let appleVoice = AppleVoice()
+    /// Minuteur piloté par Jeffrey (fractionné, blocs, récupération).
+    @Published private(set) var timerLabel: String?
+    @Published private(set) var timerEndsAt: Date?
+    private var timerTask: Task<Void, Never>?
+    private var timerRepeatsLeft = 0
+    private var timerRestSeconds = 0
+    private var timerWorkSeconds = 0
+    private var timerPhaseIsWork = true
     private var useAppleVoice = false
     private var sentenceBuffer = ""
     private var textResponseBuffer = ""
@@ -71,6 +79,8 @@ final class CoachSession: ObservableObject {
     private var lastCoachSpokeAt: Date = .distantPast
     private var fatigueAnnouncedAt: Date = .distantPast
     private var lastCueZone: HeartRateZone?
+    private var lastUserSpokeAt: Date = .distantPast
+    private var lastSpontaneousCueAt: Date = .distantPast
     private var lastKmAnnounced = 0
     private var lastKmAt: (km: Int, at: Date)?
     private var routineTopic = 0
@@ -194,6 +204,7 @@ final class CoachSession: ObservableObject {
         lastMirror = nil
         hrSamples.removeAll()
         hrHistory.removeAll(); speedHistory.removeAll()
+        lastUserSpokeAt = .distantPast; lastSpontaneousCueAt = .distantPast
         struggleAnnouncedForClimb = false; climbStartedAt = nil; lastCoachSpokeAt = .distantPast; fatigueAnnouncedAt = .distantPast; lastCueZone = nil
         lastKmAnnounced = 0; lastKmAt = nil; routineTopic = 0
         // Repart propre : l'instantané de la séance précédente ne doit pas nourrir celle-ci.
@@ -292,13 +303,14 @@ final class CoachSession: ObservableObject {
                            goalLabel: goal.kind == .free ? nil : goal.label, remaining: p.remaining, progress: p.fraction,
                            goalReached: goalReached, coachSpeaking: coachSpeaking, userSpeaking: userSpeaking,
                            lastLine: lastCoachLine.map { String($0.prefix(140)) }, heartRate: latest?.heartRate,
-                           distance: displayDistance, paused: isPaused)
+                           distance: displayDistance, paused: isPaused, timerLabel: timerLabel, timerEndsAt: timerEndsAt)
     }
 
     private func sendMirror(force: Bool = false) {
         let m = mirrorSnapshot()
         if !force, let last = lastMirror, last.phase == m.phase, last.coachSpeaking == m.coachSpeaking, last.userSpeaking == m.userSpeaking,
-           last.lastLine == m.lastLine, last.paused == m.paused, abs(last.elapsed - m.elapsed) < 4, last.goalReached == m.goalReached { return }
+           last.lastLine == m.lastLine, last.paused == m.paused, abs(last.elapsed - m.elapsed) < 4, last.goalReached == m.goalReached,
+           last.timerLabel == m.timerLabel { return }
         lastMirror = m
         connectivity.sendCoachState(m)
     }
@@ -308,6 +320,7 @@ final class CoachSession: ObservableObject {
         phase = .ending
         status = "Fin de séance…"
         stopTimers()
+        cancelTimer()
         gps.stop()
         activity.stop()
         if !gps.status.isEmpty { log(.info, gps.status) }
@@ -405,6 +418,42 @@ final class CoachSession: ObservableObject {
             "output_modalities": [useAppleVoice ? "text" : "audio"],
             "tools": [[
                 "type": "function",
+                "name": "start_timer",
+                "description": "Lancer le chronomètre de l'application. L'app sonne et te prévient quand il se termine ; tu n'as pas besoin de compter. Pour un fractionné, indique work_seconds, rest_seconds et repeats : l'app enchaîne travail et récupération et te prévient à chaque changement.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "seconds": ["type": "integer", "description": "Durée du bloc en secondes (ou du bloc de travail si repeats > 1)"],
+                        "label": ["type": "string", "description": "Nom court du bloc (sprint, récup, plateau…)"],
+                        "rest_seconds": ["type": "integer", "description": "Durée de récupération entre répétitions, 0 si aucune"],
+                        "repeats": ["type": "integer", "description": "Nombre de répétitions, 1 par défaut"],
+                    ],
+                    "required": ["seconds", "label"],
+                ],
+            ], [
+                "type": "function",
+                "name": "cancel_timer",
+                "description": "Arrêter le chronomètre en cours.",
+                "parameters": ["type": "object", "properties": [:]],
+            ], [
+                "type": "function",
+                "name": "get_time",
+                "description": "Lire l'heure exacte de la séance : temps écoulé, temps ou distance restants sur l'objectif, chronomètre en cours.",
+                "parameters": ["type": "object", "properties": [:]],
+            ], [
+                "type": "function",
+                "name": "save_note",
+                "description": "Enregistrer une note demandée par l'utilisateur : kind=memory pour un fait durable sur lui (blessure, objectif, préférence) que tu dois retenir aux prochaines séances ; kind=feedback pour une remarque ou un bug destinés au développeur de l'application. Confirme oralement en une phrase après l'appel.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "kind": ["type": "string", "enum": ["memory", "feedback"]],
+                        "text": ["type": "string", "description": "La note, une ou deux phrases, à la troisième personne pour memory"],
+                    ],
+                    "required": ["kind", "text"],
+                ],
+            ], [
+                "type": "function",
                 "name": "propose_goal",
                 "description": "Proposer à l'utilisateur de modifier l'objectif de la séance en cours (raccourcir, allonger, changer de type). L'utilisateur devra confirmer sur son téléphone : ne considère pas le changement acquis avant la réponse.",
                 "parameters": [
@@ -473,6 +522,7 @@ final class CoachSession: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.userSpeaking = false
+                self.lastUserSpokeAt = Date()
                 self.scheduleAckIfSlow()
             }
         }
@@ -563,6 +613,42 @@ final class CoachSession: ObservableObject {
     }
 
     private func handleFunctionCall(name: String, callId: String, arguments: String) {
+        let json = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8)) as? [String: Any]) ?? [:]
+        if name == "get_time" {
+            realtime.sendFunctionOutput(callId: callId, output: timeStatus())
+            return
+        }
+        if name == "cancel_timer" {
+            cancelTimer()
+            realtime.sendFunctionOutput(callId: callId, output: ["cancelled": true])
+            return
+        }
+        if name == "start_timer" {
+            let seconds = max(5, (json["seconds"] as? Int) ?? Int((json["seconds"] as? Double) ?? 30))
+            let label = (json["label"] as? String ?? "bloc").trimmingCharacters(in: .whitespaces)
+            let rest = max(0, (json["rest_seconds"] as? Int) ?? 0)
+            let repeats = max(1, (json["repeats"] as? Int) ?? 1)
+            startTimer(seconds: seconds, label: label, rest: rest, repeats: repeats)
+            var out = timeStatus()
+            out["started"] = true
+            realtime.sendFunctionOutput(callId: callId, output: out)
+            return
+        }
+        if name == "save_note" {
+            let json = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8)) as? [String: Any]) ?? [:]
+            let text = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let kind = json["kind"] as? String ?? "feedback"
+            guard !text.isEmpty else { realtime.sendFunctionOutput(callId: callId, output: ["error": "note vide"]); return }
+            if kind == "memory" {
+                JeffreyMemory.shared.add(text)
+                log(.info, "Note mémorisée : \(text)")
+            } else {
+                DeveloperFeedback.append(text, context: metricsLine(prefix: ""))
+                log(.info, "Retour développeur noté : \(text)")
+            }
+            realtime.sendFunctionOutput(callId: callId, output: ["saved": true, "kind": kind])
+            return
+        }
         guard name == "propose_goal",
               let data = arguments.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -575,6 +661,114 @@ final class CoachSession: ObservableObject {
         let reason = json["reason"] as? String ?? ""
         proposal = GoalProposal(callId: callId, goal: SessionGoal(kind: kind, target: target), reason: reason)
         log(.info, "Jeffrey propose : \(proposal!.goal.label)\(reason.isEmpty ? "" : " · \(reason)")")
+    }
+
+    // MARK: - Chronomètre piloté par Jeffrey
+
+    private func timeStatus() -> [String: Any] {
+        var out: [String: Any] = [
+            "elapsed": Formatters.elapsed(liveElapsed()),
+            "clock": Date().formatted(date: .omitted, time: .shortened),
+        ]
+        if goal.kind != .free {
+            let p = goal.progress(elapsed: liveElapsed(), distance: displayDistance)
+            out["goal"] = goal.coachLabel()
+            out["goal_remaining"] = p.remaining ?? "atteint"
+        }
+        if let label = timerLabel, let end = timerEndsAt {
+            out["timer"] = label
+            out["timer_remaining_seconds"] = Int(max(0, end.timeIntervalSinceNow))
+        }
+        return out
+    }
+
+    func startTimer(seconds: Int, label: String, rest: Int = 0, repeats: Int = 1) {
+        cancelTimer()
+        timerWorkSeconds = seconds
+        timerRestSeconds = rest
+        timerRepeatsLeft = repeats
+        timerPhaseIsWork = true
+        runTimerPhase(seconds: seconds, label: repeats > 1 ? "\(label) 1/\(repeats)" : label, baseLabel: label, index: 1)
+    }
+
+    private func runTimerPhase(seconds: Int, label: String, baseLabel: String, index: Int) {
+        timerLabel = label
+        timerEndsAt = Date().addingTimeInterval(TimeInterval(seconds))
+        log(.info, "Chrono : \(label), \(seconds) s")
+        sendMirror(force: true)
+        timerTask = Task { [weak self] in
+            // Rappel à 10 s de la fin pour les blocs longs.
+            if seconds >= 45 {
+                try? await Task.sleep(nanoseconds: UInt64(seconds - 10) * 1_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                self.beep(short: true)
+                self.realtime.injectText("[CHRONO] plus que 10 s sur « \(label) ».")
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+            } else {
+                try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.beep(short: false)
+            self.timerPhaseFinished(baseLabel: baseLabel, index: index)
+        }
+    }
+
+    private func timerPhaseFinished(baseLabel: String, index: Int) {
+        let finished = timerLabel ?? baseLabel
+        timerLabel = nil
+        timerEndsAt = nil
+        if timerPhaseIsWork, timerRepeatsLeft > 1, timerRestSeconds > 0 {
+            // Travail terminé → récupération
+            timerPhaseIsWork = false
+            realtime.injectText("[CHRONO terminé] « \(finished) ». Récupération de \(timerRestSeconds) s qui démarre.")
+            realtime.requestResponse(instructions: "Le chrono « \(finished) » vient de sonner : annonce la fin du bloc et lance la récupération de \(timerRestSeconds) s en une phrase.")
+            runTimerPhase(seconds: timerRestSeconds, label: "récup \(index)/\(timerRepeatsLeft + index - 1)", baseLabel: baseLabel, index: index)
+            return
+        }
+        if !timerPhaseIsWork {
+            // Récupération terminée → répétition suivante
+            timerPhaseIsWork = true
+            timerRepeatsLeft -= 1
+            let total = timerRepeatsLeft + index
+            realtime.injectText("[CHRONO terminé] récupération. Répétition \(index + 1)/\(total) de « \(baseLabel) » (\(timerWorkSeconds) s) qui démarre.")
+            realtime.requestResponse(instructions: "La récup est finie : lance la répétition \(index + 1) sur \(total) de « \(baseLabel) » en une phrase énergique.")
+            runTimerPhase(seconds: timerWorkSeconds, label: "\(baseLabel) \(index + 1)/\(total)", baseLabel: baseLabel, index: index + 1)
+            return
+        }
+        timerRepeatsLeft = 0
+        sendMirror(force: true)
+        realtime.injectText("[CHRONO terminé] « \(finished) ». " + metricsLine(prefix: "[MÉTRIQUES]"))
+        realtime.requestResponse(instructions: "Le chrono « \(finished) » vient de sonner : annonce-le et donne la consigne suivante en une ou deux phrases.")
+    }
+
+    func cancelTimer() {
+        timerTask?.cancel()
+        timerTask = nil
+        timerLabel = nil
+        timerEndsAt = nil
+        timerRepeatsLeft = 0
+        sendMirror(force: true)
+    }
+
+    /// Bip local (dans la file audio de Jeffrey) : court pour le rappel, double pour la fin.
+    private func beep(short: Bool) {
+        let rate = 24_000.0
+        func tone(_ freq: Double, _ dur: Double) -> [Int16] {
+            (0..<Int(rate * dur)).map { i in
+                let t = Double(i) / rate
+                let env = min(1, min(t / 0.01, (dur - t) / 0.03))
+                return Int16(sin(2 * .pi * freq * t) * 0.6 * env * 32767)
+            }
+        }
+        var samples = tone(880, short ? 0.12 : 0.15)
+        if !short { samples += [Int16](repeating: 0, count: Int(rate * 0.08)) + tone(1320, 0.18) }
+        let data = samples.withUnsafeBufferPointer { Data(buffer: $0) }
+        if useAppleVoice {
+            // La voix Apple n'utilise pas la file PCM : petit lecteur dédié.
+            BeepPlayer.shared.play(pcm16: data)
+        } else {
+            audio.enqueuePlayback(pcm16: data)
+        }
     }
 
     private func onRealtimeReady() {
@@ -802,6 +996,7 @@ final class CoachSession: ObservableObject {
                 parts.append(ref)
             }
         }
+        if let label = timerLabel, let end = timerEndsAt { parts.append("chrono « \(label) » : \(Int(max(0, end.timeIntervalSinceNow))) s restantes") }
         if s.state == .paused { parts.append("séance EN PAUSE") }
         if s.state == .ended { parts.append("séance terminée côté montre") }
         let age = Int(Date().timeIntervalSince(s.lastSampleAt ?? s.timestamp))
@@ -949,10 +1144,28 @@ final class CoachSession: ObservableObject {
         }
     }
 
-    /// Demande une intervention courte du coach, sauf si quelqu'un parle déjà.
+    /// Interventions prioritaires : elles passent devant l'espacement (chrono, objectif atteint, galère, arrêt long).
+    private func isPriority(_ reason: String) -> Bool {
+        ["objectif atteint", "galère", "chrono", "arrêt depuis", "demande manuelle", "zone 5"].contains { reason.lowercased().contains($0) }
+    }
+
+    /// Demande une intervention courte du coach, sauf si quelqu'un parle déjà ou si c'est trop tôt.
     func cue(reason: String) {
         guard phase == .live, realtime.isConnected, !responseInProgress, !userSpeaking, !coachSpeaking else { return }
-        lastCueAt = Date()
+        let now = Date()
+        if !isPriority(reason) {
+            // Conversation en cours avec l'utilisateur : on ne l'interrompt pas avec du spontané.
+            guard now.timeIntervalSince(lastUserSpokeAt) >= 60 else { return }
+            // Silence minimal après la dernière phrase de Jeffrey.
+            guard now.timeIntervalSince(lastCoachSpokeAt) >= 30 else { return }
+            // Espacement entre deux interventions spontanées.
+            let spacing: TimeInterval = config.presence == "discreet" ? 180 : 90
+            guard now.timeIntervalSince(lastSpontaneousCueAt) >= spacing else { return }
+            lastSpontaneousCueAt = now
+        } else {
+            guard now.timeIntervalSince(lastCoachSpokeAt) >= 8 else { return }
+        }
+        lastCueAt = now
         if let hr = latest?.heartRate {
             lastAnnouncedZone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
             lastCueZone = lastAnnouncedZone

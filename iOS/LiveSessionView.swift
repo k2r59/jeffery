@@ -15,6 +15,7 @@ struct LiveSessionView: View {
                     VStack(spacing: 12) {
                         timerCard
                         metricsRow
+                        if let label = coach.timerLabel, let end = coach.timerEndsAt { timerCard(label, end) }
                         activityRow
                         jeffreyLiveCard
                         if let p = coach.proposal { proposalCard(p) }
@@ -79,6 +80,21 @@ struct LiveSessionView: View {
                 }
             }
             .card()
+        }
+    }
+
+    private func timerCard(_ label: String, _ end: Date) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            let remaining = max(0, end.timeIntervalSince(ctx.date))
+            HStack(spacing: 12) {
+                JIcon("chronometre", size: 18).foregroundStyle(Theme.citron)
+                Text(label.capitalized).font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.creme)
+                Spacer()
+                Text(Formatters.elapsed(remaining)).font(.display(28, weight: .black).monospacedDigit()).foregroundStyle(Theme.citron)
+                Button { coach.cancelTimer() } label: { JIcon("fermer", size: 14).foregroundStyle(Theme.muted) }
+            }
+            .padding(.horizontal, 14).frame(height: 56)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.citron.opacity(0.12)))
         }
     }
 

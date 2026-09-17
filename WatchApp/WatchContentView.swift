@@ -71,6 +71,10 @@ struct WatchContentView: View {
     // MARK: Séance en direct (miroir de l'iPhone)
 
     private var livePage: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in livePageContent }
+    }
+
+    private var livePageContent: some View {
         let m = mirror.state
         let s = workout.snapshot
         let hr = s.heartRate ?? m.heartRate
@@ -109,6 +113,14 @@ struct WatchContentView: View {
                         metric("distance", (s.distance ?? m.distance).map { String(format: "%.2f", $0 / 1000) } ?? "--", "km")
                     }
                     if let e = s.activeEnergy { metric("energie", "\(Int(e))", "kcal") }
+                }
+                if let tl = m.timerLabel, let te = m.timerEndsAt {
+                    HStack {
+                        Text(tl.capitalized).font(.system(size: 11, weight: .bold)).foregroundStyle(creme)
+                        Spacer()
+                        Text(Formatters.elapsed(max(0, te.timeIntervalSinceNow))).font(.system(size: 20, weight: .black, design: .rounded).monospacedDigit()).foregroundStyle(citron)
+                    }
+                    .padding(8).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(citron.opacity(0.15)))
                 }
                 if m.phase == "foreground" {
                     Text("Ouvre Jeffrey sur l'iPhone pour lancer la voix").font(.system(size: 10, weight: .bold)).foregroundStyle(citron)

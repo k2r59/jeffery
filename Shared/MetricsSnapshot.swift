@@ -115,6 +115,8 @@ struct CoachMirror: Codable, Equatable {
     var heartRate: Double?
     var distance: Double?
     var paused: Bool
+    var timerLabel: String? = nil
+    var timerEndsAt: Date? = nil
 
     static let idle = CoachMirror(phase: "idle", elapsed: 0, timestamp: Date(), kind: .running, goalLabel: nil, remaining: nil,
                                   progress: 0, goalReached: false, coachSpeaking: false, userSpeaking: false, lastLine: nil,

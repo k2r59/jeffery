@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		074C41C7A8E27B9557E68F60 /* JeffreyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397467C11C8057136CF8549F /* JeffreyView.swift */; };
+		0BEB9A6157CAAA7BDAE7583A /* SessionAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E565DD4B3701C8EEC7FD653 /* SessionAnalysisService.swift */; };
 		0E824A8B7E8D8F9B3B3FB42C /* SessionLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E436D5C4A739476728581A22 /* SessionLog.swift */; };
 		0FCF8FACF728ECDBF3B0ADC3 /* PhoneConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */; };
 		10B71EEE9658C3AD09BBBBE1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D4AA1667A3275F3D77C3C7 /* Theme.swift */; };
@@ -49,7 +50,9 @@
 		C7908D583D26CC144A48A6B9 /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5679A20688F985B95732882B /* ActivityMonitor.swift */; };
 		C899428C5426D7A8690625AB /* JeffreyMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C633A224C23AEA7E5F906EE0 /* JeffreyMemory.swift */; };
 		CB08DD05ED173449299454B6 /* WatchCoachWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D3E9191F7BC99494DF29BA20 /* BeepPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */; };
 		E26AB3EAECF37CF14F030331 /* VoicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = D501B5BC019DE9395044ADA3 /* VoicePreview.swift */; };
+		E82550A98E525C664B168E43 /* DeveloperFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AE0E78538EB40DB1DE2E09 /* DeveloperFeedback.swift */; };
 		EC0901101D1F3616937B0785 /* ProfileImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF934BA7DEFCAB03A6719FF /* ProfileImage.swift */; };
 		EDCF91F2A7B9462E66319FA6 /* RealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */; };
 		F2DC8CB0D16F9403F45983B8 /* JeffreyMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D7D2911298C496B06F52EA /* JeffreyMark.swift */; };
@@ -90,10 +93,13 @@
 		2F9EC583F66EEBE0A4F6A881 /* AppleAnalyst.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleAnalyst.swift; sourceTree = "<group>"; };
 		349670EE16768E2C8346D827 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		397467C11C8057136CF8549F /* JeffreyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyView.swift; sourceTree = "<group>"; };
+		39AE0E78538EB40DB1DE2E09 /* DeveloperFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperFeedback.swift; sourceTree = "<group>"; };
 		3CD5230CD8F6E66BE4CD9541 /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
 		3E1F94AF9504750D0AC84335 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3E565DD4B3701C8EEC7FD653 /* SessionAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAnalysisService.swift; sourceTree = "<group>"; };
 		3E589C09902B7A842396858D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
+		4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeepPlayer.swift; sourceTree = "<group>"; };
 		50D4AA1667A3275F3D77C3C7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		5679A20688F985B95732882B /* ActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitor.swift; sourceTree = "<group>"; };
 		5E3F53CE58B179A6AF3DC43C /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
@@ -156,8 +162,10 @@
 				E062557903F7829899F6BCFE /* AppleVoice.swift */,
 				3E1F94AF9504750D0AC84335 /* Assets.xcassets */,
 				D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */,
+				4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */,
 				A2097E145A239323A219EBC1 /* CoachConfig.swift */,
 				FAB112F058BBADDA9A8B2F7C /* CoachSession.swift */,
+				39AE0E78538EB40DB1DE2E09 /* DeveloperFeedback.swift */,
 				1B72EA6338816D49A380C3D1 /* HealthProfile.swift */,
 				B771AF7CF4644315101BFB4F /* HistoryView.swift */,
 				283D571A2B12BF08F2767D09 /* Info.plist */,
@@ -174,6 +182,7 @@
 				2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */,
 				D5A63CF06A05D2BA57DB5461 /* RootView.swift */,
 				C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */,
+				3E565DD4B3701C8EEC7FD653 /* SessionAnalysisService.swift */,
 				0FC8C31809CD02803421C632 /* SessionAnalyst.swift */,
 				6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */,
 				CB07464CCC26C18B28EB4F8B /* SessionGoal.swift */,
@@ -343,8 +352,10 @@
 				2ACB625130B2D0D66AD0772C /* AppleAnalyst.swift in Sources */,
 				386E28887225C03332FE61BB /* AppleVoice.swift in Sources */,
 				509C76BD84E7D18BBD014B3F /* AudioPipeline.swift in Sources */,
+				D3E9191F7BC99494DF29BA20 /* BeepPlayer.swift in Sources */,
 				3C0DA67E865FD64FA0A8BBC6 /* CoachConfig.swift in Sources */,
 				82C1230E51C0C277FC02F078 /* CoachSession.swift in Sources */,
+				E82550A98E525C664B168E43 /* DeveloperFeedback.swift in Sources */,
 				621D15B63E630840EF4F1E1B /* HealthProfile.swift in Sources */,
 				75A0EB54E5503D86B74B134C /* HistoryView.swift in Sources */,
 				F2DC8CB0D16F9403F45983B8 /* JeffreyMark.swift in Sources */,
@@ -362,6 +373,7 @@
 				A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */,
 				48B34E824CC2E58A4B52982A /* RootView.swift in Sources */,
 				827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */,
+				0BEB9A6157CAAA7BDAE7583A /* SessionAnalysisService.swift in Sources */,
 				283FD722227E973622E5D7CE /* SessionAnalyst.swift in Sources */,
 				4A6C94955EF3E4443DD6175A /* SessionEndView.swift in Sources */,
 				9329260E9C7DA8A64B02B2A9 /* SessionGoal.swift in Sources */,
