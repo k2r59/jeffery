@@ -25,6 +25,7 @@ enum Prefs {
     static let analysisModel = "pref.analysisModel"
     static let analysisProvider = "pref.analysisProvider"   // apple | openai
     static let voiceEngine = "pref.voiceEngine"             // openai | apple (voix de sortie uniquement)
+    static let micSource = "pref.micSource"                 // headset | iphone
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
@@ -68,6 +69,7 @@ enum Prefs {
             analysisModel: "gpt-5-mini",
             analysisProvider: "apple",
             voiceEngine: "openai",
+            micSource: "headset",
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,
@@ -197,10 +199,15 @@ struct CoachConfig {
         )
     }
 
-    func instructions(kind: WorkoutKind, mode: CaptureMode) -> String {
-        let goalLine = goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Aucun objectif précis n'a été donné : demande-le brièvement au début, puis adapte-toi."
-            : "Objectif annoncé pour la séance : \(goal)."
+    func instructions(kind: WorkoutKind, mode: CaptureMode, sessionGoal: String? = nil) -> String {
+        let goalLine: String
+        if let g = sessionGoal, !g.contains("sortie libre") {
+            goalLine = "Objectif de la séance : \(g)."
+        } else if !goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            goalLine = "Objectif général annoncé : \(goal). Séance du jour libre."
+        } else {
+            goalLine = "Séance libre, sans objectif chiffré : ne redemande pas d'objectif, accompagne."
+        }
         var profile: [String] = []
         if age > 0 { profile.append("\(age) ans") }
         if weightKg > 0 { profile.append("\(Int(weightKg.rounded())) kg") }
@@ -232,7 +239,8 @@ struct CoachConfig {
         5. Les données : la ligne [MÉTRIQUES] donne FC et zone, distance, allure, calories, objectif, chrono, et « corps/terrain » \
            (marche, course, arrêt, cadence, plat, montée, descente, D+). Une FC qui monte en côte est normale ; une pause \
            marchée n'est pas un échec ; en descente, relâcher. Données absentes ou vieilles : dis-le et coache au temps.
-        6. Changer l'objectif : dis « Je regarde », puis appelle propose_goal ; l'utilisateur confirme sur son téléphone.
+        6. Changer l'objectif : demande l'accord à l'oral en une question courte, puis appelle set_goal ; c'est appliqué \
+           aussitôt, jamais rien à faire sur le téléphone.
         7. Tout ce qui se dit est transcrit et conservé ; un bilan écrit et tes notes durables suivent la séance. Si on te \
            demande de noter quelque chose (fait à retenir, remarque pour le développeur), appelle save_note ; ne dis jamais \
            que tu ne peux pas.

@@ -59,12 +59,20 @@ struct SessionSummary: Codable, Identifiable {
     static func loadAll() -> [SessionSummary] {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
-        return (try? d.decode([SessionSummary].self, from: data)) ?? []
+        if let list = try? d.decode([SessionSummary].self, from: data) { return list }
+        // Fichier illisible : on le met de côté au lieu de l'écraser.
+        try? FileManager.default.moveItem(at: fileURL, to: fileURL.appendingPathExtension("bak-\(Int(Date().timeIntervalSince1970))"))
+        return []
     }
 
-    /// Séance coachée correspondant à une séance Santé (même début, à 10 min près).
-    static func matching(start: Date) -> SessionSummary? {
-        loadAll().first { abs($0.date.timeIntervalSince(start)) < 600 }
+    /// Séance coachée correspondant à une séance Santé : recouvrement des périodes.
+    static func matching(start: Date, end: Date? = nil, in list: [SessionSummary]? = nil) -> SessionSummary? {
+        let all = list ?? loadAll()
+        let healthEnd = end ?? start.addingTimeInterval(3600)
+        return all.first { s in
+            let sEnd = s.date.addingTimeInterval(s.elapsed)
+            return s.date < healthEnd && sEnd > start && (abs(s.date.timeIntervalSince(start)) < 1800 || abs(sEnd.timeIntervalSince(healthEnd)) < 1800)
+        }
     }
 
     static func upsert(_ s: SessionSummary) {

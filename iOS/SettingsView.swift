@@ -23,6 +23,9 @@ struct SettingsView: View {
     @AppStorage(Prefs.athleteNotes) private var athleteNotes: String = ""
     @AppStorage(Prefs.basePrompt) private var basePrompt: String = Prefs.defaultBasePrompt
     @State private var apiKey: String = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
+    @AppStorage(Prefs.voiceEngine) private var voiceEngine: String = "openai"
+    @AppStorage(Prefs.voiceBoost) private var voiceBoost: Bool = true
+    @StateObject private var appleVoice = AppleVoice()
     @State private var saveNotice: String?
 
     var body: some View {
@@ -122,6 +125,21 @@ struct SettingsView: View {
                         .lineLimit(5...14)
                     Button("Rétablir le prompt par défaut") { basePrompt = Prefs.defaultBasePrompt }
                         .font(.footnote)
+                }
+                Section("Voix (avancé)") {
+                    Picker("Moteur de voix", selection: $voiceEngine) {
+                        Text("OpenAI (naturelle)").tag("openai")
+                        Text("Apple (lue sur l'iPhone)").tag("apple")
+                    }
+                    Toggle("Voix au-dessus de la musique", isOn: $voiceBoost)
+                    if voiceEngine == "apple" {
+                        Picker("Voix Apple", selection: $appleVoice.selectedIdentifier) {
+                            ForEach(appleVoice.voices, id: \.identifier) { v in Text("\(v.name) · \(AppleVoice.qualityLabel(v.quality))").tag(v.identifier) }
+                        }
+                        Button(appleVoice.isSpeaking ? "Stop" : "Écouter la voix Apple") {
+                            appleVoice.isSpeaking ? appleVoice.stop() : appleVoice.speak("Salut, moi c'est Jeffrey. On y va à ton rythme.")
+                        }
+                    }
                 }
                 Section("Séance") {
                     TextField("Objectif (ex. 45 min en zone 2, ou 6 × 400 m)", text: $goal, axis: .vertical)

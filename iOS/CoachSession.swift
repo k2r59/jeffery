@@ -3,6 +3,7 @@ import Combine
 import UIKit
 import CoreLocation
 import ActivityKit
+import AVFAudio
 
 struct TranscriptLine: Identifiable, Equatable {
     enum Role { case user, coach, info }
@@ -30,7 +31,6 @@ final class CoachSession: ObservableObject {
     @Published private(set) var reference: ReferenceStatus?
     @Published var endedSummary: SessionSummary?
     @Published private(set) var goal: SessionGoal = .free
-    @Published var proposal: GoalProposal?
     @Published private(set) var goalReached = false
     @Published private(set) var lastCoachLine: String?
     private var halfwayAnnounced = false
@@ -104,6 +104,12 @@ final class CoachSession: ObservableObject {
     private var distanceHistory: [(Date, Double)] = []
     private var reconnectAttempts = 0
     private var endTimeoutTask: Task<Void, Never>?
+    private var connectTimeoutTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+    private var pendingPriorityCues: [String] = []
+    /// Pause demandée localement, en attendant la confirmation de la montre.
+    private var localPaused = false
+    private var sessionToken = UUID()
 
     var latest: MetricsSnapshot? { connectivity.latest }
 
@@ -136,7 +142,7 @@ final class CoachSession: ObservableObject {
 
     /// Marche, course, arrêt, montée, descente : Jeffrey réagit, avec au plus une réaction toutes les 30 s.
     private func handle(activityEvent event: ActivityMonitor.Event) {
-        guard phase == .live, config.autoCues else { return }
+        guard phase == .live, config.autoCues, !isPaused else { return }
         let now = Date()
         guard now.timeIntervalSince(lastEventCueAt) >= 30 else { return }
         let reason: String
@@ -181,13 +187,29 @@ final class CoachSession: ObservableObject {
 
     // MARK: - Démarrage / arrêt
 
+    /// La montre est le capteur : sans elle, pas de séance.
+    var watchReady: Bool { connectivity.isPaired && connectivity.isWatchAppInstalled && connectivity.isReachable }
+
     func start(kind: WorkoutKind, mode: CaptureMode, goal: SessionGoal = .free) {
         guard phase == .idle else { return }
+        if AVAudioApplication.shared.recordPermission != .granted {
+            Task { [weak self] in
+                let ok = await AudioPipeline.requestMicrophonePermission()
+                guard let self else { return }
+                if ok { self.start(kind: kind, mode: mode, goal: goal) } else { self.errorMessage = "Micro refusé : Jeffrey ne peut pas t'entendre (Réglages › Jeffrey › Micro)." }
+            }
+            return
+        }
         config = CoachConfig.load()
+        guard watchReady else {
+            errorMessage = connectivity.isWatchAppInstalled
+                ? "Montre introuvable : ouvre Jeffrey sur la montre, puis réessaie."
+                : "L'app Jeffrey n'est pas installée sur la montre."
+            return
+        }
         self.goal = goal
         goalReached = false
         halfwayAnnounced = false
-        proposal = nil
         lastCoachLine = nil
         guard !config.apiKey.isEmpty else {
             errorMessage = "Renseigne ta clé API OpenAI dans les réglages."
@@ -221,6 +243,7 @@ final class CoachSession: ObservableObject {
         audio.noiseGate = config.micSensitivity.noiseGate
         audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
         useAppleVoice = config.voiceEngine == "apple"
+        audio.useHeadsetMic = (UserDefaults.standard.string(forKey: Prefs.micSource) ?? "headset") == "headset"
         appleVoice.refresh()
         sentenceBuffer = ""; textResponseBuffer = ""
         gps.start(kind: kind)
@@ -236,11 +259,25 @@ final class CoachSession: ObservableObject {
             reference = nil
         }
 
+        sessionToken = UUID()
+        localPaused = false
+        pendingPriorityCues.removeAll()
+        partialCoachLine = nil
+        // Micro et session audio ouverts tout de suite, tant que l'app est visible : ils continuent ensuite en arrière-plan.
+        if UIApplication.shared.applicationState == .active {
+            do { try audio.start() } catch {
+                errorMessage = "Audio : \(error.localizedDescription)"
+                phase = .idle
+                return
+            }
+        }
         realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
         startLiveActivity()
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 20_000_000_000)
-            guard let self, self.phase == .connecting else { return }
+        let token = sessionToken
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 25_000_000_000)
+            guard let self, self.sessionToken == token, self.phase == .connecting, !self.waitingForForeground else { return }
             self.errorMessage = self.errorMessage ?? "Connexion au coach impossible (délai dépassé)."
             self.stop()
         }
@@ -286,7 +323,12 @@ final class CoachSession: ObservableObject {
         case .requestPause, .requestResume:
             togglePause()
         case .requestEnd:
-            stop()
+            if phase == .idle {
+                // Rien en cours côté iPhone : la montre doit quand même arrêter sa capture.
+                connectivity.send(command: .end, kind: payload.kind, mode: .companion)
+            } else {
+                stop()
+            }
         default:
             break
         }
@@ -345,18 +387,24 @@ final class CoachSession: ObservableObject {
     }
 
     private func sendMirror(force: Bool = false) {
-        updateLiveActivity()
         let m = mirrorSnapshot()
         if !force, let last = lastMirror, last.phase == m.phase, last.coachSpeaking == m.coachSpeaking, last.userSpeaking == m.userSpeaking,
            last.lastLine == m.lastLine, last.paused == m.paused, abs(last.elapsed - m.elapsed) < 4, last.goalReached == m.goalReached,
            last.timerLabel == m.timerLabel { return }
         lastMirror = m
+        updateLiveActivity()
         connectivity.sendCoachState(m)
     }
 
     func stop() {
         guard phase == .connecting || phase == .live else { return }
+        let wasLive = phase == .live
+        connectTimeoutTask?.cancel(); connectTimeoutTask = nil
+        reconnectTask?.cancel(); reconnectTask = nil
+        realtime.cancelPendingResponses()
+        pendingPriorityCues.removeAll()
         phase = .ending
+        if !wasLive { finishTeardown(); return }
         status = "Fin de séance…"
         stopTimers()
         cancelTimer()
@@ -382,7 +430,7 @@ final class CoachSession: ObservableObject {
         }
     }
 
-    var isPaused: Bool { latest?.state == .paused }
+    var isPaused: Bool { localPaused || latest?.state == .paused }
 
     /// Temps écoulé « vrai » : dernier instantané de la montre + temps passé depuis, ou horloge locale sans montre.
     func liveElapsed(at now: Date = Date()) -> TimeInterval {
@@ -397,24 +445,18 @@ final class CoachSession: ObservableObject {
     func togglePause() {
         guard phase == .live else { return }
         let command: WatchCommand = isPaused ? .resume : .pause
-        connectivity.send(command: command, kind: kind, mode: mode)
-        realtime.injectText(command == .pause ? "L'utilisateur met la séance en pause." : "L'utilisateur reprend la séance.")
-    }
-
-    /// Applique ou refuse la proposition d'objectif de Jeffrey.
-    func resolveProposal(accept: Bool) {
-        guard let p = proposal else { return }
-        proposal = nil
-        if accept {
-            goal = p.goal
-            goalReached = false
-            halfwayAnnounced = false
-            log(.info, "Nouvel objectif : \(p.goal.label)")
+        localPaused = command == .pause
+        gps.paused = localPaused
+        activity.paused = localPaused
+        connectivity.send(command: command, kind: kind, mode: mode) { [weak self] error in
+            if let error { self?.log(.info, "Montre : \(error.localizedDescription)") }
         }
-        realtime.sendFunctionOutput(callId: p.callId, output: ["accepted": accept, "current_goal": goal.coachLabel()])
+        realtime.injectText(command == .pause ? "L'utilisateur met la séance en pause : plus de coaching jusqu'à la reprise." : "L'utilisateur reprend la séance.")
+        sendMirror(force: true)
     }
 
     private func finishTeardown() {
+        guard phase == .ending else { return }
         endTimeoutTask?.cancel()
         endTimeoutTask = nil
         realtime.disconnect()
@@ -426,14 +468,16 @@ final class CoachSession: ObservableObject {
         responseInProgress = false
         coachSpeaking = false
         userSpeaking = false
+        partialCoachLine = nil
+        localPaused = false
         phase = .idle
         status = "Séance terminée"
         waitingForForeground = false
         sendMirror(force: true)
-        if let start = sessionStartedAt {
+        if let start = sessionStartedAt, hrSamples.count + transcript.count > 2 {
             let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
             endedSummary = SessionSummary(
-                id: ISO8601DateFormatter().string(from: start), date: start, kind: kind,
+                id: ISO8601DateFormatter().string(from: start), date: latest?.sessionStart ?? start, kind: kind,
                 elapsed: elapsed,
                 distance: displayDistance,
                 averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
@@ -454,7 +498,7 @@ final class CoachSession: ObservableObject {
     private func sessionConfig() -> [String: Any] {
         [
             "type": "realtime",
-            "instructions": config.instructions(kind: kind, mode: mode),
+            "instructions": config.instructions(kind: kind, mode: mode, sessionGoal: goal.coachLabel()),
             "output_modalities": [useAppleVoice ? "text" : "audio"],
             "tools": [[
                 "type": "function",
@@ -494,8 +538,8 @@ final class CoachSession: ObservableObject {
                 ],
             ], [
                 "type": "function",
-                "name": "propose_goal",
-                "description": "Proposer à l'utilisateur de modifier l'objectif de la séance en cours (raccourcir, allonger, changer de type). L'utilisateur devra confirmer sur son téléphone : ne considère pas le changement acquis avant la réponse.",
+                "name": "set_goal",
+                "description": "Changer l'objectif de la séance en cours (raccourcir, allonger, passer en libre) après accord ORAL de l'utilisateur. Demande d'abord en une question courte (« on passe à 25 minutes ? »), et appelle cette fonction quand il a dit oui. Le changement s'applique immédiatement, rien à faire sur le téléphone.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -567,7 +611,10 @@ final class CoachSession: ObservableObject {
             }
         }
         realtime.callbacks.onResponseStarted = { [weak self] in
-            Task { @MainActor in self?.responseInProgress = true }
+            Task { @MainActor in
+                self?.responseInProgress = true
+                if let e = self?.errorMessage, e.hasPrefix("Envoi") { self?.errorMessage = nil }
+            }
         }
         realtime.callbacks.onResponseDone = { [weak self] in
             Task { @MainActor in
@@ -575,7 +622,8 @@ final class CoachSession: ObservableObject {
                 self.responseInProgress = false
                 if self.capturingAck {
                     self.capturingAck = false
-                    if self.ackCaptureBuffer.count > 4_800 {
+                    let saidIt = (self.lastCoachLine ?? "").lowercased().contains("regarde")
+                    if self.ackCaptureBuffer.count > 4_800, self.ackCaptureBuffer.count < 24_000 * 2 * 4, saidIt {
                         self.ackAudio = self.ackCaptureBuffer
                         try? self.ackCaptureBuffer.write(to: self.ackFileURL, options: .atomic)
                     }
@@ -585,6 +633,7 @@ final class CoachSession: ObservableObject {
                 }
                 if self.useAppleVoice {
                     if self.phase == .ending, !self.appleVoice.isSpeaking { self.finishTeardown() }
+                    else { self.replayPriorityCues() }
                 } else {
                     self.scheduleSpeakingReset()
                     if self.phase == .ending { self.scheduleTeardownAfterPlayback() }
@@ -664,7 +713,7 @@ final class CoachSession: ObservableObject {
             return
         }
         if name == "start_timer" {
-            let seconds = max(5, (json["seconds"] as? Int) ?? Int((json["seconds"] as? Double) ?? 30))
+            let seconds = min(4 * 3600, max(5, (json["seconds"] as? Int) ?? Int((json["seconds"] as? Double) ?? 30)))
             let label = (json["label"] as? String ?? "bloc").trimmingCharacters(in: .whitespaces)
             let rest = max(0, (json["rest_seconds"] as? Int) ?? 0)
             let repeats = max(1, (json["repeats"] as? Int) ?? 1)
@@ -689,7 +738,7 @@ final class CoachSession: ObservableObject {
             realtime.sendFunctionOutput(callId: callId, output: ["saved": true, "kind": kind])
             return
         }
-        guard name == "propose_goal",
+        guard name == "set_goal",
               let data = arguments.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let kindRaw = json["kind"] as? String, let kind = SessionGoal.Kind(rawValue: kindRaw) else {
@@ -699,8 +748,13 @@ final class CoachSession: ObservableObject {
         let value = (json["target"] as? Double) ?? 0
         let target: Double = kind == .duration ? value * 60 : (kind == .distance ? value * 1000 : 0)
         let reason = json["reason"] as? String ?? ""
-        proposal = GoalProposal(callId: callId, goal: SessionGoal(kind: kind, target: target), reason: reason)
-        log(.info, "Jeffrey propose : \(proposal!.goal.label)\(reason.isEmpty ? "" : " · \(reason)")")
+        goal = SessionGoal(kind: kind, target: target, note: reason)
+        goalReached = false
+        let p = goal.progress(elapsed: liveElapsed(), distance: displayDistance)
+        halfwayAnnounced = p.fraction >= 0.5
+        log(.info, "Nouvel objectif : \(goal.label)\(reason.isEmpty ? "" : " · \(reason)")")
+        sendMirror(force: true)
+        realtime.sendFunctionOutput(callId: callId, output: ["applied": true, "goal": goal.coachLabel(), "remaining": p.remaining ?? "atteint"])
     }
 
     // MARK: - Chronomètre piloté par Jeffrey
@@ -757,6 +811,15 @@ final class CoachSession: ObservableObject {
         let finished = timerLabel ?? baseLabel
         timerLabel = nil
         timerEndsAt = nil
+        if timerPhaseIsWork, timerRepeatsLeft > 1, timerRestSeconds == 0 {
+            // Répétitions enchaînées sans récupération.
+            timerRepeatsLeft -= 1
+            let total = timerRepeatsLeft + index
+            realtime.injectText("[CHRONO terminé] « \(finished) ». Répétition \(index + 1)/\(total) qui démarre tout de suite.")
+            realtime.requestResponse(instructions: "Le bloc vient de sonner : enchaîne la répétition \(index + 1) sur \(total) en une phrase.")
+            runTimerPhase(seconds: timerWorkSeconds, label: "\(baseLabel) \(index + 1)/\(total)", baseLabel: baseLabel, index: index + 1)
+            return
+        }
         if timerPhaseIsWork, timerRepeatsLeft > 1, timerRestSeconds > 0 {
             // Travail terminé → récupération
             timerPhaseIsWork = false
@@ -814,20 +877,24 @@ final class CoachSession: ObservableObject {
     private func onRealtimeReady() {
         errorMessage = nil
         reconnectAttempts = 0
+        coachSpeaking = false
+        responseInProgress = false
         if phase == .connecting {
-            if UIApplication.shared.applicationState != .active {
-                // Réveillé par la montre : iOS refuse le micro en arrière-plan, on attend l'ouverture de l'app.
-                waitingForForeground = true
-                status = "Ouvre Jeffrey sur l'iPhone pour lancer la voix"
-                sendMirror(force: true)
-                return
-            }
-            do {
-                try audio.start()
-            } catch {
-                errorMessage = "Audio : \(error.localizedDescription)"
-                stop()
-                return
+            if !audio.isRunning {
+                if UIApplication.shared.applicationState != .active {
+                    // Réveillé par la montre : iOS refuse le micro en arrière-plan, on attend l'ouverture de l'app.
+                    waitingForForeground = true
+                    status = "Ouvre Jeffrey sur l'iPhone pour lancer la voix"
+                    sendMirror(force: true)
+                    return
+                }
+                do {
+                    try audio.start()
+                } catch {
+                    errorMessage = "Audio : \(error.localizedDescription)"
+                    stop()
+                    return
+                }
             }
             phase = .live
             status = "Coach en ligne"
@@ -856,7 +923,13 @@ final class CoachSession: ObservableObject {
             }
         } else if phase == .live {
             status = "Coach reconnecté"
-            realtime.injectText("Reconnexion après une coupure réseau ; la séance continue. " + metricsLine(prefix: "[MÉTRIQUES]"))
+            // Reprise sans amnésie : les dernières répliques, l'objectif et le chrono en cours.
+            let recent = transcript.filter { $0.role != .info }.suffix(20)
+                .map { ($0.role == .user ? "Lui : " : "Toi : ") + $0.text }.joined(separator: "\n")
+            var resume = "Reconnexion après une coupure réseau ; la séance continue sans changement. Objectif : \(goal.coachLabel())."
+            if let label = timerLabel, let end = timerEndsAt { resume += " Chrono en cours « \(label) », \(Int(max(0, end.timeIntervalSinceNow))) s restantes." }
+            if !recent.isEmpty { resume += "\nDernières répliques :\n" + recent }
+            realtime.injectText(resume + "\n" + metricsLine(prefix: "[MÉTRIQUES]"))
         }
     }
 
@@ -871,7 +944,8 @@ final class CoachSession: ObservableObject {
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_100_000_000)
             guard let self, self.phase == .live else { return }
-            guard self.lastAudioDeltaAt < stoppedAt, Date().timeIntervalSince(self.lastAckAt) > 8 else { return }
+            // Seulement si le serveur a bien ouvert une réponse (vraie parole) et qu'aucun audio n'est encore arrivé.
+            guard self.responseInProgress, self.lastAudioDeltaAt < stoppedAt, Date().timeIntervalSince(self.lastAckAt) > 8 else { return }
             if self.useAppleVoice {
                 guard !self.appleVoice.isSpeaking else { return }
                 self.lastAckAt = Date()
@@ -887,6 +961,11 @@ final class CoachSession: ObservableObject {
     }
 
     private func handleDisconnect(_ reason: String) {
+        // Plus rien ne parle ni ne répond : on libère les drapeaux, sinon Jeffrey reste muet.
+        coachSpeaking = false
+        responseInProgress = false
+        audio.stopPlayback()
+        if phase == .ending { finishTeardown(); return }
         guard phase == .live || phase == .connecting else { return }
         // Clé refusée ou accès interdit : inutile de retenter.
         if let err = errorMessage?.lowercased(), err.contains("api key") || err.contains("invalid_api_key") || err.contains("unauthorized") {
@@ -902,9 +981,11 @@ final class CoachSession: ObservableObject {
         }
         status = "Reconnexion (\(reconnectAttempts)/5)…"
         let delay = Double(reconnectAttempts) * 1.5
-        Task { [weak self] in
+        let token = sessionToken
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard let self, self.phase == .live || self.phase == .connecting else { return }
+            guard let self, self.sessionToken == token, self.phase == .live || self.phase == .connecting else { return }
             self.realtime.connect(apiKey: self.config.apiKey, model: self.config.model, sessionConfig: self.sessionConfig())
         }
     }
@@ -916,10 +997,15 @@ final class CoachSession: ObservableObject {
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 guard let self else { return }
                 if !self.audio.isPlaying {
-                    await MainActor.run { self.coachSpeaking = false }
+                    await MainActor.run { self.coachSpeaking = false; self.replayPriorityCues() }
                     return
                 }
             }
+            guard let self else { return }
+            // Lecture bloquée (interruption audio) : on vide et on libère.
+            self.audio.stopPlayback()
+            self.coachSpeaking = false
+            self.replayPriorityCues()
         }
     }
 
@@ -937,6 +1023,11 @@ final class CoachSession: ObservableObject {
     // MARK: - Métriques → contexte
 
     private func handle(snapshot snap: MetricsSnapshot) {
+        if snap.state == .paused || snap.state == .running {
+            localPaused = snap.state == .paused
+            gps.paused = localPaused
+            activity.paused = localPaused
+        }
         if let d = snap.distance {
             distanceHistory.append((snap.timestamp, d))
             distanceHistory.removeAll { snap.timestamp.timeIntervalSince($0.0) > 45 }
@@ -947,12 +1038,19 @@ final class CoachSession: ObservableObject {
             let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
             currentZone = zone
             if phase == .live, config.autoCues, let previous = lastAnnouncedZone, previous != zone,
-               Date().timeIntervalSince(lastCueAt) > 45, zone.rawValue >= 5 || (previous.rawValue >= 5 && zone.rawValue <= 3) {
+               Date().timeIntervalSince(lastCueAt) > 45, Date().timeIntervalSince(lastEventCueAt) > 45, !isPaused,
+               zone.rawValue >= 5 || (previous.rawValue >= 5 && zone.rawValue <= 3) {
+                lastEventCueAt = Date()
                 cue(reason: zone.rawValue >= 5 ? "FC en zone 5 (\(Int(hr)) bpm) : vérifier que c'est voulu, sinon lever le pied" : "FC redescendue de la zone 5 : bien récupéré")
             }
             if lastAnnouncedZone == nil { lastAnnouncedZone = zone }
         }
         evaluateGoal()
+        if phase == .connecting, snap.state == .ended, Date().timeIntervalSince(sessionStartedAt ?? Date()) > 5 {
+            log(.info, "La montre a terminé avant le début : séance annulée.")
+            stop()
+            return
+        }
         if phase == .live, snap.state == .ended {
             log(.info, mode == .owned ? "La montre a terminé la séance." : "La séance de l'app Exercice est terminée.")
             stop()
@@ -999,6 +1097,10 @@ final class CoachSession: ObservableObject {
         let elapsedNow = liveElapsed()
         guard let s = latest else {
             var parts = ["\(prefix) temps écoulé \(Formatters.elapsed(elapsedNow)) · aucune donnée de la montre pour l'instant"]
+            if kind.usesDistance, let d = displayDistance {
+                parts.append("distance \(Formatters.distance(d)) (GPS iPhone)")
+                if let v = gps.speed, let p = Formatters.pace(speedMetersPerSecond: v) { parts.append("allure \(p)") }
+            }
             let act = activity.summaryLine()
             if !act.isEmpty { parts.append("corps/terrain : \(act)") }
             if goal.kind != .free {
@@ -1046,11 +1148,15 @@ final class CoachSession: ObservableObject {
 
     private func startTimers() {
         stopTimers()
-        metricsTimer = Timer.scheduledTimer(withTimeInterval: min(config.metricsInterval, 15), repeats: true) { [weak self] _ in
+        metricsTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.injectMetricsIfChanged() }
         }
         goalTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.evaluateGoal(); self?.detectStruggle() }
+            Task { @MainActor in
+                guard let self else { return }
+                if self.latest?.speed == nil, let v = self.gps.speed, !self.isPaused { self.pace = Formatters.pace(speedMetersPerSecond: v) }
+                self.evaluateGoal(); self.detectStruggle()
+            }
         }
         mirrorTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.sendMirror() }
@@ -1077,13 +1183,24 @@ final class CoachSession: ObservableObject {
     /// Le temps avance même si la montre se tait : on injecte à intervalle fixe, données nouvelles ou non.
     private func injectMetricsIfChanged() {
         guard phase == .live, realtime.isConnected else { return }
-        lastInjectedSnapshot = latest
-        realtime.injectText(metricsLine(prefix: "[MÉTRIQUES]"))
+        realtime.injectMetrics(metricsLine(prefix: "[MÉTRIQUES]"))
+    }
+
+    /// Montre obligatoire : plus de données depuis 2 min et montre injoignable → la séance s'arrête.
+    private func watchWatchdog() {
+        guard phase == .live, !isPaused else { return }
+        let stale = latest.map { Date().timeIntervalSince($0.timestamp) > 120 } ?? (Date().timeIntervalSince(sessionStartedAt ?? Date()) > 120)
+        if stale, !connectivity.isReachable {
+            errorMessage = "Montre perdue : séance arrêtée."
+            log(.info, "Montre injoignable depuis plus de 2 minutes, arrêt de la séance.")
+            stop()
+        }
     }
 
     /// Coaching de fond : Jeffrey reste présent, avec un contenu qui a une raison d'être (kilomètre, allure, technique, objectif).
     private func routineCheck() {
-        guard phase == .live else { return }
+        guard phase == .live, !isPaused else { return }
+        watchWatchdog()
         let now = Date()
         let silence = now.timeIntervalSince(max(lastCoachSpokeAt, lastCueAt))
         guard silence >= 30 else { return }
@@ -1093,10 +1210,11 @@ final class CoachSession: ObservableObject {
             let km = Int(d / 1000)
             if km > lastKmAnnounced {
                 let split = lastKmAt.map { now.timeIntervalSince($0.at) }
-                lastKmAnnounced = km
-                lastKmAt = (km, now)
                 let splitText = split.map { " en \(Formatters.elapsed($0))" } ?? ""
-                cue(reason: "kilomètre \(km) passé\(splitText) : annonce-le, situe l'allure par rapport à l'objectif ou au ressenti, un mot d'encouragement")
+                if cue(reason: "kilomètre \(km) passé\(splitText) : annonce-le, situe l'allure par rapport à l'objectif ou au ressenti, un mot d'encouragement") {
+                    lastKmAnnounced = km
+                    lastKmAt = (km, now)
+                }
                 return
             }
         }
@@ -1129,7 +1247,7 @@ final class CoachSession: ObservableObject {
 
     /// Galère en montée et dérive de fatigue : détection sur les historiques FC / allure.
     private func detectStruggle() {
-        guard phase == .live, config.autoCues else { return }
+        guard phase == .live, config.autoCues, !isPaused else { return }
         let now = Date()
         if let hr = latest?.heartRate { hrHistory.append((now, hr)) }
         if let v = gps.speed ?? latest?.speed { speedHistory.append((now, v)) }
@@ -1149,7 +1267,7 @@ final class CoachSession: ObservableObject {
             let hrRising = (hrNow ?? 0) - (hrBefore ?? hrNow ?? 0) >= 8
             let hrHigh = hrNow.map { HeartRateZone.zone(for: $0, maxHR: config.maxHR).rawValue >= 5 } ?? false
             let slowing = (vNow ?? 1) < (vBefore ?? 0) * 0.7 && (vBefore ?? 0) > 1
-            let cadenceDrop = (activity.cadence ?? 999) < 145 && activity.activity == .running
+            let cadenceDrop = activity.activity == .running && (activity.cadence ?? 999) < activity.typicalRunningCadence * 0.92
             if (hrRising && (slowing || cadenceDrop)) || hrHigh || (slowing && cadenceDrop) {
                 struggleAnnouncedForClimb = true
                 lastEventCueAt = now
@@ -1179,8 +1297,7 @@ final class CoachSession: ObservableObject {
             lastCueAt = .distantPast
             cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
         } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues {
-            halfwayAnnounced = true
-            cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))")
+            if cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))") { halfwayAnnounced = true }
         }
     }
 
@@ -1189,21 +1306,34 @@ final class CoachSession: ObservableObject {
         ["objectif atteint", "galère", "chrono", "arrêt depuis", "demande manuelle", "zone 5"].contains { reason.lowercased().contains($0) }
     }
 
-    /// Demande une intervention courte du coach, sauf si quelqu'un parle déjà ou si c'est trop tôt.
-    func cue(reason: String) {
-        guard phase == .live, realtime.isConnected, !responseInProgress, !userSpeaking, !coachSpeaking else { return }
+    /// Les annonces prioritaires refusées (Jeffrey parlait) sont rejouées dès qu'il a fini.
+    private func replayPriorityCues() {
+        guard !pendingPriorityCues.isEmpty, phase == .live, !coachSpeaking, !responseInProgress else { return }
+        let reason = pendingPriorityCues.removeFirst()
+        _ = cue(reason: reason)
+    }
+
+    /// Demande une intervention courte du coach. Renvoie true si elle est envoyée ou mise en attente (prioritaire).
+    @discardableResult
+    func cue(reason: String) -> Bool {
+        guard phase == .live, realtime.isConnected, !isPaused else { return false }
+        if responseInProgress || userSpeaking || coachSpeaking {
+            if isPriority(reason), !pendingPriorityCues.contains(reason) { pendingPriorityCues.append(reason); return true }
+            return false
+        }
         let now = Date()
         if !isPriority(reason) {
             // Conversation en cours avec l'utilisateur : on ne l'interrompt pas avec du spontané.
-            guard now.timeIntervalSince(lastUserSpokeAt) >= 60 else { return }
+            guard now.timeIntervalSince(lastUserSpokeAt) >= 60 else { return false }
             // Silence minimal après la dernière phrase de Jeffrey.
-            guard now.timeIntervalSince(lastCoachSpokeAt) >= 30 else { return }
+            guard now.timeIntervalSince(lastCoachSpokeAt) >= 30 else { return false }
             // Espacement entre deux interventions spontanées.
             let spacing: TimeInterval = config.presence == "discreet" ? 180 : 90
-            guard now.timeIntervalSince(lastSpontaneousCueAt) >= spacing else { return }
+            guard now.timeIntervalSince(lastSpontaneousCueAt) >= spacing else { return false }
             lastSpontaneousCueAt = now
-        } else {
-            guard now.timeIntervalSince(lastCoachSpokeAt) >= 8 else { return }
+        } else if now.timeIntervalSince(lastCoachSpokeAt) < 8 {
+            if !pendingPriorityCues.contains(reason) { pendingPriorityCues.append(reason) }
+            return true
         }
         lastCueAt = now
         if let hr = latest?.heartRate {
@@ -1211,8 +1341,9 @@ final class CoachSession: ObservableObject {
             lastCueZone = lastAnnouncedZone
         }
         lastInjectedSnapshot = latest
-        realtime.injectText(metricsLine(prefix: "[MÉTRIQUES]") + " · motif : \(reason)")
-        realtime.requestResponse(instructions: "Intervention coach spontanée (\(reason)) : 1 à 2 phrases orales, utiles, sans répéter la précédente.")
+        realtime.injectMetrics(metricsLine(prefix: "[MÉTRIQUES]"))
+        realtime.requestResponse(instructions: "Intervention coach (\(reason)) : 1 à 2 phrases orales, utiles, sans répéter la précédente.")
+        return true
     }
 
     // MARK: - Transcript

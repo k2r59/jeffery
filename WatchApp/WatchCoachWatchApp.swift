@@ -23,6 +23,10 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
         WorkoutManager.shared.requestAuthorization()
     }
 
+    func applicationDidBecomeActive() {
+        Task { @MainActor in WorkoutManager.shared.appBecameActive() }
+    }
+
     /// Lancement à distance : la commande déposée par l'iPhone dit s'il faut suivre l'app Exercice ou piloter la séance.
     func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
         let kind = WorkoutKind(activityType: workoutConfiguration.activityType)

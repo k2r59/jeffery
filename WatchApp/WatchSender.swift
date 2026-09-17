@@ -16,6 +16,9 @@ final class WatchSender: NSObject, WCSessionDelegate {
     static let shared = WatchSender()
 
     private var lastQueuedAt: Date = .distantPast
+    private var lastHandledCommandAt: Double = 0
+    private var lastSentState: SessionState?
+    private let stateLock = NSLock()
 
     func activate() {
         guard WCSession.isSupported() else { return }
@@ -38,13 +41,15 @@ final class WatchSender: NSObject, WCSessionDelegate {
         }
     }
 
-    /// Quand l'iPhone n'est pas joignable : file de transfert (livrée dès que possible), au plus une toutes les 5 s.
+    /// Quand l'iPhone n'est pas joignable : contexte (dernier état) toujours ; file de transfert seulement aux transitions.
     private func queueFallback(_ payload: [String: Any]) {
         let session = WCSession.default
         try? session.updateApplicationContext(payload)
-        let now = Date()
-        guard now.timeIntervalSince(lastQueuedAt) >= 5 else { return }
-        lastQueuedAt = now
+        guard let data = payload[WCKeys.metrics] as? Data, let snap = try? WCCodec.decoder.decode(MetricsSnapshot.self, from: data) else { return }
+        stateLock.lock(); defer { stateLock.unlock() }
+        guard snap.state != lastSentState || Date().timeIntervalSince(lastQueuedAt) >= 60 else { return }
+        lastSentState = snap.state
+        lastQueuedAt = Date()
         session.transferUserInfo(payload)
     }
 
@@ -73,7 +78,18 @@ final class WatchSender: NSObject, WCSessionDelegate {
 
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         Task { @MainActor in WatchMirror.shared.phoneReachable = session.isReachable }
-        if !session.receivedApplicationContext.isEmpty { ingestMirror(session.receivedApplicationContext) }
+        if !session.receivedApplicationContext.isEmpty {
+            ingestMirror(session.receivedApplicationContext)
+            handleContextCommand(session.receivedApplicationContext)
+        }
+    }
+
+    /// Commande déposée dans le contexte (montre injoignable au moment de l'envoi) : exécutée si récente et pas déjà vue.
+    private func handleContextCommand(_ dict: [String: Any]) {
+        guard let at = dict[WCKeys.commandAt] as? Double, at > lastHandledCommandAt,
+              Date().timeIntervalSince1970 - at < 600 else { return }
+        lastHandledCommandAt = at
+        handleCommand(in: dict)
     }
 
     func sessionReachabilityDidChange(_ session: WCSession) {
@@ -82,6 +98,7 @@ final class WatchSender: NSObject, WCSessionDelegate {
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         ingestMirror(applicationContext)
+        handleContextCommand(applicationContext)
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {

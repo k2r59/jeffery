@@ -80,6 +80,8 @@ struct MetricsSnapshot: Codable, Equatable {
     var state: SessionState
     /// Date du dernier échantillon HealthKit reçu (mode compagnon : utile pour la latence).
     var lastSampleAt: Date?
+    /// Départ réel de la séance côté montre (calé sur la séance native en mode compagnon).
+    var sessionStart: Date? = nil
 
     static func idle(kind: WorkoutKind, mode: CaptureMode) -> MetricsSnapshot {
         MetricsSnapshot(timestamp: Date(), elapsed: 0, heartRate: nil, activeEnergy: nil,

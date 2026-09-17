@@ -5,6 +5,7 @@ import CoreLocation
 
 struct SessionsView: View {
     @ObservedObject var history: WorkoutHistory
+    private let coached = SessionSummary.loadAll()
 
     private var weekCount: (Int, Double) {
         guard let start = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start else { return (0, 0) }
@@ -63,7 +64,7 @@ struct SessionsView: View {
     }
 
     private func row(_ w: HKWorkout) -> some View {
-        let coached = SessionSummary.matching(start: w.startDate) != nil || WorkoutHistory.sourceLabel(w) == "WatchCoach"
+        let coached = SessionSummary.matching(start: w.startDate, end: w.endDate, in: coached) != nil || WorkoutHistory.sourceLabel(w) == "WatchCoach"
         return HStack(spacing: 12) {
             JIcon("course", size: 17).foregroundStyle(Theme.creme)
                 .frame(width: 34, height: 34).background(Circle().fill(Theme.surfaceRaised))
@@ -92,9 +93,10 @@ struct RedoRouteView: View {
     @State private var loaded = false
     @State private var style = 0   // 0 tranquillement, 1 viser un temps, 2 libre
     @State private var showObjective = false
+    @State private var pendingGoal: SessionGoal?
 
     private var coordinates: [CLLocationCoordinate2D] { locations.filter { $0.horizontalAccuracy < 60 }.map(\.coordinate) }
-    private var summary: SessionSummary? { SessionSummary.matching(start: workout.startDate) }
+    private var summary: SessionSummary? { SessionSummary.matching(start: workout.startDate, end: workout.endDate) }
 
     var body: some View {
         ZStack {
@@ -154,11 +156,16 @@ struct RedoRouteView: View {
             locations = locs
             loaded = true
         }
-        .sheet(isPresented: $showObjective) {
-            ObjectiveView(kind: WorkoutKind(activityType: workout.workoutActivityType), initial: initialGoal) { goal in
-                showObjective = false
+        .sheet(isPresented: $showObjective, onDismiss: {
+            if let goal = pendingGoal {
+                pendingGoal = nil
                 dismiss()
                 coach.start(kind: WorkoutKind(activityType: workout.workoutActivityType), mode: CaptureMode(rawValue: modeRaw) ?? .companion, goal: goal)
+            }
+        }) {
+            ObjectiveView(kind: WorkoutKind(activityType: workout.workoutActivityType), initial: initialGoal) { goal in
+                pendingGoal = goal
+                showObjective = false
             }
         }
     }

@@ -21,6 +21,12 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     }
 
     private let healthStore = HKHealthStore()
+    /// Contexte applicatif fusionné : commande en attente + état miroir (updateApplicationContext remplace tout).
+    private var context: [String: Any] = [:]
+
+    private func pushContext() {
+        try? WCSession.default.updateApplicationContext(context)
+    }
 
     func activate() {
         guard WCSession.isSupported() else { return }
@@ -54,7 +60,9 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         let payload = WatchCommandPayload(command: command, kind: kind, mode: mode)
         guard let data = try? WCCodec.encoder.encode(payload) else { return }
         let session = WCSession.default
-        try? session.updateApplicationContext([WCKeys.command: data, WCKeys.commandAt: Date().timeIntervalSince1970])
+        context[WCKeys.command] = data
+        context[WCKeys.commandAt] = Date().timeIntervalSince1970
+        pushContext()
         guard session.activationState == .activated else {
             completion?(NSError(domain: "WatchCoach", code: 3, userInfo: [NSLocalizedDescriptionKey: "WatchConnectivity inactif"]))
             return
@@ -76,7 +84,8 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         guard WCSession.isSupported(), let data = try? WCCodec.encoder.encode(mirror) else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }
-        try? session.updateApplicationContext([WCKeys.coachState: data])
+        context[WCKeys.coachState] = data
+        pushContext()
         if session.isReachable {
             session.sendMessage([WCKeys.coachState: data], replyHandler: nil, errorHandler: { _ in })
         }
@@ -112,7 +121,12 @@ final class PhoneConnectivity: NSObject, ObservableObject {
 extension PhoneConnectivity: WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         refreshFlags(session)
-        if !session.receivedApplicationContext.isEmpty { ingest(session.receivedApplicationContext) }
+        // Le contexte reçu au lancement est un reliquat : on ne le prend que s'il est frais.
+        if let data = session.receivedApplicationContext[WCKeys.metrics] as? Data,
+           let snap = try? WCCodec.decoder.decode(MetricsSnapshot.self, from: data),
+           Date().timeIntervalSince(snap.timestamp) < 30 {
+            ingest(session.receivedApplicationContext)
+        }
     }
 
     func sessionDidBecomeInactive(_ session: WCSession) {}

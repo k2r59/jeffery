@@ -117,13 +117,25 @@ final class AudioPipeline {
     var noiseGate: Float = 0.015
     private var gateHold = 0
 
+    /// Micro : écouteurs Bluetooth (mains libres, musique en qualité téléphone) ou micro de l'iPhone (musique en pleine qualité).
+    var useHeadsetMic = true
+    /// Changement de catégorie déclenché par nous : l'observateur de route ne doit pas redémarrer le moteur.
+    private var internalCategoryChange = false
+
     /// Atténuer la musique des autres apps pendant que le coach parle.
     var duckOthersWhileSpeaking = true
     private var ducking = false
 
     private var baseOptions: AVAudioSession.CategoryOptions {
         // .mixWithOthers : la musique (Apple Music, Spotify…) continue pendant la séance.
-        [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
+        // Sans HFP, la sortie reste en A2DP (pleine qualité) et le micro est celui de l'iPhone.
+        useHeadsetMic ? [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
+                      : [.allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
+    }
+
+    /// Demande la permission micro (à faire avant `start`, l'app au premier plan).
+    static func requestMicrophonePermission() async -> Bool {
+        await AVAudioApplication.requestRecordPermission()
     }
 
     private func applyCategory(duck: Bool) throws {
@@ -152,12 +164,17 @@ final class AudioPipeline {
     private func applyDucking(_ on: Bool) {
         guard on != ducking else { return }
         ducking = on
-        do {
-            try applyCategory(duck: on)
-            // La réactivation applique le nouveau réglage aux autres apps (retour du volume quand on cesse d'atténuer).
-            try AVAudioSession.sharedInstance().setActive(true, options: [])
-        } catch {
-            // Sans gravité : la musique reste à son niveau.
+        internalCategoryChange = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            do {
+                try self.applyCategory(duck: on)
+                // La réactivation applique le nouveau réglage aux autres apps (retour du volume quand on cesse d'atténuer).
+                try AVAudioSession.sharedInstance().setActive(true, options: [])
+            } catch {
+                // Sans gravité : la musique reste à son niveau.
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.internalCategoryChange = false }
         }
     }
 
@@ -168,6 +185,9 @@ final class AudioPipeline {
         try session.setPreferredSampleRate(24_000)
         try session.setPreferredIOBufferDuration(0.02)
         try session.setActive(true, options: [])
+        if !useHeadsetMic, let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+            try? session.setPreferredInput(builtIn)
+        }
     }
 
     private func startEngine() throws {
@@ -234,9 +254,20 @@ final class AudioPipeline {
 
     private func installObservers() {
         let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self, self.isRunning else { return }
+            // Le serveur audio a redémarré : tout est à reconstruire.
+            self.engine.stop()
+            self.engine.inputNode.removeTap(onBus: 0)
+            if let node = self.sourceNode { self.engine.detach(node) }
+            self.sourceNode = nil
+            try? self.configureSession()
+            try? self.startEngine()
+        })
         observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
             guard let self, let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+            if type == .began { self.playback.clear() }
             if type == .ended, self.isRunning {
                 try? AVAudioSession.sharedInstance().setActive(true, options: [])
                 try? self.engine.start()
@@ -245,7 +276,7 @@ final class AudioPipeline {
         observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
             guard let self, self.isRunning, let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
                   let reason = AVAudioSession.RouteChangeReason(rawValue: raw) else { return }
-            guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable || reason == .categoryChange else { return }
+            guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable || (reason == .categoryChange && !self.internalCategoryChange) else { return }
             // Le format d'entrée change avec la route (AirPods ↔ micro interne) : on réinstalle la capture.
             self.engine.stop()
             do {

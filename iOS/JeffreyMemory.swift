@@ -25,7 +25,8 @@ final class JeffreyMemory: ObservableObject {
     func load() {
         guard let data = try? Data(contentsOf: url) else { return }
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
-        notes = (try? d.decode([MemoryNote].self, from: data)) ?? []
+        if let list = try? d.decode([MemoryNote].self, from: data) { notes = list }
+        else { try? FileManager.default.moveItem(at: url, to: url.appendingPathExtension("bak-\(Int(Date().timeIntervalSince1970))")) }
     }
 
     private func save() {
@@ -48,6 +49,10 @@ final class JeffreyMemory: ObservableObject {
 
     /// Remplace la liste par la version fusionnée renvoyée par le modèle (on conserve les dates des notes inchangées).
     func replace(with texts: [String]) {
+        // Garde-fou : une liste très amputée (modèle tronqué) ne doit pas effacer la mémoire.
+        if notes.count >= 4, texts.count < notes.count / 2 { return }
+        let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601
+        if let data = try? e.encode(notes) { try? data.write(to: url.appendingPathExtension("bak"), options: .atomic) }
         var result: [MemoryNote] = []
         for t in texts {
             let clean = t.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -55,7 +60,8 @@ final class JeffreyMemory: ObservableObject {
             if let existing = notes.first(where: { $0.text == clean }) {
                 result.append(existing)
             } else {
-                result.append(MemoryNote(text: clean))
+                var n = MemoryNote(text: clean); n.updatedAt = Date()
+                result.append(n)
             }
         }
         notes = result

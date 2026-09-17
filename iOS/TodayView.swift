@@ -8,6 +8,7 @@ struct TodayView: View {
     @AppStorage(Prefs.kind) private var kindRaw: String = WorkoutKind.running.rawValue
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var showObjective = false
+    @State private var pendingGoal: SessionGoal?
 
     private var kind: WorkoutKind { WorkoutKind(rawValue: kindRaw) ?? .running }
     private var weekWorkouts: [HKWorkout] {
@@ -30,7 +31,20 @@ struct TodayView: View {
                     if let last = history.workouts.first { lastOutingRow(last) }
                     if let ref = ReferenceRoute.load() { referenceRow(ref) }
                     KindChips(kindRaw: $kindRaw)
-                    PrimaryButton(title: "Démarrer avec Jeffrey") { showObjective = true }
+                    if coach.watchReady {
+                        PrimaryButton(title: "Démarrer avec Jeffrey") { showObjective = true }
+                    } else {
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                JIcon("montre", size: 18).foregroundStyle(Theme.alerte)
+                                Text(coach.connectivity.isWatchAppInstalled ? "Ouvre Jeffrey sur ta montre pour démarrer" : "Installe Jeffrey sur ta montre pour démarrer")
+                                    .font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.creme)
+                            }
+                            Text("La montre mesure ton cœur : sans elle, pas de séance.").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
+                        }
+                        .frame(maxWidth: .infinity).frame(height: 72)
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface))
+                    }
                     if let err = coach.errorMessage {
                         Text(err).font(.caption).foregroundStyle(Theme.pulse)
                     }
@@ -39,10 +53,16 @@ struct TodayView: View {
                 .padding(.bottom, 70)
             }
         }
-        .sheet(isPresented: $showObjective) {
-            ObjectiveView(kind: kind) { goal in
-                showObjective = false
+        .sheet(isPresented: $showObjective, onDismiss: {
+            // Démarrage après la fermeture de la feuille : pas deux présentations en même temps.
+            if let goal = pendingGoal {
+                pendingGoal = nil
                 coach.start(kind: kind, mode: CaptureMode(rawValue: UserDefaults.standard.string(forKey: Prefs.mode) ?? "") ?? .companion, goal: goal)
+            }
+        }) {
+            ObjectiveView(kind: kind) { goal in
+                pendingGoal = goal
+                showObjective = false
             }
         }
     }

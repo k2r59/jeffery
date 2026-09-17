@@ -63,6 +63,9 @@ final class RouteRecorder: NSObject, ObservableObject {
     @Published private(set) var status: String = ""
     @Published private(set) var lastLocation: CLLocation?
     private(set) var startedAt: Date?
+    /// En pause : les points sont ignorés, la distance n'avance pas.
+    var paused = false
+    private var pendingKind: WorkoutKind?
 
     private let manager = CLLocationManager()
     private var route: LocalRoute?
@@ -88,10 +91,13 @@ final class RouteRecorder: NSObject, ObservableObject {
         guard route == nil else { return }
         let status = manager.authorizationStatus
         guard status == .authorizedWhenInUse || status == .authorizedAlways else {
+            pendingKind = kind
             requestAuthorization()
             self.status = "GPS non autorisé"
             return
         }
+        pendingKind = nil
+        paused = false
         let now = Date()
         route = LocalRoute(id: ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-"),
                            start: now, end: now, kind: kind.rawValue, points: [])
@@ -118,7 +124,7 @@ final class RouteRecorder: NSObject, ObservableObject {
     }
 
     private func ingest(_ locations: [CLLocation]) {
-        guard var r = route else { return }
+        guard var r = route, !paused else { return }
         for l in locations where l.horizontalAccuracy >= 0 && l.horizontalAccuracy <= 40 {
             if let prev = lastGood {
                 let d = l.distance(from: prev)
@@ -145,6 +151,15 @@ final class RouteRecorder: NSObject, ObservableObject {
 extension RouteRecorder: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         Task { @MainActor in self.ingest(locations) }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            // Autorisation accordée après la demande : on démarre l'enregistrement si une séance attend.
+            if let kind = self.pendingKind, manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+                self.start(kind: kind)
+            }
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

@@ -46,6 +46,8 @@ final class SessionAnalysisService: ObservableObject {
                         lastSource = "OpenAI \(model)"
                     }
                     if let r = result, !r.analysis.trimmingCharacters(in: .whitespaces).isEmpty {
+                        // On relit le disque : le ressenti a pu être choisi pendant l'analyse.
+                        if let fresh = SessionSummary.loadAll().first(where: { $0.id == summary.id }) { summary = fresh }
                         summary.analysis = r.analysis
                         summary.advice = r.advice
                         summary.caution = r.caution
@@ -71,6 +73,7 @@ final class SessionAnalysisService: ObservableObject {
                 }
                 if let notes {
                     memory.replace(with: notes)
+                    if let fresh = SessionSummary.loadAll().first(where: { $0.id == summary.id }) { summary = fresh }
                     summary.memoryUpdated = true
                     SessionSummary.upsert(summary)
                 }

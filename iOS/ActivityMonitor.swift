@@ -41,6 +41,11 @@ final class ActivityMonitor: ObservableObject {
     @Published private(set) var ascent: Double = 0          // D+ cumulé (m)
     @Published private(set) var descent: Double = 0         // D- cumulé (m)
     @Published private(set) var available = false
+    /// Séance en pause : les détections et compteurs sont gelés.
+    var paused = false
+    /// Cadence de course habituelle de ce coureur (médiane glissante), pour juger une chute de cadence.
+    private(set) var typicalRunningCadence: Double = 160
+    private var runningCadences: [Double] = []
 
     var onEvent: ((Event) -> Void)?
     /// Journal des transitions (même sans intervention), pour relecture après la séance.
@@ -77,6 +82,7 @@ final class ActivityMonitor: ObservableObject {
         ascent = 0; descent = 0; altitudeTrack.removeAll(); lastAltForCumul = nil; pendingAltDelta = 0
         horizontal = 0; lastAltitudeAt = nil; lastCadenceAt = .distantPast
         secondsByActivity = [:]; secondsClimbing = 0; lastTick = Date(); stationaryAnnounced = false
+        paused = false; runningCadences.removeAll(); typicalRunningCadence = 160
         available = CMMotionActivityManager.isActivityAvailable() || CMAltimeter.isRelativeAltitudeAvailable()
 
         if CMMotionActivityManager.isActivityAvailable() {
@@ -103,9 +109,15 @@ final class ActivityMonitor: ObservableObject {
                 guard let data, let c = data.currentCadence?.doubleValue else { return }
                 Task { @MainActor in
                     guard let self else { return }
+                    guard !self.paused else { return }
                     let spm = c * 60
                     self.cadence = spm
                     self.lastCadenceAt = Date()
+                    if self.activity == .running, spm >= 130 {
+                        self.runningCadences.append(spm)
+                        if self.runningCadences.count > 120 { self.runningCadences.removeFirst() }
+                        if self.runningCadences.count >= 20 { self.typicalRunningCadence = self.runningCadences.sorted()[self.runningCadences.count / 2] }
+                    }
                     // La cadence tranche vite : ≥ 140 pas/min = course, 30-125 = marche, < 30 = arrêt.
                     if spm >= 140 { self.consider(.running) }
                     else if spm <= 125, spm >= 30 { self.consider(.walking) }
@@ -134,7 +146,7 @@ final class ActivityMonitor: ObservableObject {
     // MARK: Activité (hystérésis 15 s)
 
     private func consider(_ raw: Activity) {
-        guard raw != .unknown else { return }
+        guard raw != .unknown, !paused else { return }
         if raw != candidate { candidate = raw; candidateSince = Date() }
         commitIfStable()
     }
@@ -154,6 +166,7 @@ final class ActivityMonitor: ObservableObject {
     // MARK: Relief
 
     private func ingestAltitude(_ alt: Double) {
+        guard !paused else { lastAltitudeAt = nil; return }
         let now = Date()
         // Distance horizontale : vitesse GPS intégrée (fine), sinon distance externe (montre) en secours.
         if let last = lastAltitudeAt {
@@ -196,6 +209,7 @@ final class ActivityMonitor: ObservableObject {
         let now = Date()
         let dt = now.timeIntervalSince(lastTick)
         lastTick = now
+        guard !paused else { return }
         secondsByActivity[activity, default: 0] += dt
         if terrain == .climb { secondsClimbing += dt }
         commitIfStable()

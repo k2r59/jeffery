@@ -5,6 +5,7 @@ struct RootView: View {
     @AppStorage(Prefs.onboarded) private var onboarded: Bool = false
     @StateObject private var history = WorkoutHistory()
     @State private var tab = 0
+    @State private var summaryToShow: SessionSummary?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -20,10 +21,12 @@ struct RootView: View {
         }
         .tint(Theme.lime)
         .preferredColorScheme(.dark)
-        .fullScreenCover(isPresented: Binding(get: { coach.phase != .idle }, set: { _ in })) {
+        .fullScreenCover(isPresented: Binding(get: { coach.phase != .idle }, set: { _ in }), onDismiss: {
+            if let s = coach.endedSummary { coach.endedSummary = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { summaryToShow = s } }
+        }) {
             LiveSessionView().environmentObject(coach)
         }
-        .sheet(item: $coach.endedSummary) { summary in SessionEndView(summary: summary) }
+        .sheet(item: $summaryToShow) { summary in SessionEndView(summary: summary) }
         .fullScreenCover(isPresented: Binding(get: { !onboarded }, set: { _ in })) { OnboardingView() }
         .task { await history.load(); SessionAnalysisService.shared.catchUp() }
         .onChange(of: coach.phase) { _, phase in

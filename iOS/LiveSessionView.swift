@@ -18,7 +18,6 @@ struct LiveSessionView: View {
                         if let label = coach.timerLabel, let end = coach.timerEndsAt { timerCard(label, end) }
                         activityRow
                         jeffreyLiveCard
-                        if let p = coach.proposal { proposalCard(p) }
                         if let r = coach.reference { referenceCard(r) }
                         musicCard
                         if let err = coach.errorMessage { Text(err).font(.caption).foregroundStyle(Theme.pulse) }
@@ -31,7 +30,6 @@ struct LiveSessionView: View {
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showTalk) { TalkSheet().environmentObject(coach) }
-        .onChange(of: coach.proposal) { _, p in if p != nil { showTalk = true } }
     }
 
     private var header: some View {
@@ -170,24 +168,6 @@ struct LiveSessionView: View {
         }
         .frame(maxWidth: .infinity).frame(height: 74)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface))
-    }
-
-    private func proposalCard(_ p: GoalProposal) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) { JIcon("objectif", size: 16); Text("Nouvel objectif · \(p.goal.label)") }.font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-            if !p.reason.isEmpty { Text(p.reason).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted) }
-            HStack(spacing: 10) {
-                Button { coach.resolveProposal(accept: true) } label: {
-                    Text("Confirmer").font(.display(14, weight: .black)).foregroundStyle(Theme.background)
-                        .frame(maxWidth: .infinity).frame(height: 44).background(Capsule().fill(Theme.lime))
-                }
-                Button { coach.resolveProposal(accept: false) } label: {
-                    Text("Garder \(coach.goal.label)").font(.display(14, weight: .black)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).frame(height: 44).background(Capsule().fill(Theme.surfaceRaised))
-                }
-            }
-        }
-        .card()
     }
 
     private func referenceCard(_ r: ReferenceStatus) -> some View {
@@ -329,28 +309,9 @@ struct TalkSheet: View {
                         if let last = lines.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                     }
                 }
-                if let p = coach.proposal {
-                    VStack(spacing: 10) {
-                        HStack(spacing: 6) { JIcon("objectif", size: 16); Text("Nouvel objectif · \(p.goal.label)") }
-                            .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
-                        HStack(spacing: 10) {
-                            Button { coach.resolveProposal(accept: true) } label: {
-                                Text("Confirmer").font(.display(15, weight: .black)).foregroundStyle(Theme.background)
-                                    .frame(maxWidth: .infinity).frame(height: 50).background(Capsule().fill(Theme.lime))
-                            }
-                            Button { coach.resolveProposal(accept: false) } label: {
-                                Text("Garder \(coach.goal.label)").font(.display(15, weight: .black)).foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity).frame(height: 50).background(Capsule().fill(Theme.surfaceRaised))
-                            }
-                        }
-                    }
-                }
-                VStack(spacing: 6) {
+                HStack(spacing: 8) {
                     JIcon("micro", size: 14).foregroundStyle(Theme.citron)
-                        .frame(width: 60, height: 60).background(Circle().stroke(Theme.lime, lineWidth: 2))
-                    Text(coach.userSpeaking ? "Je t'entends…" : "Micro activé").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
+                    Text(coach.userSpeaking ? "Je t'entends…" : "Micro ouvert en continu").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
                 }
                 .padding(.bottom, 10)
             }

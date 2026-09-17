@@ -145,6 +145,7 @@ struct WatchContentView: View {
     }
 
     private func stateLabel(_ m: CoachMirror) -> String {
+        if !mirror.phoneReachable, Date().timeIntervalSince(m.timestamp) > 120, m.phase != "idle" { return "IPHONE PERDU" }
         switch m.phase {
         case "connecting": return "JEFFREY ARRIVE"
         case "foreground": return "EN ATTENTE DE L'IPHONE"
@@ -170,7 +171,8 @@ struct WatchContentView: View {
             HStack(spacing: 18) {
                 controlButton("xmark", "Terminer", Color(red: 1.0, green: 0.384, blue: 0.345)) {
                     WatchSender.shared.request(.requestEnd, kind: m.kind) { ok in
-                        if !ok { workout.end() }
+                        // iPhone injoignable, ou déjà à l'arrêt : on termine la capture ici.
+                        if !ok || m.phase == "idle" { workout.end() }
                     }
                 }
                 if m.paused {

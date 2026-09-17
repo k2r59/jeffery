@@ -33,6 +33,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var seenSampleUUIDs = Set<UUID>()
 
     private var startDate: Date?
+    private var companionGeneration = 0
     private var pausedAccumulated: TimeInterval = 0
     private var pauseStartedAt: Date?
     private var tickTimer: Timer?
@@ -125,10 +126,15 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func startCompanion(kind: WorkoutKind) {
         guard !isActive else { return }
+        companionGeneration += 1
+        let generation = companionGeneration
         statusMessage = "Recherche de la séance en cours…"
         Task {
             let inferred = await inferNativeWorkoutStart()
-            await MainActor.run { self.beginCompanion(kind: kind, start: inferred ?? Date(), inferred: inferred != nil) }
+            await MainActor.run {
+                guard generation == self.companionGeneration else { return } // un .end est arrivé entre-temps
+                self.beginCompanion(kind: kind, start: inferred ?? Date(), inferred: inferred != nil)
+            }
         }
     }
 
@@ -170,7 +176,11 @@ final class WorkoutManager: NSObject, ObservableObject {
         runtime.start()
         runtimeSession = runtime
 
-        let predicate = HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-5), end: nil, options: [])
+        // Échantillons de la montre uniquement : les pas comptés par l'iPhone ne doivent pas s'ajouter.
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-5), end: nil, options: []),
+            HKQuery.predicateForObjects(from: Set([HKDevice.local()])),
+        ])
         var types: [HKQuantityType] = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned), HKQuantityType(.runningSpeed)]
         if let d = kind.distanceType { types.append(d) }
         for type in types {
@@ -250,6 +260,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     func end() {
+        companionGeneration += 1
         guard isActive else { return }
         if snapshot.mode == .owned {
             session?.end()
@@ -290,6 +301,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     private func finishTracking() {
         WKExtension.shared().isFrontmostTimeoutExtended = false
+        stopRouteRecording()
         tickTimer?.invalidate()
         tickTimer = nil
         var snap = snapshot
@@ -329,6 +341,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         var s = snap
         s.timestamp = Date()
         s.elapsed = currentElapsed()
+        s.sessionStart = startDate
         snapshot = s
         let now = Date()
         guard force || now.timeIntervalSince(lastSendAt) >= 1 else { return }
@@ -470,6 +483,11 @@ extension WorkoutManager: WKExtendedRuntimeSessionDelegate {
                 self.statusMessage = "Arrière-plan interrompu : \(error?.localizedDescription ?? "raison \(reason.rawValue)")"
             }
         }
+    }
+
+    /// Au retour au premier plan : si la session étendue est tombée, on la relance sans rien demander.
+    func appBecameActive() {
+        if needsBackgroundExtension { extendBackground() }
     }
 
     /// Relance la session d'exécution étendue (l'app doit être au premier plan).
