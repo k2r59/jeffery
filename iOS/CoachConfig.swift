@@ -185,7 +185,7 @@ struct CoachConfig {
             voice: d.string(forKey: Prefs.voice) ?? "marin",
             maxHR: maxHR,
             goal: d.string(forKey: Prefs.goal) ?? "",
-            cueInterval: (d.string(forKey: Prefs.presence) ?? "present") == "discreet" ? max(150, d.double(forKey: Prefs.cueInterval) * 3) : max(20, d.double(forKey: Prefs.cueInterval)),
+            cueInterval: 30, // vérification toutes les 30 s ; Jeffrey ne parle que s'il y a une raison (voir routineCheck)
             metricsInterval: max(5, d.double(forKey: Prefs.metricsInterval)),
             autoCues: d.bool(forKey: Prefs.autoCues)
         )
@@ -221,6 +221,9 @@ struct CoachConfig {
           puis appelle la fonction propose_goal plutôt que d'annoncer le changement toi-même ; il confirmera sur son téléphone.
         - N'énumère pas les chiffres bêtement : interprète-les (« tu es en zone 4, c'est bien pour ce bloc, tiens 2 minutes »).
         - Ne répète pas la même consigne à chaque intervention ; varie et sois concret.
+        - Parle quand c'est utile, pas pour meubler : sur du plat où tout roule, le silence est une bonne réponse. \
+          Les moments qui comptent : une montée où ça devient dur, un passage à la marche, une FC qui s'emballe, un arrêt, \
+          un objectif atteint. Là, sois présent, précis et bref.
         - Si l'utilisateur pose une question, réponds directement. S'il t'a parlé pendant que tu parlais, \
           réponds à ce qu'il a dit en priorité, sans répéter ce que tu venais de dire.
         - Si les métriques sont absentes ou vieilles, dis-le simplement et continue à coacher au temps.

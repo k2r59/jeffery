@@ -60,6 +60,13 @@ final class CoachSession: ObservableObject {
     let gps = RouteRecorder()
     let activity = ActivityMonitor()
     private var lastEventCueAt: Date = .distantPast
+    private var hrHistory: [(Date, Double)] = []
+    private var speedHistory: [(Date, Double)] = []
+    private var struggleAnnouncedForClimb = false
+    private var climbStartedAt: Date?
+    private var lastCoachSpokeAt: Date = .distantPast
+    private var fatigueAnnouncedAt: Date = .distantPast
+    private var lastCueZone: HeartRateZone?
     private let audio = AudioPipeline()
     private let realtime = RealtimeClient()
 
@@ -107,17 +114,34 @@ final class CoachSession: ObservableObject {
         switch event {
         case .activity(let from, let to):
             switch (from, to) {
-            case (.running, .walking): reason = "il vient de passer de la course à la marche (pause marchée ou fatigue ?) : accompagne sans juger, propose de repartir quand il veut"
+            case (.running, .walking):
+                if activity.terrain == .climb {
+                    struggleAnnouncedForClimb = true
+                    reason = "il passe à la marche dans la montée : c'est dur, soutiens-le, marcher est un bon choix, propose de repartir en haut"
+                } else {
+                    reason = "il vient de passer de la course à la marche (pause marchée ou fatigue ?) : accompagne sans juger, propose de repartir quand il veut"
+                }
             case (.walking, .running): reason = "il vient de repasser à la course : encourage la reprise"
             case (_, .stationary): return // annoncé seulement si l'arrêt dure
             case (.stationary, .running), (.stationary, .walking): reason = "il repart après un arrêt"
             default: reason = "activité détectée : \(to.label) (avant : \(from.label))"
             }
         case .terrain(let from, let to):
+            let g = activity.grade ?? 0
             switch to {
-            case .climb: reason = String(format: "début d'une montée (%.0f %%) : prépare-le, la FC va monter, c'est normal", activity.grade ?? 0)
-            case .descent: reason = "début d'une descente : relâcher les épaules, foulée courte, pas de freinage"
-            case .flat: reason = from == .climb ? "sommet atteint, retour sur du plat : félicite et invite à reprendre l'allure progressivement" : "retour sur du plat après la descente"
+            case .climb:
+                climbStartedAt = now
+                struggleAnnouncedForClimb = false
+                guard g >= 5 else { return } // une côte douce ne mérite pas de commentaire
+                reason = String(format: "début d'une vraie montée (%.0f %%) : un mot pour le préparer, la FC va monter, c'est normal", g)
+            case .descent:
+                guard g <= -5 else { return }
+                reason = "début d'une descente raide : relâcher les épaules, foulée courte, pas de freinage"
+            case .flat:
+                let climbDuration = climbStartedAt.map { now.timeIntervalSince($0) } ?? 0
+                climbStartedAt = nil
+                guard from == .climb, climbDuration >= 45 else { return }
+                reason = "sommet atteint après \(Int(climbDuration)) s de montée : félicite, invite à reprendre l'allure progressivement"
             }
         case .stationaryLong(let seconds):
             reason = "à l'arrêt depuis \(seconds) s (feu, pause ?) : demande si tout va bien, propose la pause si besoin"
@@ -155,6 +179,8 @@ final class CoachSession: ObservableObject {
         sessionStartedAt = Date()
         lastMirror = nil
         hrSamples.removeAll()
+        hrHistory.removeAll(); speedHistory.removeAll()
+        struggleAnnouncedForClimb = false; climbStartedAt = nil; lastCoachSpokeAt = .distantPast; fatigueAnnouncedAt = .distantPast; lastCueZone = nil
         // Repart propre : l'instantané de la séance précédente ne doit pas nourrir celle-ci.
         connectivity.reset()
         connectivity.acceptSnapshotsSince = Date().addingTimeInterval(-3)
@@ -615,8 +641,8 @@ final class CoachSession: ObservableObject {
             let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
             currentZone = zone
             if phase == .live, config.autoCues, let previous = lastAnnouncedZone, previous != zone,
-               Date().timeIntervalSince(lastCueAt) > 25, abs(zone.rawValue - previous.rawValue) >= 1 {
-                cue(reason: "changement de zone cardiaque : \(previous.label) → \(zone.label)")
+               Date().timeIntervalSince(lastCueAt) > 45, zone.rawValue >= 5 || (previous.rawValue >= 5 && zone.rawValue <= 3) {
+                cue(reason: zone.rawValue >= 5 ? "FC en zone 5 (\(Int(hr)) bpm) : vérifier que c'est voulu, sinon lever le pied" : "FC redescendue de la zone 5 : bien récupéré")
             }
             if lastAnnouncedZone == nil { lastAnnouncedZone = zone }
         }
@@ -717,14 +743,14 @@ final class CoachSession: ObservableObject {
             Task { @MainActor in self?.injectMetricsIfChanged() }
         }
         goalTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.evaluateGoal() }
+            Task { @MainActor in self?.evaluateGoal(); self?.detectStruggle() }
         }
         mirrorTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.sendMirror() }
         }
         if config.autoCues {
             cueTimer = Timer.scheduledTimer(withTimeInterval: config.cueInterval, repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.cue(reason: "point régulier") }
+                Task { @MainActor in self?.routineCheck() }
             }
         }
         lastCueAt = Date()
@@ -748,6 +774,69 @@ final class CoachSession: ObservableObject {
         realtime.injectText(metricsLine(prefix: "[MÉTRIQUES]"))
     }
 
+    /// Point régulier seulement s'il y a quelque chose à dire ; sinon Jeffrey se tait (au plus 5 min de silence).
+    private func routineCheck() {
+        guard phase == .live else { return }
+        let now = Date()
+        let silence = now.timeIntervalSince(max(lastCoachSpokeAt, lastCueAt))
+        var reasons: [String] = []
+        if let hr = latest?.heartRate {
+            let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
+            if let last = lastCueZone, zone != last, zone.rawValue >= 4 || last.rawValue >= 4 {
+                reasons.append("zone cardiaque passée de \(last.label) à \(zone.label)")
+            }
+        }
+        if activity.terrain == .climb, now.timeIntervalSince(activity.terrainSince) > 60, !struggleAnnouncedForClimb {
+            reasons.append("longue montée en cours")
+        }
+        let maxSilence: TimeInterval = config.presence == "discreet" ? 600 : 300
+        if silence >= maxSilence { reasons.append("point tranquille, rien d'anormal : une phrase courte et utile, ou juste un encouragement") }
+        guard let reason = reasons.first else { return }
+        cue(reason: reason)
+    }
+
+    /// Galère en montée et dérive de fatigue : détection sur les historiques FC / allure.
+    private func detectStruggle() {
+        guard phase == .live, config.autoCues else { return }
+        let now = Date()
+        if let hr = latest?.heartRate { hrHistory.append((now, hr)) }
+        if let v = gps.speed ?? latest?.speed { speedHistory.append((now, v)) }
+        hrHistory.removeAll { now.timeIntervalSince($0.0) > 300 }
+        speedHistory.removeAll { now.timeIntervalSince($0.0) > 300 }
+        func avg(_ h: [(Date, Double)], from: TimeInterval, to: TimeInterval) -> Double? {
+            let xs = h.filter { let a = now.timeIntervalSince($0.0); return a >= to && a <= from }.map(\.1)
+            return xs.isEmpty ? nil : xs.reduce(0, +) / Double(xs.count)
+        }
+        // Galère en montée : FC qui grimpe vite ou déjà très haute, allure ou cadence qui s'effondrent.
+        if activity.terrain == .climb, !struggleAnnouncedForClimb, now.timeIntervalSince(activity.terrainSince) >= 20,
+           now.timeIntervalSince(lastEventCueAt) >= 30 {
+            let hrNow = avg(hrHistory, from: 15, to: 0)
+            let hrBefore = avg(hrHistory, from: 60, to: 40)
+            let vNow = avg(speedHistory, from: 20, to: 0)
+            let vBefore = avg(speedHistory, from: 150, to: 60)
+            let hrRising = (hrNow ?? 0) - (hrBefore ?? hrNow ?? 0) >= 8
+            let hrHigh = hrNow.map { HeartRateZone.zone(for: $0, maxHR: config.maxHR).rawValue >= 5 } ?? false
+            let slowing = (vNow ?? 1) < (vBefore ?? 0) * 0.7 && (vBefore ?? 0) > 1
+            let cadenceDrop = (activity.cadence ?? 999) < 145 && activity.activity == .running
+            if (hrRising && (slowing || cadenceDrop)) || hrHigh || (slowing && cadenceDrop) {
+                struggleAnnouncedForClimb = true
+                lastEventCueAt = now
+                let detail = [hrHigh ? "FC en zone 5" : (hrRising ? "FC qui grimpe" : nil), slowing ? "allure qui chute" : nil, cadenceDrop ? "cadence qui tombe" : nil].compactMap { $0 }.joined(separator: ", ")
+                cue(reason: "il galère dans la montée (\(detail)) : soutiens-le concrètement, foulée courte, bras, regard, autoriser à marcher si besoin")
+                return
+            }
+        }
+        // Dérive de fatigue sur le plat : FC nettement plus haute à allure égale sur 4 minutes.
+        if activity.terrain == .flat, now.timeIntervalSince(fatigueAnnouncedAt) >= 600,
+           let hrNow = avg(hrHistory, from: 30, to: 0), let hrBefore = avg(hrHistory, from: 270, to: 210),
+           let vNow = avg(speedHistory, from: 30, to: 0), let vBefore = avg(speedHistory, from: 270, to: 210),
+           hrNow - hrBefore >= 10, abs(vNow - vBefore) / max(vBefore, 0.1) < 0.1, vNow > 1 {
+            fatigueAnnouncedAt = now
+            lastEventCueAt = now
+            cue(reason: "dérive cardiaque : FC +\(Int(hrNow - hrBefore)) bpm à allure égale depuis 4 min, signe de fatigue ou de chaleur : proposer de lever un peu le pied ou de boire")
+        }
+    }
+
     /// Évalue l'objectif sur le temps réel, indépendamment des messages de la montre.
     private func evaluateGoal() {
         guard phase == .live, goal.kind != .free else { return }
@@ -767,7 +856,10 @@ final class CoachSession: ObservableObject {
     func cue(reason: String) {
         guard phase == .live, realtime.isConnected, !responseInProgress, !userSpeaking, !coachSpeaking else { return }
         lastCueAt = Date()
-        if let hr = latest?.heartRate { lastAnnouncedZone = HeartRateZone.zone(for: hr, maxHR: config.maxHR) }
+        if let hr = latest?.heartRate {
+            lastAnnouncedZone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
+            lastCueZone = lastAnnouncedZone
+        }
         lastInjectedSnapshot = latest
         realtime.injectText(metricsLine(prefix: "[MÉTRIQUES]") + " · motif : \(reason)")
         realtime.requestResponse(instructions: "Intervention coach spontanée (\(reason)) : 1 à 2 phrases orales, utiles, sans répéter la précédente.")
@@ -793,6 +885,7 @@ final class CoachSession: ObservableObject {
         }
         if let line = partialCoachLine { lastCoachLine = full.isEmpty ? line.text : full }
         partialCoachLine = nil
+        lastCoachSpokeAt = Date()
         sendMirror(force: true)
     }
 
