@@ -18,8 +18,10 @@ Projet personnel, installé hors App Store en signature de développement.
 - Coaching de fond utile (kilomètres passés avec le temps du split, allure vs objectif, technique, respiration) et
   réactions immédiates aux événements : galère dans une côte, passage à la marche, fréquence cardiaque en zone 5,
   arrêt prolongé, sommet, descente raide, dérive de fatigue, objectif atteint.
-- Objectif de séance (durée, distance ou libre) fixé avant de partir, dicté en langage naturel ou par boutons ; Jeffrey
-  peut proposer de le modifier en cours de route, à confirmer d'un toucher.
+- Objectif de séance (durée, distance ou libre) fixé avant de partir, dicté en langage naturel ou par boutons ; en cours
+  de route, Jeffrey peut le changer après ton accord à l'oral, rien à toucher sur le téléphone.
+- Chronomètre piloté par Jeffrey (blocs, fractionné travail/récup) : l'app sonne et le prévient, il n'a jamais à compter.
+- La montre est obligatoire : sans montre joignable, pas de départ ; montre perdue plus de deux minutes, séance arrêtée.
 - Parcours de référence : rejouer une sortie précédente avec le relief à venir et un « fantôme » (avance ou retard).
 - Musique : elle continue, s'atténue quand Jeffrey parle, et sa voix passe au-dessus.
 
