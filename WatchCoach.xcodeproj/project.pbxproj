@@ -9,9 +9,11 @@
 /* Begin PBXBuildFile section */
 		074C41C7A8E27B9557E68F60 /* JeffreyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397467C11C8057136CF8549F /* JeffreyView.swift */; };
 		0BEB9A6157CAAA7BDAE7583A /* SessionAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E565DD4B3701C8EEC7FD653 /* SessionAnalysisService.swift */; };
+		0D0A19A9F30B530333A1F9B1 /* JeffreyWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6007B40D0AD1397CFB26FD68 /* JeffreyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0E824A8B7E8D8F9B3B3FB42C /* SessionLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E436D5C4A739476728581A22 /* SessionLog.swift */; };
 		0FCF8FACF728ECDBF3B0ADC3 /* PhoneConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */; };
 		10B71EEE9658C3AD09BBBBE1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D4AA1667A3275F3D77C3C7 /* Theme.swift */; };
+		12E9ECF9868829D20AF09038 /* JeffreyActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B70BA75F2844F85D5CBA6B2 /* JeffreyActivityAttributes.swift */; };
 		1600092E21C6985E6AB9AFA7 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD5230CD8F6E66BE4CD9541 /* SessionsView.swift */; };
 		25F7C47C9F29CEBDDFF2B50F /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3F53CE58B179A6AF3DC43C /* WatchContentView.swift */; };
 		283FD722227E973622E5D7CE /* SessionAnalyst.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC8C31809CD02803421C632 /* SessionAnalyst.swift */; };
@@ -34,6 +36,7 @@
 		7E00FDA4D53A37441BE3CBF0 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEA482D9F644EE21C7810B1F /* TodayView.swift */; };
 		827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */; };
 		82C1230E51C0C277FC02F078 /* CoachSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB112F058BBADDA9A8B2F7C /* CoachSession.swift */; };
+		847A5860A43449825023E794 /* JeffreyWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 928176BE1F8766A035A4A58D /* JeffreyWidgets.swift */; };
 		866DA61EF35ADFC8E9C783B8 /* WatchCoachApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */; };
 		88F89F6CD6F490B56D7F51C4 /* WatchCoachWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E609600A71477DB5A710B8DD /* WatchCoachWatchApp.swift */; };
 		89B7863B043015F9038F2D99 /* JeffreyMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D7D2911298C496B06F52EA /* JeffreyMark.swift */; };
@@ -47,6 +50,7 @@
 		AA8054D04A39FFBD9DEA1CBA /* ObjectiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A433BC192FA6379ABE91035B /* ObjectiveView.swift */; };
 		AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349670EE16768E2C8346D827 /* KeychainStore.swift */; };
 		BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
+		C3BDDD0BA985AC4037D19FEE /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
 		C7908D583D26CC144A48A6B9 /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5679A20688F985B95732882B /* ActivityMonitor.swift */; };
 		C899428C5426D7A8690625AB /* JeffreyMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C633A224C23AEA7E5F906EE0 /* JeffreyMemory.swift */; };
 		CB08DD05ED173449299454B6 /* WatchCoachWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -56,6 +60,8 @@
 		EC0901101D1F3616937B0785 /* ProfileImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF934BA7DEFCAB03A6719FF /* ProfileImage.swift */; };
 		EDCF91F2A7B9462E66319FA6 /* RealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */; };
 		F2DC8CB0D16F9403F45983B8 /* JeffreyMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D7D2911298C496B06F52EA /* JeffreyMark.swift */; };
+		F55E74FE7A7CC4D291C25571 /* JeffreyActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B70BA75F2844F85D5CBA6B2 /* JeffreyActivityAttributes.swift */; };
+		FE5F2CFD7FA25DE4F4A8E319 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 404CFB6572CFA845E57B2EFD /* Assets.xcassets */; };
 		FE6BE3C6B3FD3FC8AA6E0553 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
 /* End PBXBuildFile section */
 
@@ -67,9 +73,27 @@
 			remoteGlobalIDString = DEFFC490841FD42DFD651309;
 			remoteInfo = WatchCoachWatch;
 		};
+		D5B5DFC5785BE6A130E5D74F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 66F79F72D3BA62BB142AC183 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 03F0AA569D3B322E936A6A86;
+			remoteInfo = JeffreyWidgets;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		40345A20CAAF80EA5F552A1B /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0D0A19A9F30B530333A1F9B1 /* JeffreyWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9CC817E64FD9F5FE9C1A3B46 /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -98,18 +122,23 @@
 		3E1F94AF9504750D0AC84335 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3E565DD4B3701C8EEC7FD653 /* SessionAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAnalysisService.swift; sourceTree = "<group>"; };
 		3E589C09902B7A842396858D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		404CFB6572CFA845E57B2EFD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
 		4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeepPlayer.swift; sourceTree = "<group>"; };
 		50D4AA1667A3275F3D77C3C7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		5679A20688F985B95732882B /* ActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitor.swift; sourceTree = "<group>"; };
 		5E3F53CE58B179A6AF3DC43C /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
+		6007B40D0AD1397CFB26FD68 /* JeffreyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = JeffreyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B2DA5DD09E89CF2639E1253 /* MusicController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicController.swift; sourceTree = "<group>"; };
 		6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEndView.swift; sourceTree = "<group>"; };
+		7B70BA75F2844F85D5CBA6B2 /* JeffreyActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyActivityAttributes.swift; sourceTree = "<group>"; };
 		7E02BD34C7EDAE2584384F97 /* WatchSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSender.swift; sourceTree = "<group>"; };
 		82D7D2911298C496B06F52EA /* JeffreyMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyMark.swift; sourceTree = "<group>"; };
+		8629CF7B01AA2A2E28933C33 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		892B4D5B0C8155C590E5D7C7 /* WatchCoachWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WatchCoachWatch.entitlements; sourceTree = "<group>"; };
 		8BF934BA7DEFCAB03A6719FF /* ProfileImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileImage.swift; sourceTree = "<group>"; };
 		915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHistory.swift; sourceTree = "<group>"; };
+		928176BE1F8766A035A4A58D /* JeffreyWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyWidgets.swift; sourceTree = "<group>"; };
 		A2097E145A239323A219EBC1 /* CoachConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachConfig.swift; sourceTree = "<group>"; };
 		A433BC192FA6379ABE91035B /* ObjectiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveView.swift; sourceTree = "<group>"; };
 		A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatchCoachWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -152,6 +181,16 @@
 				1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */,
 			);
 			path = WatchApp;
+			sourceTree = "<group>";
+		};
+		6399828CFCD6909D4B8740E8 /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				404CFB6572CFA845E57B2EFD /* Assets.xcassets */,
+				8629CF7B01AA2A2E28933C33 /* Info.plist */,
+				928176BE1F8766A035A4A58D /* JeffreyWidgets.swift */,
+			);
+			path = Widgets;
 			sourceTree = "<group>";
 		};
 		9450222908086875F81C9E31 /* iOS */ = {
@@ -204,15 +243,26 @@
 			isa = PBXGroup;
 			children = (
 				9450222908086875F81C9E31 /* iOS */,
+				AF78FB92897D63DC586BB247 /* LiveActivity */,
 				FCBFD595187F28B8D828F6EA /* Shared */,
 				48B3D9DC9625622CE3293FFD /* WatchApp */,
+				6399828CFCD6909D4B8740E8 /* Widgets */,
 				C2651558923DC03DA8FC77FE /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		AF78FB92897D63DC586BB247 /* LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				7B70BA75F2844F85D5CBA6B2 /* JeffreyActivityAttributes.swift */,
+			);
+			path = LiveActivity;
 			sourceTree = "<group>";
 		};
 		C2651558923DC03DA8FC77FE /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				6007B40D0AD1397CFB26FD68 /* JeffreyWidgets.appex */,
 				DC42CFE418F8BE04A8F90575 /* WatchCoach.app */,
 				A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */,
 			);
@@ -232,6 +282,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		03F0AA569D3B322E936A6A86 /* JeffreyWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2B2B200F33462520807314CF /* Build configuration list for PBXNativeTarget "JeffreyWidgets" */;
+			buildPhases = (
+				69698762B182E7923113986B /* Sources */,
+				1BB143AD13A3A42866168C55 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JeffreyWidgets;
+			packageProductDependencies = (
+			);
+			productName = JeffreyWidgets;
+			productReference = 6007B40D0AD1397CFB26FD68 /* JeffreyWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		DEFFC490841FD42DFD651309 /* WatchCoachWatch */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FD93AD14BFD858E11E404A9B /* Build configuration list for PBXNativeTarget "WatchCoachWatch" */;
@@ -256,12 +324,14 @@
 			buildPhases = (
 				E123F7C9F2594BFC7705AEF2 /* Sources */,
 				8DEF50B31C43A50BCFDF983C /* Resources */,
+				40345A20CAAF80EA5F552A1B /* Embed Foundation Extensions */,
 				9CC817E64FD9F5FE9C1A3B46 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				6686EF2BA2E2B8DD956E9FA2 /* PBXTargetDependency */,
+				BF18D3C4137886EF743593F6 /* PBXTargetDependency */,
 			);
 			name = WatchCoach;
 			packageProductDependencies = (
@@ -279,6 +349,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					03F0AA569D3B322E936A6A86 = {
+						DevelopmentTeam = PTB959SX83;
+						ProvisioningStyle = Automatic;
+					};
 					DEFFC490841FD42DFD651309 = {
 						DevelopmentTeam = PTB959SX83;
 						ProvisioningStyle = Automatic;
@@ -305,11 +379,20 @@
 			targets = (
 				EDC5BE2367913D6EF69087F7 /* WatchCoach */,
 				DEFFC490841FD42DFD651309 /* WatchCoachWatch */,
+				03F0AA569D3B322E936A6A86 /* JeffreyWidgets */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		1BB143AD13A3A42866168C55 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FE5F2CFD7FA25DE4F4A8E319 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		236BACFAD5B8362CB6F23343 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -329,6 +412,16 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		69698762B182E7923113986B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				12E9ECF9868829D20AF09038 /* JeffreyActivityAttributes.swift in Sources */,
+				847A5860A43449825023E794 /* JeffreyWidgets.swift in Sources */,
+				C3BDDD0BA985AC4037D19FEE /* MetricsSnapshot.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C747BA38CFCE89521004BEE2 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -358,6 +451,7 @@
 				E82550A98E525C664B168E43 /* DeveloperFeedback.swift in Sources */,
 				621D15B63E630840EF4F1E1B /* HealthProfile.swift in Sources */,
 				75A0EB54E5503D86B74B134C /* HistoryView.swift in Sources */,
+				F55E74FE7A7CC4D291C25571 /* JeffreyActivityAttributes.swift in Sources */,
 				F2DC8CB0D16F9403F45983B8 /* JeffreyMark.swift in Sources */,
 				C899428C5426D7A8690625AB /* JeffreyMemory.swift in Sources */,
 				074C41C7A8E27B9557E68F60 /* JeffreyView.swift in Sources */,
@@ -398,9 +492,30 @@
 			target = DEFFC490841FD42DFD651309 /* WatchCoachWatch */;
 			targetProxy = 2F45EEA2F05D108F6CF4D322 /* PBXContainerItemProxy */;
 		};
+		BF18D3C4137886EF743593F6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 03F0AA569D3B322E936A6A86 /* JeffreyWidgets */;
+			targetProxy = D5B5DFC5785BE6A130E5D74F /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		082E403B52F56B4702051788 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INFOPLIST_FILE = Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.promo.watchcoach.widgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		2DC95F061116E68F916BF7F6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -484,6 +599,22 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		5B0330C15E92B38CCD68F17B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INFOPLIST_FILE = Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.promo.watchcoach.widgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -597,6 +728,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2B2B200F33462520807314CF /* Build configuration list for PBXNativeTarget "JeffreyWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5B0330C15E92B38CCD68F17B /* Debug */,
+				082E403B52F56B4702051788 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		65675020D985E5BCCE342026 /* Build configuration list for PBXNativeTarget "WatchCoach" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

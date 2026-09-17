@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import UIKit
 import CoreLocation
+import ActivityKit
 
 struct TranscriptLine: Identifiable, Equatable {
     enum Role { case user, coach, info }
@@ -52,6 +53,8 @@ final class CoachSession: ObservableObject {
     private var lastGhostWarnAt: Date = .distantPast
     private var cancellables = Set<AnyCancellable>()
     private var mirrorTimer: Timer?
+    private var liveActivity: Activity<JeffreyActivityAttributes>?
+    private var liveActivityStart: Date = Date()
     private var lastMirror: CoachMirror?
     /// L'iPhone a été réveillé en arrière-plan par la montre : l'audio ne peut démarrer qu'au premier plan.
     @Published private(set) var waitingForForeground = false
@@ -126,6 +129,8 @@ final class CoachSession: ObservableObject {
             }
         }
         activity.distanceProvider = { [weak self] in self?.displayDistance ?? 0 }
+        activity.speedProvider = { [weak self] in self?.gps.speed }
+        activity.onLog = { [weak self] text in self?.log(.info, text) }
         activity.onEvent = { [weak self] event in self?.handle(activityEvent: event) }
     }
 
@@ -232,6 +237,7 @@ final class CoachSession: ObservableObject {
         }
 
         realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
+        startLiveActivity()
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 20_000_000_000)
             guard let self, self.phase == .connecting else { return }
@@ -306,7 +312,40 @@ final class CoachSession: ObservableObject {
                            distance: displayDistance, paused: isPaused, timerLabel: timerLabel, timerEndsAt: timerEndsAt)
     }
 
+    // MARK: - Live Activity (écran verrouillé, Dynamic Island, Smart Stack de la montre)
+
+    private func activityState() -> JeffreyActivityAttributes.ContentState {
+        let elapsed = liveElapsed()
+        let p = goal.kind == .free ? (fraction: 0.0, remaining: nil as String?) : goal.progress(elapsed: elapsed, distance: displayDistance)
+        return JeffreyActivityAttributes.ContentState(
+            startedAt: Date().addingTimeInterval(-elapsed), paused: isPaused, elapsedFrozen: elapsed,
+            heartRate: latest?.heartRate.map { Int($0) }, distanceMeters: displayDistance,
+            goalLabel: goal.kind == .free ? nil : goal.label, remaining: p.remaining, progress: p.fraction,
+            coachState: phase == .connecting ? "arrive" : (coachSpeaking ? "parle" : "ecoute"),
+            lastLine: lastCoachLine.map { String($0.prefix(120)) }, timerLabel: timerLabel, timerEndsAt: timerEndsAt)
+    }
+
+    private func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let attributes = JeffreyActivityAttributes(kindLabel: kind.label)
+        liveActivity = try? Activity.request(attributes: attributes, content: .init(state: activityState(), staleDate: nil))
+    }
+
+    private func updateLiveActivity() {
+        guard let activity = liveActivity else { return }
+        let state = activityState()
+        Task { await activity.update(.init(state: state, staleDate: nil)) }
+    }
+
+    private func endLiveActivity() {
+        guard let activity = liveActivity else { return }
+        liveActivity = nil
+        let state = activityState()
+        Task { await activity.end(.init(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(300))) }
+    }
+
     private func sendMirror(force: Bool = false) {
+        updateLiveActivity()
         let m = mirrorSnapshot()
         if !force, let last = lastMirror, last.phase == m.phase, last.coachSpeaking == m.coachSpeaking, last.userSpeaking == m.userSpeaking,
            last.lastLine == m.lastLine, last.paused == m.paused, abs(last.elapsed - m.elapsed) < 4, last.goalReached == m.goalReached,
@@ -381,6 +420,7 @@ final class CoachSession: ObservableObject {
         realtime.disconnect()
         appleVoice.stop()
         audio.stop()
+        endLiveActivity()
         audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
         UIApplication.shared.isIdleTimerDisabled = false
         responseInProgress = false

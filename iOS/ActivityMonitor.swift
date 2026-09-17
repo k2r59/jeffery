@@ -43,8 +43,15 @@ final class ActivityMonitor: ObservableObject {
     @Published private(set) var available = false
 
     var onEvent: ((Event) -> Void)?
+    /// Journal des transitions (même sans intervention), pour relecture après la séance.
+    var onLog: ((String) -> Void)?
     /// Distance parcourue fournie par l'extérieur (GPS iPhone ou montre), en mètres.
     var distanceProvider: (() -> Double)?
+    /// Vitesse instantanée (m/s) du GPS : sert à intégrer la distance horizontale finement pour la pente.
+    var speedProvider: (() -> Double?)?
+    private var lastCadenceAt: Date = .distantPast
+    private var horizontal: Double = 0
+    private var lastAltitudeAt: Date?
 
     private let motion = CMMotionActivityManager()
     private let pedometer = CMPedometer()
@@ -68,6 +75,7 @@ final class ActivityMonitor: ObservableObject {
         activity = .unknown; candidate = .unknown; terrain = .flat; terrainCandidate = .flat
         activitySince = Date(); terrainSince = Date(); cadence = nil; grade = nil
         ascent = 0; descent = 0; altitudeTrack.removeAll(); lastAltForCumul = nil; pendingAltDelta = 0
+        horizontal = 0; lastAltitudeAt = nil; lastCadenceAt = .distantPast
         secondsByActivity = [:]; secondsClimbing = 0; lastTick = Date(); stationaryAnnounced = false
         available = CMMotionActivityManager.isActivityAvailable() || CMAltimeter.isRelativeAltitudeAvailable()
 
@@ -83,19 +91,25 @@ final class ActivityMonitor: ObservableObject {
                 // Faible confiance : on garde la valeur précédente plutôt que d'osciller.
                 if a.confidence == .low, raw != .stationary { return }
                 self.lastRawActivity = raw
-                self.consider(raw)
+                // Marche/course : la cadence décide (plus rapide) ; ici on ne tranche que l'arrêt et le vélo,
+                // ou marche/course quand la cadence manque depuis plus de 10 s.
+                if raw == .stationary || raw == .cycling || Date().timeIntervalSince(self.lastCadenceAt) > 10 {
+                    self.consider(raw)
+                }
             }
         }
         if CMPedometer.isCadenceAvailable() {
             pedometer.startUpdates(from: Date()) { [weak self] data, _ in
                 guard let data, let c = data.currentCadence?.doubleValue else { return }
                 Task { @MainActor in
-                    self?.cadence = c * 60
-                    // La cadence tranche quand le classificateur hésite : > 140 pas/min = course, < 125 = marche.
                     guard let self else { return }
-                    if self.lastRawActivity == .unknown || self.lastRawActivity == .walking || self.lastRawActivity == .running {
-                        if c * 60 >= 140 { self.consider(.running) } else if c * 60 <= 125, c * 60 > 20 { self.consider(.walking) }
-                    }
+                    let spm = c * 60
+                    self.cadence = spm
+                    self.lastCadenceAt = Date()
+                    // La cadence tranche vite : ≥ 140 pas/min = course, 30-125 = marche, < 30 = arrêt.
+                    if spm >= 140 { self.consider(.running) }
+                    else if spm <= 125, spm >= 30 { self.consider(.walking) }
+                    else if spm < 30, self.lastRawActivity != .cycling { self.consider(.stationary) }
                 }
             }
         }
@@ -126,19 +140,30 @@ final class ActivityMonitor: ObservableObject {
     }
 
     private func commitIfStable() {
-        guard candidate != activity, Date().timeIntervalSince(candidateSince) >= 15 else { return }
+        // 6 s de stabilité (la première détection passe immédiatement).
+        let needed: TimeInterval = activity == .unknown ? 0 : 6
+        guard candidate != activity, Date().timeIntervalSince(candidateSince) >= needed else { return }
         let from = activity
         activity = candidate
         activitySince = Date()
         stationaryAnnounced = false
+        onLog?("Détection : \(from.label) → \(activity.label)\(cadence.map { String(format: " (cadence %.0f)", $0) } ?? "")")
         if from != .unknown { onEvent?(.activity(from: from, to: activity)) }
     }
 
     // MARK: Relief
 
     private func ingestAltitude(_ alt: Double) {
-        let dist = distanceProvider?() ?? 0
-        altitudeTrack.append((dist, alt, Date()))
+        let now = Date()
+        // Distance horizontale : vitesse GPS intégrée (fine), sinon distance externe (montre) en secours.
+        if let last = lastAltitudeAt {
+            let dt = now.timeIntervalSince(last)
+            if let v = speedProvider?(), v >= 0 { horizontal += v * dt }
+            else { horizontal = max(horizontal, distanceProvider?() ?? horizontal) }
+        }
+        lastAltitudeAt = now
+        let dist = horizontal
+        altitudeTrack.append((dist, alt, now))
         if altitudeTrack.count > 600 { altitudeTrack.removeFirst(altitudeTrack.count - 600) }
         // D+ / D- cumulés : on n'enregistre que les variations nettes d'au moins 1 m, pour ignorer le bruit.
         if let last = lastAltForCumul {
@@ -147,16 +172,17 @@ final class ActivityMonitor: ObservableObject {
             else if pendingAltDelta <= -1 { descent -= pendingAltDelta; pendingAltDelta = 0 }
         }
         lastAltForCumul = alt
-        // Pente sur les 100 derniers mètres parcourus (au moins 40 m pour se prononcer).
-        if let ref = altitudeTrack.last(where: { dist - $0.dist >= 100 }) ?? altitudeTrack.first, dist - ref.dist >= 40 {
+        // Pente sur les 15 dernières secondes (au moins 12 m parcourus pour se prononcer).
+        if let ref = altitudeTrack.first(where: { now.timeIntervalSince($0.at) <= 15 }), dist - ref.dist >= 12 {
             let g = (alt - ref.alt) / (dist - ref.dist) * 100
             grade = g
-            let t: Terrain = g >= 3 ? .climb : (g <= -3 ? .descent : (abs(g) < 1.5 ? .flat : terrainCandidate))
-            if t != terrainCandidate { terrainCandidate = t; terrainCandidateSince = Date() }
-            if terrainCandidate != terrain, Date().timeIntervalSince(terrainCandidateSince) >= 20 {
+            let t: Terrain = g >= 4 ? .climb : (g <= -4 ? .descent : (abs(g) < 2 ? .flat : terrainCandidate))
+            if t != terrainCandidate { terrainCandidate = t; terrainCandidateSince = now }
+            if terrainCandidate != terrain, now.timeIntervalSince(terrainCandidateSince) >= 6 {
                 let from = terrain
                 terrain = terrainCandidate
-                terrainSince = Date()
+                terrainSince = now
+                onLog?(String(format: "Relief : %@ → %@ (%.0f %%)", from.label, terrain.label, g))
                 onEvent?(.terrain(from: from, to: terrain))
             }
         } else {
