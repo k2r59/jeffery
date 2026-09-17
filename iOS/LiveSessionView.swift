@@ -15,8 +15,7 @@ struct LiveSessionView: View {
                     VStack(spacing: 12) {
                         timerCard
                         metricsRow
-                        JeffreyBubble(text: coach.lastCoachLine ?? (coach.phase == .connecting ? "J'arrive…" : "Je t'écoute. Parle-moi quand tu veux."),
-                                      label: coach.coachSpeaking ? "JEFFREY TE PARLE" : "JEFFREY")
+                        jeffreyLiveCard
                         if let p = coach.proposal { proposalCard(p) }
                         if let r = coach.reference { referenceCard(r) }
                         musicCard
@@ -80,6 +79,28 @@ struct LiveSessionView: View {
             }
             .card()
         }
+    }
+
+    /// Jeffrey est actif dès la connexion : pas de bouton à presser, on lui parle quand on veut.
+    private var jeffreyLiveCard: some View {
+        Button { showTalk = true } label: {
+            HStack(alignment: .top, spacing: 12) {
+                JeffreyMark(state: coach.coachSpeaking ? .speaking : (coach.phase == .live ? .listening : .available), size: 44)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(coach.phase == .connecting ? "JEFFREY ARRIVE" : (coach.coachSpeaking ? "JEFFREY TE PARLE" : (coach.userSpeaking ? "JEFFREY T'ÉCOUTE" : "JEFFREY EST LÀ")))
+                        .font(.system(size: 10, weight: .heavy)).tracking(1.5)
+                        .foregroundStyle(coach.coachSpeaking || coach.userSpeaking ? Theme.citron : Theme.muted)
+                    Text(coach.lastCoachLine ?? (coach.phase == .connecting ? "Connexion en cours…" : "Parle-lui quand tu veux, il t'entend."))
+                        .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.creme)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                JIcon("conversation", size: 16).foregroundStyle(Theme.muted)
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface))
+        }
+        .buttonStyle(.plain)
     }
 
     private func liveElapsed(_ s: MetricsSnapshot?, now: Date) -> TimeInterval {
@@ -213,8 +234,6 @@ struct LiveSessionView: View {
 
     private var controls: some View {
         VStack(spacing: 10) {
-            PrimaryButton(title: "Parler à Jeffrey", icon: "micro") { showTalk = true }
-                .disabled(coach.phase != .live).opacity(coach.phase == .live ? 1 : 0.5)
             HStack(spacing: 10) {
                 Button { coach.togglePause() } label: {
                     HStack(spacing: 6) { JIcon(coach.isPaused ? "lecture" : "pause", size: 16); Text(coach.isPaused ? "Reprendre" : "Pause") }
@@ -233,7 +252,7 @@ struct LiveSessionView: View {
     }
 }
 
-/// 04 · Le point coach : Jeffrey écoute, la conversation défile, une proposition se confirme d'un toucher.
+/// La conversation en cours : Jeffrey écoute en permanence, ceci n'est qu'une fenêtre de lecture (et de confirmation d'objectif).
 struct TalkSheet: View {
     @EnvironmentObject private var coach: CoachSession
     @Environment(\.dismiss) private var dismiss
@@ -255,7 +274,7 @@ struct TalkSheet: View {
                 .padding(.top, 14)
                 JeffreyMark(state: coach.coachSpeaking ? .speaking : .listening, size: 96)
                     .shadow(color: Theme.lime.opacity(0.5), radius: 24)
-                Text(coach.coachSpeaking ? "Jeffrey te parle" : "Jeffrey est à l'écoute")
+                Text(coach.coachSpeaking ? "Jeffrey te parle" : (coach.userSpeaking ? "Jeffrey t'écoute" : "Jeffrey est là, parle-lui"))
                     .font(.display(18, weight: .black)).foregroundStyle(.white)
                 ScrollViewReader { proxy in
                     ScrollView(showsIndicators: false) {
@@ -288,7 +307,7 @@ struct TalkSheet: View {
                     }
                 }
                 VStack(spacing: 6) {
-                    JIcon("micro", size: 26).foregroundStyle(Theme.lime)
+                    JIcon("micro", size: 14).foregroundStyle(Theme.citron)
                         .frame(width: 60, height: 60).background(Circle().stroke(Theme.lime, lineWidth: 2))
                     Text(coach.userSpeaking ? "Je t'entends…" : "Micro activé").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
                 }

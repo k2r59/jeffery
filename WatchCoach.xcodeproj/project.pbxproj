@@ -36,6 +36,7 @@
 		89B7863B043015F9038F2D99 /* JeffreyMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D7D2911298C496B06F52EA /* JeffreyMark.swift */; };
 		9329260E9C7DA8A64B02B2A9 /* SessionGoal.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB07464CCC26C18B28EB4F8B /* SessionGoal.swift */; };
 		94537B092149D76C4523AC7E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF832909FB51387ABE5722ED /* SettingsView.swift */; };
+		9FDA1EBD7CE8D8ABE7FF7890 /* WatchIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C280D7DA9559C6A13D621E /* WatchIcons.swift */; };
 		A01D1049225F6E303D785128 /* MusicController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2DA5DD09E89CF2639E1253 /* MusicController.swift */; };
 		A336E0792D358AD246889323 /* WorkoutKind+HealthKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EA9D6E0CF16BBB2466EE8E /* WorkoutKind+HealthKit.swift */; };
 		A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */; };
@@ -78,6 +79,7 @@
 
 /* Begin PBXFileReference section */
 		0FC8C31809CD02803421C632 /* SessionAnalyst.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAnalyst.swift; sourceTree = "<group>"; };
+		12C280D7DA9559C6A13D621E /* WatchIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchIcons.swift; sourceTree = "<group>"; };
 		1B72EA6338816D49A380C3D1 /* HealthProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthProfile.swift; sourceTree = "<group>"; };
 		1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManager.swift; sourceTree = "<group>"; };
 		283D571A2B12BF08F2767D09 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 				892B4D5B0C8155C590E5D7C7 /* WatchCoachWatch.entitlements */,
 				E609600A71477DB5A710B8DD /* WatchCoachWatchApp.swift */,
 				5E3F53CE58B179A6AF3DC43C /* WatchContentView.swift */,
+				12C280D7DA9559C6A13D621E /* WatchIcons.swift */,
 				7E02BD34C7EDAE2584384F97 /* WatchSender.swift */,
 				1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */,
 			);
@@ -316,6 +319,7 @@
 				FE6BE3C6B3FD3FC8AA6E0553 /* MetricsSnapshot.swift in Sources */,
 				88F89F6CD6F490B56D7F51C4 /* WatchCoachWatchApp.swift in Sources */,
 				25F7C47C9F29CEBDDFF2B50F /* WatchContentView.swift in Sources */,
+				9FDA1EBD7CE8D8ABE7FF7890 /* WatchIcons.swift in Sources */,
 				5B0CE21D56CC710BDD6EFC61 /* WatchSender.swift in Sources */,
 				3E0BED32725F9FD516A9645A /* WorkoutKind+HealthKit.swift in Sources */,
 				A795789D70318C0FFA83C6C6 /* WorkoutManager.swift in Sources */,

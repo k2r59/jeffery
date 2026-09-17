@@ -10,6 +10,15 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     @Published private(set) var isWatchAppInstalled = false
 
     var onSnapshot: ((MetricsSnapshot) -> Void)?
+    /// Demandes venant de la montre (démarrer, pause, reprendre, terminer la séance iPhone).
+    var onWatchRequest: ((WatchCommandPayload) -> Void)?
+    /// Les instantanés antérieurs à cette date sont ignorés (reliquats d'une séance précédente).
+    var acceptSnapshotsSince: Date = .distantPast
+
+    /// Oublie l'instantané de la séance précédente.
+    func reset() {
+        latest = nil
+    }
 
     private let healthStore = HKHealthStore()
 
@@ -45,6 +54,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         let payload = WatchCommandPayload(command: command, kind: kind, mode: mode)
         guard let data = try? WCCodec.encoder.encode(payload) else { return }
         let session = WCSession.default
+        try? session.updateApplicationContext([WCKeys.command: data, WCKeys.commandAt: Date().timeIntervalSince1970])
         guard session.activationState == .activated else {
             completion?(NSError(domain: "WatchCoach", code: 3, userInfo: [NSLocalizedDescriptionKey: "WatchConnectivity inactif"]))
             return
@@ -61,11 +71,29 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         }
     }
 
+    /// Envoie l'état de la séance à la montre (message si joignable, contexte applicatif dans tous les cas).
+    func sendCoachState(_ mirror: CoachMirror) {
+        guard WCSession.isSupported(), let data = try? WCCodec.encoder.encode(mirror) else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        try? session.updateApplicationContext([WCKeys.coachState: data])
+        if session.isReachable {
+            session.sendMessage([WCKeys.coachState: data], replyHandler: nil, errorHandler: { _ in })
+        }
+    }
+
     private func ingest(_ dict: [String: Any]) {
+        if let data = dict[WCKeys.command] as? Data,
+           let payload = try? WCCodec.decoder.decode(WatchCommandPayload.self, from: data) {
+            DispatchQueue.main.async { self.onWatchRequest?(payload) }
+            return
+        }
         guard let data = dict[WCKeys.metrics] as? Data,
               let snap = try? WCCodec.decoder.decode(MetricsSnapshot.self, from: data) else { return }
         DispatchQueue.main.async {
-            // Ignore un instantané plus vieux que le dernier reçu (les files de secours peuvent arriver en retard).
+            // Ignore un instantané plus vieux que le dernier reçu (les files de secours peuvent arriver en retard),
+            // ou antérieur au début de la séance en cours.
+            if snap.timestamp < self.acceptSnapshotsSince { return }
             if let last = self.latest, last.timestamp > snap.timestamp { return }
             self.latest = snap
             self.onSnapshot?(snap)
@@ -103,6 +131,11 @@ extension PhoneConnectivity: WCSessionDelegate {
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         ingest(message)
+    }
+
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        ingest(message)
+        replyHandler(["ok": true])
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {

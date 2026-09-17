@@ -21,7 +21,7 @@ final class CoachSession: ObservableObject {
     @Published private(set) var status: String = "Prêt"
     @Published private(set) var errorMessage: String?
     @Published private(set) var coachSpeaking = false {
-        didSet { if coachSpeaking != oldValue { audio.setDucking(coachSpeaking) } }
+        didSet { if coachSpeaking != oldValue { audio.setDucking(coachSpeaking); sendMirror(force: true) } }
     }
     @Published private(set) var userSpeaking = false
     @Published private(set) var currentZone: HeartRateZone?
@@ -51,6 +51,10 @@ final class CoachSession: ObservableObject {
     private var lastClimbWarnAt: Date = .distantPast
     private var lastGhostWarnAt: Date = .distantPast
     private var cancellables = Set<AnyCancellable>()
+    private var mirrorTimer: Timer?
+    private var lastMirror: CoachMirror?
+    /// L'iPhone a été réveillé en arrière-plan par la montre : l'audio ne peut démarrer qu'au premier plan.
+    @Published private(set) var waitingForForeground = false
 
     let connectivity = PhoneConnectivity()
     let gps = RouteRecorder()
@@ -77,8 +81,8 @@ final class CoachSession: ObservableObject {
     init() {
         Prefs.registerDefaults()
         connectivity.activate()
-        connectivity.requestHealthAuthorization()
         connectivity.onSnapshot = { [weak self] snap in self?.handle(snapshot: snap) }
+        connectivity.onWatchRequest = { [weak self] payload in self?.handle(watchRequest: payload) }
         wireRealtime()
         audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
         audio.onRouteChanged = { [weak self] name in
@@ -117,7 +121,12 @@ final class CoachSession: ObservableObject {
         phase = .connecting
         status = "Connexion au coach…"
         sessionStartedAt = Date()
+        lastMirror = nil
         hrSamples.removeAll()
+        // Repart propre : l'instantané de la séance précédente ne doit pas nourrir celle-ci.
+        connectivity.reset()
+        connectivity.acceptSnapshotsSince = Date().addingTimeInterval(-3)
+        connectivity.requestHealthAuthorization()
         UIApplication.shared.isIdleTimerDisabled = true
         audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
         audio.noiseGate = config.micSensitivity.noiseGate
@@ -155,13 +164,65 @@ final class CoachSession: ObservableObject {
         case .companion:
             connectivity.send(command: .start, kind: kind, mode: .companion) { [weak self] error in
                 guard let self else { return }
-                if let error {
-                    self.log(.info, "Montre : \(error.localizedDescription). Sur la montre, ouvre WatchCoach et touche « Suivre l'app Exercice ».")
-                } else {
+                if error == nil {
                     self.log(.info, "La montre suit l'app Exercice. Lance ta séance dans l'app Exercice si ce n'est pas fait.")
+                    return
+                }
+                // Montre non joignable : on réveille l'app montre, qui lit la commande déposée et passe en mode compagnon.
+                self.connectivity.launchWatchWorkout(kind: kind) { error in
+                    if let error {
+                        self.log(.info, "Montre : \(error.localizedDescription). Ouvre Jeffrey sur la montre et touche « Suivre l'app Exercice ».")
+                    } else {
+                        self.log(.info, "Jeffrey réveillé sur la montre, il suit l'app Exercice.")
+                    }
                 }
             }
         }
+    }
+
+    /// Télécommande montre : la montre ne décide de rien, elle demande à l'iPhone.
+    private func handle(watchRequest payload: WatchCommandPayload) {
+        switch payload.command {
+        case .requestStart:
+            guard phase == .idle else { return }
+            let mode = CaptureMode(rawValue: UserDefaults.standard.string(forKey: Prefs.mode) ?? "") ?? .companion
+            UserDefaults.standard.set(payload.kind.rawValue, forKey: Prefs.kind)
+            start(kind: payload.kind, mode: mode, goal: .free)
+        case .requestPause, .requestResume:
+            togglePause()
+        case .requestEnd:
+            stop()
+        default:
+            break
+        }
+        sendMirror(force: true)
+    }
+
+    /// Reprise quand l'app revient au premier plan (audio impossible à démarrer en arrière-plan).
+    func resumeIfWaitingForForeground() {
+        guard waitingForForeground, phase == .connecting else { return }
+        waitingForForeground = false
+        onRealtimeReady()
+    }
+
+    private func mirrorSnapshot() -> CoachMirror {
+        let elapsed = liveElapsed()
+        let p = goal.kind == .free ? (fraction: 0.0, remaining: nil as String?) : goal.progress(elapsed: elapsed, distance: displayDistance)
+        let phaseName: String
+        switch phase { case .idle: phaseName = "idle"; case .connecting: phaseName = waitingForForeground ? "foreground" : "connecting"; case .live: phaseName = "live"; case .ending: phaseName = "ending" }
+        return CoachMirror(phase: phaseName, elapsed: elapsed, timestamp: Date(), kind: kind,
+                           goalLabel: goal.kind == .free ? nil : goal.label, remaining: p.remaining, progress: p.fraction,
+                           goalReached: goalReached, coachSpeaking: coachSpeaking, userSpeaking: userSpeaking,
+                           lastLine: lastCoachLine.map { String($0.prefix(140)) }, heartRate: latest?.heartRate,
+                           distance: displayDistance, paused: isPaused)
+    }
+
+    private func sendMirror(force: Bool = false) {
+        let m = mirrorSnapshot()
+        if !force, let last = lastMirror, last.phase == m.phase, last.coachSpeaking == m.coachSpeaking, last.userSpeaking == m.userSpeaking,
+           last.lastLine == m.lastLine, last.paused == m.paused, abs(last.elapsed - m.elapsed) < 4, last.goalReached == m.goalReached { return }
+        lastMirror = m
+        connectivity.sendCoachState(m)
     }
 
     func stop() {
@@ -194,7 +255,7 @@ final class CoachSession: ObservableObject {
 
     /// Temps écoulé « vrai » : dernier instantané de la montre + temps passé depuis, ou horloge locale sans montre.
     func liveElapsed(at now: Date = Date()) -> TimeInterval {
-        if let s = latest {
+        if let s = latest, s.state != .idle {
             if s.state == .running, phase != .idle { return s.elapsed + max(0, now.timeIntervalSince(s.timestamp)) }
             return s.elapsed
         }
@@ -234,6 +295,8 @@ final class CoachSession: ObservableObject {
         userSpeaking = false
         phase = .idle
         status = "Séance terminée"
+        waitingForForeground = false
+        sendMirror(force: true)
         if let start = sessionStartedAt {
             let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
             endedSummary = SessionSummary(
@@ -356,8 +419,14 @@ final class CoachSession: ObservableObject {
         }
         realtime.callbacks.onError = { [weak self] message in
             Task { @MainActor in
-                self?.errorMessage = message
-                self?.log(.info, "Erreur : \(message)")
+                guard let self else { return }
+                self.errorMessage = message
+                self.log(.info, "Erreur : \(message)")
+                if self.capturingAck {
+                    self.capturingAck = false
+                    self.ackCaptureBuffer = Data()
+                    if self.pendingGreeting { self.pendingGreeting = false; self.sendGreeting() }
+                }
             }
         }
         realtime.callbacks.onDisconnected = { [weak self] reason in
@@ -384,6 +453,13 @@ final class CoachSession: ObservableObject {
         errorMessage = nil
         reconnectAttempts = 0
         if phase == .connecting {
+            if UIApplication.shared.applicationState != .active {
+                // Réveillé par la montre : iOS refuse le micro en arrière-plan, on attend l'ouverture de l'app.
+                waitingForForeground = true
+                status = "Ouvre Jeffrey sur l'iPhone pour lancer la voix"
+                sendMirror(force: true)
+                return
+            }
             do {
                 try audio.start()
             } catch {
@@ -395,6 +471,7 @@ final class CoachSession: ObservableObject {
             status = "Coach en ligne"
             log(.info, "Coach connecté (\(config.model), voix \(config.voice)).")
             startTimers()
+            sendMirror(force: true)
             realtime.injectText("La séance de \(kind.coachLabel) démarre maintenant. Objectif du jour : \(goal.coachLabel()). " + metricsLine(prefix: "[MÉTRIQUES]"))
             if let cached = try? Data(contentsOf: ackFileURL), cached.count > 4_800 {
                 ackAudio = cached
@@ -405,6 +482,13 @@ final class CoachSession: ObservableObject {
                 pendingGreeting = true
                 ackCaptureBuffer = Data()
                 realtime.requestResponse(instructions: "Dis uniquement, sur un ton naturel : « Je regarde. » Rien d'autre.")
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 8_000_000_000)
+                    guard let self, self.capturingAck else { return }
+                    self.capturingAck = false
+                    self.ackCaptureBuffer = Data()
+                    if self.pendingGreeting { self.pendingGreeting = false; self.sendGreeting() }
+                }
             }
         } else if phase == .live {
             status = "Coach reconnecté"
@@ -499,8 +583,9 @@ final class CoachSession: ObservableObject {
             if lastAnnouncedZone == nil { lastAnnouncedZone = zone }
         }
         evaluateGoal()
-        if phase == .live, snap.state == .ended, mode == .owned {
-            log(.info, "La montre a terminé la séance.")
+        if phase == .live, snap.state == .ended {
+            log(.info, mode == .owned ? "La montre a terminé la séance." : "La séance de l'app Exercice est terminée.")
+            stop()
         }
     }
 
@@ -592,6 +677,9 @@ final class CoachSession: ObservableObject {
         goalTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.evaluateGoal() }
         }
+        mirrorTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.sendMirror() }
+        }
         if config.autoCues {
             cueTimer = Timer.scheduledTimer(withTimeInterval: config.cueInterval, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.cue(reason: "point régulier") }
@@ -604,9 +692,11 @@ final class CoachSession: ObservableObject {
         metricsTimer?.invalidate()
         cueTimer?.invalidate()
         goalTimer?.invalidate()
+        mirrorTimer?.invalidate()
         metricsTimer = nil
         cueTimer = nil
         goalTimer = nil
+        mirrorTimer = nil
     }
 
     /// Le temps avance même si la montre se tait : on injecte à intervalle fixe, données nouvelles ou non.
@@ -661,6 +751,7 @@ final class CoachSession: ObservableObject {
         }
         if let line = partialCoachLine { lastCoachLine = full.isEmpty ? line.text : full }
         partialCoachLine = nil
+        sendMirror(force: true)
     }
 
     private func log(_ role: TranscriptLine.Role, _ text: String) {

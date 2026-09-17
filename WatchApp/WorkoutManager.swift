@@ -75,12 +75,18 @@ final class WorkoutManager: NSObject, ObservableObject {
     func handle(command payload: WatchCommandPayload) {
         switch payload.command {
         case .start:
-            guard !isActive else { return }
+            if isActive {
+                // Une séance pilotée ne peut pas être remplacée ; un suivi compagnon oublié, si.
+                guard snapshot.mode == .companion else { return }
+                stopCompanion()
+            }
             selectedKind = payload.kind
             payload.mode == .owned ? startOwned(kind: payload.kind) : startCompanion(kind: payload.kind)
         case .pause: pause()
         case .resume: resume()
         case .end: end()
+        case .requestStart, .requestPause, .requestResume, .requestEnd:
+            break // demandes montre → iPhone, jamais reçues ici
         }
     }
 
@@ -119,7 +125,40 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func startCompanion(kind: WorkoutKind) {
         guard !isActive else { return }
-        let start = Date()
+        statusMessage = "Recherche de la séance en cours…"
+        Task {
+            let inferred = await inferNativeWorkoutStart()
+            await MainActor.run { self.beginCompanion(kind: kind, start: inferred ?? Date(), inferred: inferred != nil) }
+        }
+    }
+
+    /// L'app Exercice écrit la fréquence cardiaque toutes les quelques secondes pendant une séance, contre
+    /// quelques fois par heure au repos : le début de la série dense la plus récente donne le départ de la séance native.
+    private func inferNativeWorkoutStart() async -> Date? {
+        let type = HKQuantityType(.heartRate)
+        let since = Date().addingTimeInterval(-3 * 3600)
+        let samples: [HKQuantitySample] = await withCheckedContinuation { c in
+            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+            let q = HKSampleQuery(sampleType: type, predicate: HKQuery.predicateForSamples(withStart: since, end: nil, options: []),
+                                  limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, s, _ in
+                c.resume(returning: (s as? [HKQuantitySample]) ?? [])
+            }
+            healthStore.execute(q)
+        }
+        guard let last = samples.last, Date().timeIntervalSince(last.startDate) < 90 else { return nil }
+        var runStart = last.startDate
+        var count = 1
+        for i in stride(from: samples.count - 2, through: 0, by: -1) {
+            let gap = samples[i + 1].startDate.timeIntervalSince(samples[i].startDate)
+            if gap > 30 { break }
+            runStart = samples[i].startDate
+            count += 1
+        }
+        return count >= 6 ? runStart : nil
+    }
+
+    private func beginCompanion(kind: WorkoutKind, start: Date, inferred: Bool) {
+        guard !isActive else { return }
         companionEnergy = 0
         companionDistance = 0
         seenSampleUUIDs.removeAll()
@@ -144,7 +183,20 @@ final class WorkoutManager: NSObject, ObservableObject {
             healthStore.execute(query)
             queries.append(query)
         }
-        statusMessage = "Suit l'app Exercice (lance ta séance native si ce n'est pas fait)"
+        // Fin de la séance native : l'app Exercice enregistre alors la séance dans Santé → on arrête de suivre.
+        let workoutPredicate = HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-60), end: nil, options: [])
+        let workoutQuery = HKAnchoredObjectQuery(type: .workoutType(), predicate: workoutPredicate, anchor: nil, limit: HKObjectQueryNoLimit) { _, _, _, _, _ in }
+        workoutQuery.updateHandler = { [weak self] _, samples, _, _, _ in
+            guard let workouts = samples as? [HKWorkout], workouts.contains(where: { $0.endDate > start }) else { return }
+            Task { @MainActor in
+                guard let self, self.isActive, self.snapshot.mode == .companion else { return }
+                self.statusMessage = "Séance de l'app Exercice terminée"
+                self.stopCompanion()
+            }
+        }
+        healthStore.execute(workoutQuery)
+        queries.append(workoutQuery)
+        statusMessage = inferred ? "Calé sur la séance en cours" : "Suit l'app Exercice (lance ta séance native si ce n'est pas fait)"
     }
 
     nonisolated private func ingest(type: HKQuantityType, samples: [HKSample]?) {

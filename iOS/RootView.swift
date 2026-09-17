@@ -5,6 +5,7 @@ struct RootView: View {
     @AppStorage(Prefs.onboarded) private var onboarded: Bool = false
     @StateObject private var history = WorkoutHistory()
     @State private var tab = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: $tab) {
@@ -27,6 +28,9 @@ struct RootView: View {
         .task { await history.load() }
         .onChange(of: coach.phase) { _, phase in
             if phase == .idle { Task { await history.load() } }
+        }
+        .onChange(of: scenePhase) { _, p in
+            if p == .active { coach.resumeIfWaitingForForeground() }
         }
         .onAppear {
             #if DEBUG

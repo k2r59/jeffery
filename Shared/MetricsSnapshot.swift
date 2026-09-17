@@ -87,12 +87,38 @@ struct MetricsSnapshot: Codable, Equatable {
     }
 }
 
-/// Commandes iPhone → montre.
+/// Commandes iPhone → montre (capture) et demandes montre → iPhone (télécommande).
 enum WatchCommand: String, Codable {
     case start
     case pause
     case resume
     case end
+    case requestStart
+    case requestPause
+    case requestResume
+    case requestEnd
+}
+
+/// État de la séance iPhone reflété sur la montre.
+struct CoachMirror: Codable, Equatable {
+    var phase: String            // idle, connecting, live, ending
+    var elapsed: TimeInterval
+    var timestamp: Date
+    var kind: WorkoutKind
+    var goalLabel: String?
+    var remaining: String?
+    var progress: Double
+    var goalReached: Bool
+    var coachSpeaking: Bool
+    var userSpeaking: Bool
+    var lastLine: String?
+    var heartRate: Double?
+    var distance: Double?
+    var paused: Bool
+
+    static let idle = CoachMirror(phase: "idle", elapsed: 0, timestamp: Date(), kind: .running, goalLabel: nil, remaining: nil,
+                                  progress: 0, goalReached: false, coachSpeaking: false, userSpeaking: false, lastLine: nil,
+                                  heartRate: nil, distance: nil, paused: false)
 }
 
 struct WatchCommandPayload: Codable {
@@ -105,6 +131,8 @@ struct WatchCommandPayload: Codable {
 enum WCKeys {
     static let metrics = "metrics"   // Data JSON de MetricsSnapshot
     static let command = "command"   // Data JSON de WatchCommandPayload
+    static let commandAt = "commandAt" // horodatage (secondes) de la commande déposée dans le contexte
+    static let coachState = "coachState" // Data JSON de CoachMirror (iPhone → montre)
 }
 
 enum WCCodec {
