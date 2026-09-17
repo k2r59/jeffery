@@ -15,6 +15,7 @@ struct LiveSessionView: View {
                     VStack(spacing: 12) {
                         timerCard
                         metricsRow
+                        activityRow
                         jeffreyLiveCard
                         if let p = coach.proposal { proposalCard(p) }
                         if let r = coach.reference { referenceCard(r) }
@@ -79,6 +80,30 @@ struct LiveSessionView: View {
             }
             .card()
         }
+    }
+
+    private var activityRow: some View {
+        let a = coach.activity
+        return HStack(spacing: 10) {
+            if a.activity != .unknown {
+                HStack(spacing: 6) {
+                    JIcon(a.activity == .running ? "course" : (a.activity == .walking ? "marche" : (a.activity == .cycling ? "velo" : "pause")), size: 14)
+                    Text(a.activity.label.capitalized)
+                    if let c = a.cadence, c > 0 { Text("· \(Int(c)) pas/min").foregroundStyle(Theme.muted) }
+                }
+            }
+            Spacer()
+            HStack(spacing: 6) {
+                Image(systemName: a.terrain == .climb ? "arrow.up.right" : (a.terrain == .descent ? "arrow.down.right" : "arrow.right"))
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(a.terrain == .flat ? Theme.muted : Theme.citron)
+                if let g = a.grade, abs(g) >= 1.5 { Text(String(format: "%.0f %%", g)) }
+                Text("D+ \(Int(a.ascent)) m").foregroundStyle(Theme.muted)
+            }
+        }
+        .font(.system(size: 12, weight: .bold).monospacedDigit()).foregroundStyle(Theme.creme)
+        .padding(.horizontal, 14).frame(height: 40)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface))
     }
 
     /// Jeffrey est actif dès la connexion : pas de bouton à presser, on lui parle quand on veut.

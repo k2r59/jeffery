@@ -34,6 +34,7 @@ targets:
         UIBackgroundModes: [audio, location]
         NSLocationWhenInUseUsageDescription: "Jeffrey enregistre le tracé GPS de ta séance et calcule distance et allure si la montre ne les fournit pas."
         NSAppleMusicUsageDescription: "Jeffrey affiche le titre en cours et te laisse le mettre en pause ou passer au suivant pendant la séance."
+        NSMotionUsageDescription: "Jeffrey détecte si tu marches, cours ou t'arrêtes, ta cadence et le relief, pour réagir au bon moment."
         NSMicrophoneUsageDescription: "Jeffrey t'écoute pour dialoguer avec toi pendant la séance."
         NSHealthShareUsageDescription: "Jeffrey lit tes données d'entraînement pour te coacher en direct."
         NSHealthUpdateUsageDescription: "Jeffrey peut lancer une séance sur ta montre."

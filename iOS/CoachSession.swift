@@ -58,6 +58,8 @@ final class CoachSession: ObservableObject {
 
     let connectivity = PhoneConnectivity()
     let gps = RouteRecorder()
+    let activity = ActivityMonitor()
+    private var lastEventCueAt: Date = .distantPast
     private let audio = AudioPipeline()
     private let realtime = RealtimeClient()
 
@@ -92,6 +94,36 @@ final class CoachSession: ObservableObject {
             .compactMap { $0 }
             .sink { [weak self] location in self?.handle(location: location) }
             .store(in: &cancellables)
+        activity.distanceProvider = { [weak self] in self?.displayDistance ?? 0 }
+        activity.onEvent = { [weak self] event in self?.handle(activityEvent: event) }
+    }
+
+    /// Marche, course, arrêt, montée, descente : Jeffrey réagit, avec au plus une réaction toutes les 30 s.
+    private func handle(activityEvent event: ActivityMonitor.Event) {
+        guard phase == .live, config.autoCues else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastEventCueAt) >= 30 else { return }
+        let reason: String
+        switch event {
+        case .activity(let from, let to):
+            switch (from, to) {
+            case (.running, .walking): reason = "il vient de passer de la course à la marche (pause marchée ou fatigue ?) : accompagne sans juger, propose de repartir quand il veut"
+            case (.walking, .running): reason = "il vient de repasser à la course : encourage la reprise"
+            case (_, .stationary): return // annoncé seulement si l'arrêt dure
+            case (.stationary, .running), (.stationary, .walking): reason = "il repart après un arrêt"
+            default: reason = "activité détectée : \(to.label) (avant : \(from.label))"
+            }
+        case .terrain(let from, let to):
+            switch to {
+            case .climb: reason = String(format: "début d'une montée (%.0f %%) : prépare-le, la FC va monter, c'est normal", activity.grade ?? 0)
+            case .descent: reason = "début d'une descente : relâcher les épaules, foulée courte, pas de freinage"
+            case .flat: reason = from == .climb ? "sommet atteint, retour sur du plat : félicite et invite à reprendre l'allure progressivement" : "retour sur du plat après la descente"
+            }
+        case .stationaryLong(let seconds):
+            reason = "à l'arrêt depuis \(seconds) s (feu, pause ?) : demande si tout va bien, propose la pause si besoin"
+        }
+        lastEventCueAt = now
+        cue(reason: reason)
     }
 
     // MARK: - Démarrage / arrêt
@@ -132,6 +164,8 @@ final class CoachSession: ObservableObject {
         audio.noiseGate = config.micSensitivity.noiseGate
         audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
         gps.start(kind: kind)
+        activity.start()
+        lastEventCueAt = .distantPast
         if let ref = ReferenceRoute.load() {
             referenceTracker = ReferenceTracker(route: ref)
             referenceName = ref.name
@@ -231,6 +265,7 @@ final class CoachSession: ObservableObject {
         status = "Fin de séance…"
         stopTimers()
         gps.stop()
+        activity.stop()
         if !gps.status.isEmpty { log(.info, gps.status) }
         if mode == .owned {
             connectivity.send(command: .end, kind: kind, mode: mode)
@@ -308,7 +343,10 @@ final class CoachSession: ObservableObject {
                 goalLabel: goal.kind == .free ? nil : goal.label, goalReached: goal.kind == .free ? nil : goalReached,
                 lastCoachLine: transcript.last(where: { $0.role == .coach })?.text,
                 zoneCounts: HeartRateZone.allCases.map { z in hrSamples.filter { HeartRateZone.zone(for: $0, maxHR: config.maxHR) == z }.count },
-                transcriptExcerpt: transcript.filter { $0.role != .info }.suffix(80).map { ($0.role == .user ? "Lui : " : "Jeffrey : ") + $0.text })
+                transcriptExcerpt: transcript.filter { $0.role != .info }.suffix(80).map { ($0.role == .user ? "Lui : " : "Jeffrey : ") + $0.text },
+                walkingSeconds: activity.secondsByActivity[.walking], runningSeconds: activity.secondsByActivity[.running],
+                stationarySeconds: activity.secondsByActivity[.stationary], ascent: activity.ascent, descent: activity.descent,
+                climbingSeconds: activity.secondsClimbing)
             sessionStartedAt = nil
         }
     }
@@ -629,6 +667,8 @@ final class CoachSession: ObservableObject {
         let elapsedNow = liveElapsed()
         guard let s = latest else {
             var parts = ["\(prefix) temps écoulé \(Formatters.elapsed(elapsedNow)) · aucune donnée de la montre pour l'instant"]
+            let act = activity.summaryLine()
+            if !act.isEmpty { parts.append("corps/terrain : \(act)") }
             if goal.kind != .free {
                 let p = goal.progress(elapsed: elapsedNow, distance: displayDistance)
                 parts.append("objectif \(goal.coachLabel()) : \(Int(p.fraction * 100)) %\(p.remaining.map { ", \($0)" } ?? "")")
@@ -649,6 +689,8 @@ final class CoachSession: ObservableObject {
             if let p = pace { parts.append("allure \(p)") }
         }
         if let e = s.activeEnergy { parts.append("\(Int(e)) kcal") }
+        let act = activity.summaryLine()
+        if !act.isEmpty { parts.append("corps/terrain : \(act)") }
         if goal.kind != .free {
             let p = goal.progress(elapsed: elapsedNow, distance: displayDistance)
             parts.append("objectif \(goal.coachLabel()) : \(Int(p.fraction * 100)) %\(p.remaining.map { ", \($0)" } ?? "")\(goalReached ? " · ATTEINT" : "")")

@@ -33,6 +33,14 @@ struct SessionEndView: View {
                         }
                         .font(.system(size: 15, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.muted)
                     }
+                    if (summary.ascent ?? 0) >= 5 || (summary.walkingSeconds ?? 0) > 30 {
+                        HStack(spacing: 14) {
+                            if let r = summary.runningSeconds, r > 30 { Label(Formatters.elapsed(r), systemImage: "figure.run") }
+                            if let w = summary.walkingSeconds, w > 30 { Label(Formatters.elapsed(w), systemImage: "figure.walk") }
+                            if let a = summary.ascent, a >= 5 { Label("D+ \(Int(a)) m", systemImage: "arrow.up.right") }
+                        }
+                        .font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.muted)
+                    }
                     if coordinates.count >= 2 {
                         Map {
                             MapPolyline(coordinates: coordinates)

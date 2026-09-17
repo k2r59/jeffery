@@ -97,6 +97,12 @@ enum SessionAnalyst {
             s.append("répartition zones Z1-Z5 : " + zones.map { "\(Int(Double($0) / total * 100)) %" }.joined(separator: " / "))
         }
         if let g = summary.goalLabel { s.append("objectif \(g) \(summary.goalReached == true ? "atteint" : "non atteint")") }
+        var body: [String] = []
+        if let r = summary.runningSeconds, r > 30 { body.append("course \(Formatters.elapsed(r))") }
+        if let w = summary.walkingSeconds, w > 30 { body.append("marche \(Formatters.elapsed(w))") }
+        if let st = summary.stationarySeconds, st > 30 { body.append("arrêt \(Formatters.elapsed(st))") }
+        if !body.isEmpty { s.append("répartition : " + body.joined(separator: ", ")) }
+        if let a = summary.ascent, a >= 5 { s.append("D+ \(Int(a)) m / D- \(Int(summary.descent ?? 0)) m, \(Formatters.elapsed(summary.climbingSeconds ?? 0)) en montée") }
         if let f = summary.feeling { s.append("ressenti : \(f.coachLabel)") }
         lines.append("SÉANCE DU JOUR : " + s.joined(separator: " · "))
 

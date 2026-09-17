@@ -44,6 +44,7 @@
 		AA8054D04A39FFBD9DEA1CBA /* ObjectiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A433BC192FA6379ABE91035B /* ObjectiveView.swift */; };
 		AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349670EE16768E2C8346D827 /* KeychainStore.swift */; };
 		BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01028830AC541CE94AA809A /* MetricsSnapshot.swift */; };
+		C7908D583D26CC144A48A6B9 /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5679A20688F985B95732882B /* ActivityMonitor.swift */; };
 		C899428C5426D7A8690625AB /* JeffreyMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C633A224C23AEA7E5F906EE0 /* JeffreyMemory.swift */; };
 		CB08DD05ED173449299454B6 /* WatchCoachWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E26AB3EAECF37CF14F030331 /* VoicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = D501B5BC019DE9395044ADA3 /* VoicePreview.swift */; };
@@ -91,6 +92,7 @@
 		3E589C09902B7A842396858D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
 		50D4AA1667A3275F3D77C3C7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		5679A20688F985B95732882B /* ActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitor.swift; sourceTree = "<group>"; };
 		5E3F53CE58B179A6AF3DC43C /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
 		6B2DA5DD09E89CF2639E1253 /* MusicController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicController.swift; sourceTree = "<group>"; };
 		6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEndView.swift; sourceTree = "<group>"; };
@@ -145,6 +147,7 @@
 		9450222908086875F81C9E31 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
+				5679A20688F985B95732882B /* ActivityMonitor.swift */,
 				3E1F94AF9504750D0AC84335 /* Assets.xcassets */,
 				D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */,
 				A2097E145A239323A219EBC1 /* CoachConfig.swift */,
@@ -330,6 +333,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C7908D583D26CC144A48A6B9 /* ActivityMonitor.swift in Sources */,
 				509C76BD84E7D18BBD014B3F /* AudioPipeline.swift in Sources */,
 				3C0DA67E865FD64FA0A8BBC6 /* CoachConfig.swift in Sources */,
 				82C1230E51C0C277FC02F078 /* CoachSession.swift in Sources */,
