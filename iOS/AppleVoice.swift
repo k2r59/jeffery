@@ -32,7 +32,7 @@ final class AppleVoice: NSObject, ObservableObject {
 
     var selected: AVSpeechSynthesisVoice? { voices.first { $0.identifier == selectedIdentifier } }
 
-    static func qualityLabel(_ q: AVSpeechSynthesisVoice.Quality) -> String {
+    static func qualityLabel(_ q: AVSpeechSynthesisVoiceQuality) -> String {
         switch q {
         case .premium: return "Premium (neuronale)"
         case .enhanced: return "Améliorée"
