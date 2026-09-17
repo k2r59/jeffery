@@ -67,6 +67,9 @@ final class CoachSession: ObservableObject {
     private var lastCoachSpokeAt: Date = .distantPast
     private var fatigueAnnouncedAt: Date = .distantPast
     private var lastCueZone: HeartRateZone?
+    private var lastKmAnnounced = 0
+    private var lastKmAt: (km: Int, at: Date)?
+    private var routineTopic = 0
     private let audio = AudioPipeline()
     private let realtime = RealtimeClient()
 
@@ -181,6 +184,7 @@ final class CoachSession: ObservableObject {
         hrSamples.removeAll()
         hrHistory.removeAll(); speedHistory.removeAll()
         struggleAnnouncedForClimb = false; climbStartedAt = nil; lastCoachSpokeAt = .distantPast; fatigueAnnouncedAt = .distantPast; lastCueZone = nil
+        lastKmAnnounced = 0; lastKmAt = nil; routineTopic = 0
         // Repart propre : l'instantané de la séance précédente ne doit pas nourrir celle-ci.
         connectivity.reset()
         connectivity.acceptSnapshotsSince = Date().addingTimeInterval(-3)
@@ -774,25 +778,50 @@ final class CoachSession: ObservableObject {
         realtime.injectText(metricsLine(prefix: "[MÉTRIQUES]"))
     }
 
-    /// Point régulier seulement s'il y a quelque chose à dire ; sinon Jeffrey se tait (au plus 5 min de silence).
+    /// Coaching de fond : Jeffrey reste présent, avec un contenu qui a une raison d'être (kilomètre, allure, technique, objectif).
     private func routineCheck() {
         guard phase == .live else { return }
         let now = Date()
         let silence = now.timeIntervalSince(max(lastCoachSpokeAt, lastCueAt))
-        var reasons: [String] = []
+        guard silence >= 30 else { return }
+
+        // 1) Passage kilométrique : temps du dernier km, un vrai repère de coach.
+        if let d = displayDistance, kind.usesDistance {
+            let km = Int(d / 1000)
+            if km > lastKmAnnounced {
+                let split = lastKmAt.map { now.timeIntervalSince($0.at) }
+                lastKmAnnounced = km
+                lastKmAt = (km, now)
+                let splitText = split.map { " en \(Formatters.elapsed($0))" } ?? ""
+                cue(reason: "kilomètre \(km) passé\(splitText) : annonce-le, situe l'allure par rapport à l'objectif ou au ressenti, un mot d'encouragement")
+                return
+            }
+        }
+        // 2) Zone haute qui change, longue montée sans galère détectée.
         if let hr = latest?.heartRate {
             let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
             if let last = lastCueZone, zone != last, zone.rawValue >= 4 || last.rawValue >= 4 {
-                reasons.append("zone cardiaque passée de \(last.label) à \(zone.label)")
+                cue(reason: "zone cardiaque passée de \(last.label) à \(zone.label)")
+                return
             }
         }
-        if activity.terrain == .climb, now.timeIntervalSince(activity.terrainSince) > 60, !struggleAnnouncedForClimb {
-            reasons.append("longue montée en cours")
+        if activity.terrain == .climb, now.timeIntervalSince(activity.terrainSince) > 60, !struggleAnnouncedForClimb, silence >= 60 {
+            cue(reason: "longue montée en cours, il tient : soutien et repère (ça monte encore combien, respirer)")
+            return
         }
-        let maxSilence: TimeInterval = config.presence == "discreet" ? 600 : 300
-        if silence >= maxSilence { reasons.append("point tranquille, rien d'anormal : une phrase courte et utile, ou juste un encouragement") }
-        guard let reason = reasons.first else { return }
-        cue(reason: reason)
+        // 3) Coaching régulier : toutes les 2 min (présent) ou 4 min (discret), sujets en rotation.
+        let interval: TimeInterval = config.presence == "discreet" ? 240 : 120
+        guard silence >= interval else { return }
+        let topics = [
+            "point d'allure : comment il se situe par rapport à l'objectif, garder ou ajuster",
+            "technique : relâchement des épaules, bras, regard loin, foulée légère (choisis un seul point)",
+            "respiration et rythme : caler le souffle sur les pas, un repère simple",
+            "encouragement sincère lié à ce qu'il fait maintenant (durée tenue, régularité, effort)",
+            "récupération et hydratation si la séance dépasse 30 min, sinon un repère sur le temps restant",
+        ]
+        let topic = topics[routineTopic % topics.count]
+        routineTopic += 1
+        cue(reason: "coaching de fond (\(topic)) : une ou deux phrases, utiles, sans répéter les précédentes")
     }
 
     /// Galère en montée et dérive de fatigue : détection sur les historiques FC / allure.
