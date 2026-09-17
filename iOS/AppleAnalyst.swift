@@ -1,11 +1,15 @@
 import Foundation
 import FoundationModels
 
-/// Bilan de fin de séance par les modèles Apple (Foundation Models, iOS 27) :
-/// d'abord le modèle serveur sur Private Cloud Compute (32K, raisonnement), sinon le modèle local de l'iPhone.
-/// Rien ne quitte l'écosystème Apple ; aucune clé, aucun coût. OpenAI reste le secours quand Apple n'est pas disponible.
+/// Intelligence Apple (Foundation Models, iOS 27) : d'abord le modèle serveur sur Private Cloud Compute
+/// (32K de contexte, raisonnement), sinon le modèle local de l'iPhone. Aucune clé, aucun coût, rien ne quitte
+/// l'écosystème Apple. OpenAI reste le secours quand Apple n'est pas disponible ou que le quota du jour est atteint.
 enum AppleAnalyst {
-    enum Backend: String { case privateCloud, onDevice }
+    enum Backend: String { case privateCloud, onDevice
+        var label: String { self == .privateCloud ? "Apple Private Cloud Compute" : "Modèle Apple sur l'iPhone" }
+    }
+
+    // MARK: Structures générées (le modèle renvoie exactement ces formes)
 
     @Generable(description: "Bilan écrit d'une séance de sport par un coach, en français, tutoiement")
     struct Bilan {
@@ -17,50 +21,132 @@ enum AppleAnalyst {
         var caution: String
     }
 
-    static let instructions = """
+    @Generable(description: "Notes durables d'un coach sur la personne qu'il accompagne")
+    struct Notes {
+        @Guide(description: "Liste fusionnée et à jour, au plus 30 notes de 120 caractères, faits durables uniquement (gênes, contexte, objectifs à moyen terme, préférences), à la troisième personne, en français")
+        var notes: [String]
+    }
+
+    @Generable(description: "Objectif de séance compris à partir d'une phrase libre")
+    struct ParsedGoal {
+        @Guide(description: "duration si l'objectif est un temps, distance si c'est une distance, free si aucun chiffre", .anyOf(["duration", "distance", "free"]))
+        var kind: String
+        @Guide(description: "Minutes si kind=duration, kilomètres si kind=distance, 0 si free")
+        var value: Double
+        @Guide(description: "Précision d'intention en quelques mots (tranquille, fractionné, fatigué…), vide sinon")
+        var note: String
+    }
+
+    static let coachInstructions = """
     Tu es Jeffrey, coach sportif. Tu rédiges le bilan écrit d'une séance à partir d'un dossier factuel. En français, tutoiement, \
     ton chaleureux et concret, jamais moralisateur. Tu compares la séance au niveau, à l'intention et à l'historique de la personne, \
     pas à des standards abstraits. Tu ne poses aucun diagnostic médical ; si un signal est inhabituel, tu le dis simplement et tu \
     conseilles de lever le pied ou d'en parler à un médecin.
     """
 
-    /// Le backend Apple utilisable en ce moment, ou nil.
-    static func availableBackend() -> Backend? {
-        if PrivateCloudComputeLanguageModel().isAvailable { return .privateCloud }
-        if SystemLanguageModel.default.isAvailable { return .onDevice }
+    // MARK: Disponibilité
+
+    /// Le backend Apple utilisable maintenant. `preferLocal` : tâches courtes (objectif dicté) où la latence prime.
+    static func availableBackend(preferLocal: Bool = false) -> Backend? {
+        let pcc = PrivateCloudComputeLanguageModel()
+        let local = SystemLanguageModel.default.isAvailable
+        if preferLocal, local { return .onDevice }
+        if pcc.isAvailable, !pcc.quotaUsage.isLimitReached { return .privateCloud }
+        if local { return .onDevice }
         return nil
     }
 
     static func availabilityDescription() -> String {
         let pcc = PrivateCloudComputeLanguageModel()
+        let local = SystemLanguageModel.default.availability
+        var parts: [String] = []
         switch pcc.availability {
-        case .available: return "Apple Private Cloud Compute disponible"
-        case .unavailable(let reason):
-            switch SystemLanguageModel.default.availability {
-            case .available: return "Modèle Apple local disponible (cloud Apple : \(reason))"
-            case .unavailable(let r2): return "Modèles Apple indisponibles (cloud : \(reason) ; local : \(r2))"
+        case .available:
+            if pcc.quotaUsage.isLimitReached {
+                let reset = pcc.quotaUsage.resetDate.map { " (retour \($0.formatted(date: .omitted, time: .shortened)))" } ?? ""
+                parts.append("Cloud privé Apple : quota du jour atteint\(reset)")
+            } else {
+                parts.append("Cloud privé Apple : disponible")
             }
+        case .unavailable(let reason):
+            parts.append("Cloud privé Apple : indisponible (\(describe(reason)))")
+        }
+        switch local {
+        case .available: parts.append("Modèle Apple local : disponible")
+        case .unavailable(let reason): parts.append("Modèle Apple local : indisponible (\(describeLocal(reason)))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private static func describe(_ r: PrivateCloudComputeLanguageModel.Availability.UnavailableReason) -> String {
+        switch r {
+        case .deviceNotEligible: return "appareil non compatible"
+        case .systemNotReady: return "système pas prêt"
+        @unknown default: return "entitlement ou Apple Intelligence manquant"
         }
     }
 
-    /// Lance le bilan sur le meilleur backend Apple disponible ; lève une erreur si aucun.
-    static func analyze(dossier: String, userName: String) async throws -> (SessionAnalyst.Result, Backend) {
-        guard let backend = availableBackend() else {
-            throw NSError(domain: "AppleAnalyst", code: 1, userInfo: [NSLocalizedDescriptionKey: availabilityDescription()])
+    private static func describeLocal(_ r: SystemLanguageModel.Availability.UnavailableReason) -> String {
+        switch r {
+        case .deviceNotEligible: return "appareil non compatible"
+        case .appleIntelligenceNotEnabled: return "Apple Intelligence désactivé dans Réglages"
+        case .modelNotReady: return "modèle en cours de téléchargement"
+        @unknown default: return "indisponible"
         }
-        let prompt = "Prénom : \(userName.isEmpty ? "inconnu" : userName)\n\n\(dossier)\n\nRédige le bilan."
-        let bilan: Bilan
+    }
+
+    private static func session(_ backend: Backend, instructions: String) -> LanguageModelSession {
         switch backend {
-        case .privateCloud:
-            let session = LanguageModelSession(model: PrivateCloudComputeLanguageModel(), instructions: instructions)
-            var options = ContextOptions()
-            options.reasoningLevel = .light
-            bilan = try await session.respond(to: prompt, generating: Bilan.self, contextOptions: options).content
-        case .onDevice:
-            let session = LanguageModelSession(model: SystemLanguageModel.default, instructions: instructions)
-            bilan = try await session.respond(to: prompt, generating: Bilan.self).content
+        case .privateCloud: return LanguageModelSession(model: PrivateCloudComputeLanguageModel(), instructions: instructions)
+        case .onDevice: return LanguageModelSession(model: SystemLanguageModel.default, instructions: instructions)
         }
+    }
+
+    private static func unavailable() -> NSError {
+        NSError(domain: "AppleAnalyst", code: 1, userInfo: [NSLocalizedDescriptionKey: availabilityDescription()])
+    }
+
+    // MARK: Bilan
+
+    static func analyze(dossier: String, userName: String) async throws -> (SessionAnalyst.Result, Backend) {
+        guard let backend = availableBackend() else { throw unavailable() }
+        let prompt = "Prénom : \(userName.isEmpty ? "inconnu" : userName)\n\n\(dossier)\n\nRédige le bilan."
+        let s = session(backend, instructions: coachInstructions)
+        var options = ContextOptions()
+        if backend == .privateCloud { options.reasoningLevel = .moderate }
+        let bilan = try await s.respond(to: prompt, generating: Bilan.self, contextOptions: options).content
         let caution = bilan.caution.trimmingCharacters(in: .whitespacesAndNewlines)
         return (SessionAnalyst.Result(analysis: bilan.analysis, advice: bilan.advice, caution: caution.isEmpty ? nil : caution), backend)
+    }
+
+    // MARK: Mémoire longue
+
+    static func updateMemory(transcript: [String], existing: [String], summaryLine: String) async throws -> ([String], Backend) {
+        guard let backend = availableBackend() else { throw unavailable() }
+        let instructions = """
+        Tu tiens les notes durables d'un coach sportif sur la personne qu'il accompagne. À partir de la transcription d'une séance \
+        et des notes existantes, renvoie la liste MISE À JOUR : faits utiles sur la durée (blessures ou gênes, contexte de vie, \
+        objectifs à moyen terme, préférences, habitudes, contraintes), jamais les chiffres d'une séance. Fusionne les doublons, \
+        mets à jour ce qui a changé, supprime le périmé. Si la transcription n'apprend rien de durable, renvoie les notes existantes telles quelles.
+        """
+        // Le modèle local n'a que 4K de contexte : on lui donne une transcription plus courte.
+        let lines = backend == .onDevice ? Array(transcript.suffix(30)) : transcript
+        let prompt = "NOTES EXISTANTES :\n" + (existing.isEmpty ? "(aucune)" : existing.map { "- \($0)" }.joined(separator: "\n"))
+            + "\n\nSÉANCE : \(summaryLine)\n\nTRANSCRIPTION :\n" + lines.joined(separator: "\n")
+        let notes = try await session(backend, instructions: instructions).respond(to: prompt, generating: Notes.self).content.notes
+        return (Array(notes.prefix(JeffreyMemory.maxNotes)), backend)
+    }
+
+    // MARK: Objectif dicté
+
+    static func parseGoal(_ text: String, kind: WorkoutKind) async throws -> SessionGoal {
+        guard let backend = availableBackend(preferLocal: true) else { throw unavailable() }
+        let instructions = "Tu transformes une phrase libre d'un sportif en objectif de séance structuré. Sport : \(kind.coachLabel). Réponds strictement selon le schéma."
+        let parsed = try await session(backend, instructions: instructions).respond(to: "Phrase : « \(text) »", generating: ParsedGoal.self).content
+        switch parsed.kind {
+        case "duration": return SessionGoal(kind: .duration, target: max(5, parsed.value) * 60, note: parsed.note)
+        case "distance": return SessionGoal(kind: .distance, target: max(0.5, parsed.value) * 1000, note: parsed.note)
+        default: return SessionGoal(kind: .free, target: 0, note: parsed.note)
+        }
     }
 }

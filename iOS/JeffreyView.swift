@@ -10,6 +10,7 @@ struct JeffreyView: View {
     @AppStorage(Prefs.duckMusic) private var duckMusic: Bool = true
     @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @AppStorage(Prefs.userName) private var userName: String = ""
+    @AppStorage(Prefs.analysisProvider) private var analysisProvider: String = "apple"
     @State private var showAdvanced = false
     @StateObject private var preview = VoicePreview()
 
@@ -79,6 +80,17 @@ struct JeffreyView: View {
                                 Text("Séance par Jeffrey").tag(CaptureMode.owned.rawValue)
                             }
                             .pickerStyle(.segmented)
+                        }
+                        section("Intelligence") {
+                            HStack(spacing: 4) {
+                                segment("Apple d'abord", selected: analysisProvider == "apple") { analysisProvider = "apple" }
+                                segment("OpenAI", selected: analysisProvider == "openai") { analysisProvider = "openai" }
+                            }
+                            .padding(4).background(Capsule().fill(Theme.surfaceRaised))
+                            Text("Voix en séance : OpenAI. Bilan, mémoire et objectif dicté : \(analysisProvider == "apple" ? "modèles Apple (cloud privé puis iPhone), OpenAI en secours" : "OpenAI").")
+                                .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
+                            Text(AppleAnalyst.availabilityDescription())
+                                .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.creme)
                         }
                         JeffreyBubble(text: "Tu peux toujours me demander de parler moins.")
                         Button { showAdvanced = true } label: {

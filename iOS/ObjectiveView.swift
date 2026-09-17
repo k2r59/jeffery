@@ -10,6 +10,9 @@ struct ObjectiveView: View {
     @State private var minutes: Double = 30
     @State private var km: Double = 5
     @State private var note: String = ""
+    @State private var spoken: String = ""
+    @State private var parsing = false
+    @State private var parsedHint: String?
 
     private var goal: SessionGoal {
         switch goalKind {
@@ -53,6 +56,19 @@ struct ObjectiveView: View {
                         Text("Sortie libre : Jeffrey t'accompagne sans compter.").font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted)
                     }
                 }
+                HStack(spacing: 8) {
+                    TextField("Dis-le à Jeffrey : « 30 minutes tranquille », « 8 km »…", text: $spoken)
+                        .font(.system(size: 14, weight: .medium))
+                        .submitLabel(.done)
+                        .onSubmit { interpret() }
+                    if parsing { ProgressView().tint(Theme.citron) } else {
+                        Button { interpret() } label: { JIcon("valider", size: 16).foregroundStyle(Theme.background).frame(width: 34, height: 34).background(Circle().fill(Theme.citron)) }
+                            .disabled(spoken.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                .padding(.horizontal, 14).frame(height: 50)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
+                if let parsedHint { Text(parsedHint).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted) }
                 TextField("Une précision pour Jeffrey (ex. tranquille, fractionné, je suis fatigué)", text: $note, axis: .vertical)
                     .lineLimit(1...3)
                     .font(.system(size: 14, weight: .medium))
@@ -73,6 +89,28 @@ struct ObjectiveView: View {
                 note = initial.note
             } else if !kind.usesDistance {
                 goalKind = .duration
+            }
+        }
+    }
+
+    /// Phrase libre → objectif structuré, compris sur l'iPhone (modèle Apple local), sans réseau.
+    private func interpret() {
+        let text = spoken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !parsing else { return }
+        parsing = true
+        Task {
+            defer { parsing = false }
+            do {
+                let g = try await AppleAnalyst.parseGoal(text, kind: kind)
+                withAnimation(.snappy) {
+                    goalKind = g.kind
+                    if g.kind == .duration { minutes = g.target / 60 }
+                    if g.kind == .distance { km = g.target / 1000 }
+                    if !g.note.isEmpty { note = g.note }
+                }
+                parsedHint = "Compris : \(g.label)\(g.note.isEmpty ? "" : " · \(g.note)")"
+            } catch {
+                parsedHint = "Je n'ai pas compris, choisis avec les boutons (\(error.localizedDescription))"
             }
         }
     }

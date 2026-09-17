@@ -179,7 +179,13 @@ struct SessionEndView: View {
                 if summary.memoryUpdated != true, let lines = summary.transcriptExcerpt, lines.contains(where: { $0.hasPrefix("Lui :") }) {
                     let memory = JeffreyMemory.shared
                     let line = "\(summary.kind.coachLabel), \(Formatters.elapsed(summary.elapsed))\(summary.feeling.map { ", ressenti \($0.coachLabel)" } ?? "")"
-                    if let notes = try? await SessionAnalyst.updateMemory(transcript: lines, existing: memory.notes.map(\.text), summaryLine: line, apiKey: config.apiKey, model: model) {
+                    var notes: [String]?
+                    if provider == "apple", let (n, _) = try? await AppleAnalyst.updateMemory(transcript: lines, existing: memory.notes.map(\.text), summaryLine: line) {
+                        notes = n
+                    } else {
+                        notes = try? await SessionAnalyst.updateMemory(transcript: lines, existing: memory.notes.map(\.text), summaryLine: line, apiKey: config.apiKey, model: model)
+                    }
+                    if let notes {
                         memory.replace(with: notes)
                         summary.memoryUpdated = true
                         SessionSummary.upsert(summary)

@@ -82,3 +82,20 @@ Le projet est décrit dans `project.yml` ; après toute modification de ce fichi
   pour des séances très longues, augmenter « Métriques envoyées toutes les … s ».
 - L'iPhone doit rester avec l'app active en arrière-plan (mode audio) : ne pas la tuer depuis
   le sélecteur d'apps.
+
+
+## Intelligence Apple (bilan, mémoire, objectif dicté)
+
+Le bilan de fin de séance, la mise à jour des notes de Jeffrey et la compréhension d'un objectif dicté passent
+par le framework Foundation Models d'iOS 27 : d'abord le modèle serveur Apple sur **Private Cloud Compute**
+(32K de contexte, raisonnement), sinon le modèle local de l'iPhone, sinon OpenAI. Réglable dans l'onglet Jeffrey
+(carte Intelligence). La voix en séance reste sur l'API Realtime d'OpenAI.
+
+Pour que le modèle serveur soit disponible, le compte développeur doit obtenir l'entitlement Private Cloud Compute :
+
+1. Être inscrit au programme App Store Small Business (App Store Connect, Accords).
+2. Demander l'entitlement : https://developer.apple.com/contact/request/private-cloud-compute/ (moins de 2 M de téléchargements).
+3. Une fois accordé, régénérer les profils (`xcodebuild … -allowProvisioningUpdates`) ; TestFlight et ad hoc sont couverts.
+
+Tant que l'entitlement manque, l'app le signale dans la carte Intelligence et utilise le modèle local, puis OpenAI.
+Le modèle local exige Apple Intelligence activé (Réglages > Apple Intelligence et Siri) sur un iPhone 15 Pro ou plus récent.
