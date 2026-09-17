@@ -22,6 +22,9 @@ final class JeffreyMemory: ObservableObject {
 
     init() { load() }
 
+    /// Pour les tests.
+    var testFileURL: URL { url }
+
     func load() {
         guard let data = try? Data(contentsOf: url) else { return }
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601

@@ -1,0 +1,121 @@
+import XCTest
+import CoreLocation
+@testable import WatchCoach
+
+final class GoalTests: XCTestCase {
+    func testDurationProgressAndRemaining() {
+        let g = SessionGoal(kind: .duration, target: 1800)
+        let p = g.progress(elapsed: 900, distance: nil)
+        XCTAssertEqual(p.fraction, 0.5, accuracy: 0.001)
+        XCTAssertEqual(p.remaining, "15:00 restantes")
+        XCTAssertFalse(g.isReached(elapsed: 1799, distance: nil))
+        XCTAssertTrue(g.isReached(elapsed: 1800, distance: nil))
+    }
+
+    func testDistanceGoal() {
+        let g = SessionGoal(kind: .distance, target: 5000)
+        XCTAssertEqual(g.label, "5.00 km")
+        XCTAssertTrue(g.isReached(elapsed: 0, distance: 5000))
+        XCTAssertEqual(g.progress(elapsed: 0, distance: 2500).remaining, "2.50 km restants")
+    }
+
+    func testFreeGoalNeverReached() {
+        XCTAssertFalse(SessionGoal.free.isReached(elapsed: 99_999, distance: 99_999))
+        XCTAssertNil(SessionGoal.free.progress(elapsed: 10, distance: 10).remaining)
+    }
+}
+
+final class ZoneAndFormatTests: XCTestCase {
+    func testZones() {
+        XCTAssertEqual(HeartRateZone.zone(for: 100, maxHR: 180), .z1)
+        XCTAssertEqual(HeartRateZone.zone(for: 117, maxHR: 180), .z2)
+        XCTAssertEqual(HeartRateZone.zone(for: 135, maxHR: 180), .z3)
+        XCTAssertEqual(HeartRateZone.zone(for: 150, maxHR: 180), .z4)
+        XCTAssertEqual(HeartRateZone.zone(for: 170, maxHR: 180), .z5)
+        XCTAssertEqual(HeartRateZone.zone(for: 170, maxHR: 0), .z1)
+    }
+
+    func testFormatters() {
+        XCTAssertEqual(Formatters.elapsed(65), "1:05")
+        XCTAssertEqual(Formatters.elapsed(3661), "1:01:01")
+        XCTAssertEqual(Formatters.distance(999), "999 m")
+        XCTAssertEqual(Formatters.distance(1234), "1.23 km")
+        XCTAssertEqual(Formatters.pace(speedMetersPerSecond: 3.0), "5:33 /km")
+        XCTAssertNil(Formatters.pace(speedMetersPerSecond: 0.1))
+        XCTAssertEqual(Formatters.humanDuration(45 * 60), "45 min")
+        XCTAssertEqual(Formatters.humanDuration(77 * 60), "1 h 17")
+    }
+}
+
+final class ReferenceRouteTests: XCTestCase {
+    /// Tracé synthétique : 1 km plein nord, montée de 40 m entre 300 et 600 m, à 3 m/s.
+    private func makeRoute() -> ReferenceRoute {
+        var locs: [CLLocation] = []
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        for i in 0...100 {
+            let d = Double(i) * 10
+            let lat = 48.85 + d / 111_000
+            let alt: Double = d < 300 ? 50 : (d < 600 ? 50 + (d - 300) / 300 * 40 : 90)
+            locs.append(CLLocation(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: 2.35), altitude: alt,
+                                   horizontalAccuracy: 5, verticalAccuracy: 5, timestamp: start.addingTimeInterval(d / 3)))
+        }
+        return ReferenceRoute.make(name: "test", date: start, locations: locs)!
+    }
+
+    func testMakeComputesDistanceAndGain() {
+        let r = makeRoute()
+        XCTAssertEqual(r.totalDistance, 1000, accuracy: 15)
+        XCTAssertEqual(r.totalGain, 40, accuracy: 6)
+    }
+
+    func testTrackerSeesUpcomingClimbAndGhost() {
+        let r = makeRoute()
+        let t = ReferenceTracker(route: r)
+        // À 100 m sur le tracé, après 40 s (référence : 33 s) → 7 s de retard, montée à venir dans la fenêtre de 500 m.
+        let here = CLLocation(latitude: 48.85 + 100 / 111_000, longitude: 2.35)
+        let s = t.update(location: here, elapsed: 40)
+        XCTAssertFalse(s.offRoute)
+        XCTAssertEqual(s.covered, 100, accuracy: 12)
+        XCTAssertGreaterThan(s.gainNext, 20)
+        XCTAssertEqual(s.ghostDelta ?? 0, -7, accuracy: 3)
+        // Loin du tracé : hors parcours, pas de fantôme.
+        let far = CLLocation(latitude: 48.86, longitude: 2.40)
+        let off = t.update(location: far, elapsed: 60)
+        XCTAssertTrue(off.offRoute)
+        XCTAssertNil(off.ghostDelta)
+    }
+}
+
+final class MemoryAndSessionTests: XCTestCase {
+    @MainActor func testMemoryReplaceGuardAgainstTruncation() {
+        let m = JeffreyMemory.shared
+        // Isolation : on part d'une mémoire vide.
+        try? FileManager.default.removeItem(at: m.testFileURL)
+        m.load()
+        m.replace(with: [])
+        ["a", "b", "c", "d", "e", "f"].forEach { m.add($0) }
+        XCTAssertEqual(m.notes.count, 6)
+        m.replace(with: ["a"])                 // liste amputée → refusée
+        XCTAssertEqual(m.notes.count, 6)
+        m.replace(with: ["a", "b", "c", "z"])  // fusion acceptée
+        XCTAssertEqual(m.notes.count, 4)
+        XCTAssertTrue(m.notes.contains { $0.text == "z" })
+    }
+
+    func testSessionMatchingByOverlap() {
+        let start = Date(timeIntervalSince1970: 2_000_000)
+        let coached = SessionSummary(id: "x", date: start.addingTimeInterval(120), kind: .running, elapsed: 1500,
+                                     distance: nil, averageHeartRate: nil, maxHeartRate: nil, feeling: nil, lastCoachLine: nil)
+        XCTAssertNotNil(SessionSummary.matching(start: start, end: start.addingTimeInterval(1800), in: [coached]))
+        XCTAssertNil(SessionSummary.matching(start: start.addingTimeInterval(7200), end: start.addingTimeInterval(9000), in: [coached]))
+    }
+
+    func testCoachMirrorRoundTrip() throws {
+        var m = CoachMirror.idle
+        m.phase = "live"; m.timerLabel = "sprint"; m.timerEndsAt = Date()
+        let data = try WCCodec.encoder.encode(m)
+        let back = try WCCodec.decoder.decode(CoachMirror.self, from: data)
+        XCTAssertEqual(back.phase, "live")
+        XCTAssertEqual(back.timerLabel, "sprint")
+    }
+}

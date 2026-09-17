@@ -201,6 +201,9 @@ final class CoachSession: ObservableObject {
             return
         }
         config = CoachConfig.load()
+        #if DEBUG
+        if FakeRealtimeBackend.enabled, config.apiKey.isEmpty { config.apiKey = "fake" }
+        #endif
         guard watchReady else {
             errorMessage = connectivity.isWatchAppInstalled
                 ? "Montre introuvable : ouvre Jeffrey sur la montre, puis réessaie."
@@ -266,9 +269,15 @@ final class CoachSession: ObservableObject {
         // Micro et session audio ouverts tout de suite, tant que l'app est visible : ils continuent ensuite en arrière-plan.
         if UIApplication.shared.applicationState == .active {
             do { try audio.start() } catch {
-                errorMessage = "Audio : \(error.localizedDescription)"
-                phase = .idle
-                return
+                var tolerate = false
+                #if DEBUG
+                tolerate = FakeRealtimeBackend.enabled
+                #endif
+                if !tolerate {
+                    errorMessage = "Audio : \(error.localizedDescription)"
+                    phase = .idle
+                    return
+                }
             }
         }
         realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
@@ -491,6 +500,24 @@ final class CoachSession: ObservableObject {
                 climbingSeconds: activity.secondsClimbing)
             sessionStartedAt = nil
         }
+        writeSessionJournal()
+    }
+
+    /// Journal complet de la séance (échanges + événements internes horodatés) dans Documents/derniere-seance.txt :
+    /// lisible depuis Fichiers ou Xcode, c'est la trace de ce que Jeffrey a vu et dit.
+    static let journalURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("derniere-seance.txt")
+
+    private func writeSessionJournal() {
+        guard let first = transcript.first else { return }
+        let start = sessionStartedAt ?? latest?.sessionStart ?? first.at
+        var lines = ["Séance \(kind.coachLabel) · \(start.formatted(date: .abbreviated, time: .shortened)) · mode \(mode == .owned ? "piloté" : "compagnon")", ""]
+        for l in transcript {
+            let t = Int(max(0, l.at.timeIntervalSince(start)))
+            let who: String
+            switch l.role { case .user: who = "Lui"; case .coach: who = "Jeffrey"; case .info: who = "·" }
+            lines.append(String(format: "%02d:%02d  %@  %@", t / 60, t % 60, who, l.text))
+        }
+        try? lines.joined(separator: "\n").write(to: Self.journalURL, atomically: true, encoding: .utf8)
     }
 
     // MARK: - Realtime
@@ -880,7 +907,12 @@ final class CoachSession: ObservableObject {
         coachSpeaking = false
         responseInProgress = false
         if phase == .connecting {
-            if !audio.isRunning {
+            #if DEBUG
+            let audioRequired = !FakeRealtimeBackend.enabled
+            #else
+            let audioRequired = true
+            #endif
+            if !audio.isRunning, audioRequired {
                 if UIApplication.shared.applicationState != .active {
                     // Réveillé par la montre : iOS refuse le micro en arrière-plan, on attend l'ouverture de l'app.
                     waitingForForeground = true

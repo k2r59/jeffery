@@ -38,6 +38,14 @@ struct RootView: View {
         .onAppear {
             #if DEBUG
             if let t = ProcessInfo.processInfo.environment["WATCHCOACH_TAB"], let i = Int(t) { tab = i }
+            if ProcessInfo.processInfo.environment["WATCHCOACH_AUTOSTART"] == "1", coach.phase == .idle {
+                let minutes = Double(ProcessInfo.processInfo.environment["WATCHCOACH_GOAL_MIN"] ?? "2") ?? 2
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    coach.start(kind: .running, mode: .companion, goal: SessionGoal(kind: .duration, target: minutes * 60, note: "banc d'essai"))
+                }
+                let stopAfter = Double(ProcessInfo.processInfo.environment["WATCHCOACH_STOP_AFTER"] ?? "0") ?? 0
+                if stopAfter > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + stopAfter) { coach.stop() } }
+            }
             #endif
             let appearance = UITabBarAppearance()
             appearance.configureWithOpaqueBackground()

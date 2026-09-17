@@ -47,16 +47,27 @@ enum AppleAnalyst {
     // MARK: Disponibilité
 
     /// Le backend Apple utilisable maintenant. `preferLocal` : tâches courtes (objectif dicté) où la latence prime.
+    /// Sur simulateur, le framework plante (assertion interne) dès qu'on interroge le modèle serveur : on ne tente rien.
+    static var frameworkUsable: Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return true
+        #endif
+    }
+
     static func availableBackend(preferLocal: Bool = false) -> Backend? {
-        let pcc = PrivateCloudComputeLanguageModel()
+        guard frameworkUsable else { return nil }
         let local = SystemLanguageModel.default.isAvailable
         if preferLocal, local { return .onDevice }
+        let pcc = PrivateCloudComputeLanguageModel()
         if pcc.isAvailable, !pcc.quotaUsage.isLimitReached { return .privateCloud }
         if local { return .onDevice }
         return nil
     }
 
     static func availabilityDescription() -> String {
+        guard frameworkUsable else { return "Intelligence Apple indisponible sur simulateur" }
         let pcc = PrivateCloudComputeLanguageModel()
         let local = SystemLanguageModel.default.availability
         var parts: [String] = []

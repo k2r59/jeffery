@@ -36,10 +36,27 @@ final class RealtimeClient: NSObject {
     private var lastMetricsItemId: String?
 
     private(set) var isConnected = false
+    #if DEBUG
+    private var fake: FakeRealtimeBackend?
+    #endif
 
     // MARK: - Connexion
 
     func connect(apiKey: String, model: String, sessionConfig: [String: Any]) {
+        #if DEBUG
+        if FakeRealtimeBackend.enabled {
+            closedByUser = false; disconnectReported = false; responseActive = false; pendingResponses.removeAll()
+            self.sessionConfig = sessionConfig
+            let backend = FakeRealtimeBackend()
+            backend.deliver = { [weak self] event in
+                guard let data = try? JSONSerialization.data(withJSONObject: event), let text = String(data: data, encoding: .utf8) else { return }
+                self?.handle(text: text)
+            }
+            fake = backend
+            backend.start()
+            return
+        }
+        #endif
         // Ferme proprement l'ancienne connexion : pas de socket fantôme facturée ni de callbacks tardifs.
         pingTimer?.invalidate(); pingTimer = nil
         task?.cancel(with: .goingAway, reason: nil)
@@ -66,6 +83,9 @@ final class RealtimeClient: NSObject {
     }
 
     func disconnect() {
+        #if DEBUG
+        fake = nil
+        #endif
         closedByUser = true
         isConnected = false
         responseActive = false
@@ -81,6 +101,9 @@ final class RealtimeClient: NSObject {
     // MARK: - Événements client
 
     func send(_ event: [String: Any]) {
+        #if DEBUG
+        if let fake { fake.handle(event); return }
+        #endif
         guard let task, let data = try? JSONSerialization.data(withJSONObject: event),
               let text = String(data: data, encoding: .utf8) else { return }
         sendQueue.async { [weak self] in
@@ -137,6 +160,9 @@ final class RealtimeClient: NSObject {
     }
 
     private func sendNow(_ event: [String: Any]) {
+        #if DEBUG
+        if let fake { fake.handle(event); return }
+        #endif
         guard let task, let data = try? JSONSerialization.data(withJSONObject: event),
               let text = String(data: data, encoding: .utf8) else { return }
         task.send(.string(text)) { _ in }

@@ -93,6 +93,7 @@ struct JeffreyView: View {
                             }
                             .card()
                         }
+                        .accessibilityIdentifier("Avancé")
                     }
                     .padding(18)
                     .padding(.bottom, 70)

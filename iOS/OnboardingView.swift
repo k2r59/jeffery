@@ -46,6 +46,10 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var apiKey = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
     @State private var healthNotice: String?
+    @FocusState private var focused: Bool
+    private var stepTransition: AnyTransition {
+        .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity))
+    }
 
     // Thème sombre, comme le reste de l'app.
     private let cream = Theme.background
@@ -55,12 +59,16 @@ struct OnboardingView: View {
         ZStack {
             cream.ignoresSafeArea()
             VStack(spacing: 0) {
-                TabView(selection: $step) {
-                    intro.tag(0)
-                    profile.tag(1)
-                    keyStep.tag(2)
+                // Une seule étape vivante à la fois (un TabView paginé garde les trois pages actives et refuse
+                // parfois de changer de page tant que le clavier est ouvert).
+                ZStack {
+                    switch step {
+                    case 0: intro.transition(stepTransition)
+                    case 1: profile.transition(stepTransition)
+                    default: keyStep.transition(stepTransition)
+                    }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in
                         Capsule().fill(i == step ? Theme.lime : ink.opacity(0.2)).frame(width: i == step ? 22 : 8, height: 8)
@@ -134,7 +142,7 @@ struct OnboardingView: View {
             }
             if let healthNotice { Text(healthNotice).font(.footnote).foregroundStyle(ink.opacity(0.6)) }
             Spacer()
-            primaryButton("Continuer") { withAnimation { step = 2 } }
+            primaryButton("Continuer") { focused = false; withAnimation { step = 2 } }
         }
         .padding(24)
     }
@@ -167,6 +175,7 @@ struct OnboardingView: View {
 
     private func field(_ placeholder: String, text: Binding<String>) -> some View {
         TextField(placeholder, text: text)
+            .focused($focused)
             .font(.system(size: 16, weight: .semibold))
             .padding(.horizontal, 16).frame(height: 54)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))

@@ -124,6 +124,23 @@ Prérequis : Xcode 27, iPhone sous iOS 27 avec Apple Watch, compte développeur 
 - `WatchApp/` : `WorkoutManager` (capture), `WatchSender` (connectivité, miroir), `WatchContentView` (télécommande).
 - `iOS/Assets.xcassets` : pack d'assets Jeffrey (icône, logos, pictogrammes Lucide, couleurs). Licence Lucide dans `LICENCE-LUCIDE.txt`.
 
+## Journal de séance
+
+À la fin de chaque séance, l'app écrit `derniere-seance.txt` dans ses Documents (visible dans Fichiers > Sur mon iPhone > Jeffrey) :
+tout ce que Jeffrey a dit et entendu, horodaté, plus les événements internes (chrono, changement d'objectif, montre, GPS).
+C'est le premier réflexe quand une séance s'est mal passée. `sessions.json`, au même endroit, garde l'historique et les bilans.
+
+## Tests
+
+- `Tests/Unit` : logique pure (objectifs, zones, parcours de référence et fantôme, mémoire, appariement des séances, miroir montre).
+- `Tests/UI` : parcours réels dans le simulateur (onboarding, onglets, réglages, objectif, blocage sans montre).
+- Séance simulée de bout en bout (Debug uniquement) avec une montre et un coach factices : lancer l'app avec
+  `WATCHCOACH_FAKE_WATCH=1 WATCHCOACH_FAKE_REALTIME=1 WATCHCOACH_AUTOSTART=1 WATCHCOACH_GOAL_MIN=2 WATCHCOACH_STOP_AFTER=150`
+  (via `SIMCTL_CHILD_…` avec `simctl launch`). La montre factice envoie une FC réaliste et de la distance, le coach factice
+  répond, déclenche le chrono et débriefe ; le journal et `sessions.json` en sortent comme en vrai.
+  `WATCHCOACH_NO_HEALTH=1` évite HealthKit, `WATCHCOACH_RESET=1` repart d'une app vierge.
+- Commande : `xcodebuild -scheme WatchCoach -destination 'id=<simulateur>' test`.
+
 ## Limites connues
 
 - Avec des écouteurs Bluetooth, l'écoute via leur micro bascule iOS en mode mains libres : la musique perd en qualité

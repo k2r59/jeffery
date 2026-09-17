@@ -21,6 +21,34 @@
                ReferencedContainer = "container:WatchCoach.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B8C5F347DA4686C4C9D9A635"
+               BuildableName = "WatchCoachTests.xctest"
+               BlueprintName = "WatchCoachTests"
+               ReferencedContainer = "container:WatchCoach.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "2F31A8C7F3EDC595DC48AA65"
+               BuildableName = "WatchCoachUITests.xctest"
+               BlueprintName = "WatchCoachUITests"
+               ReferencedContainer = "container:WatchCoach.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -39,7 +67,31 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B8C5F347DA4686C4C9D9A635"
+               BuildableName = "WatchCoachTests.xctest"
+               BlueprintName = "WatchCoachTests"
+               ReferencedContainer = "container:WatchCoach.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "2F31A8C7F3EDC595DC48AA65"
+               BuildableName = "WatchCoachUITests.xctest"
+               BlueprintName = "WatchCoachUITests"
+               ReferencedContainer = "container:WatchCoach.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

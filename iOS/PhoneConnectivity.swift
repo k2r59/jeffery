@@ -20,6 +20,16 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         latest = nil
     }
 
+    #if DEBUG
+    private var fakeWatch: FakeWatch?
+    /// Banc d'essai : instantané injecté comme s'il venait de la montre.
+    func debugInject(_ snap: MetricsSnapshot) {
+        if snap.timestamp < acceptSnapshotsSince { return }
+        latest = snap
+        onSnapshot?(snap)
+    }
+    #endif
+
     private let healthStore = HKHealthStore()
     /// Contexte applicatif fusionné : commande en attente + état miroir (updateApplicationContext remplace tout).
     private var context: [String: Any] = [:]
@@ -29,6 +39,13 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     }
 
     func activate() {
+        #if DEBUG
+        if FakeWatch.enabled {
+            fakeWatch = FakeWatch(connectivity: self)
+            isPaired = true; isWatchAppInstalled = true; isReachable = true
+            return
+        }
+        #endif
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         session.delegate = self
@@ -45,6 +62,9 @@ final class PhoneConnectivity: NSObject, ObservableObject {
 
     /// Lance l'app montre avec une configuration de séance (mode piloté). La montre démarre la HKWorkoutSession.
     func launchWatchWorkout(kind: WorkoutKind, completion: @escaping (Error?) -> Void) {
+        #if DEBUG
+        if let fake = fakeWatch { Task { @MainActor in fake.handle(command: .start, kind: kind); completion(nil) }; return }
+        #endif
         let config = HKWorkoutConfiguration()
         config.activityType = kind.activityType
         config.locationType = kind.locationType
@@ -57,6 +77,12 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     }
 
     func send(command: WatchCommand, kind: WorkoutKind, mode: CaptureMode, completion: ((Error?) -> Void)? = nil) {
+        #if DEBUG
+        if let fake = fakeWatch {
+            Task { @MainActor in fake.handle(command: command, kind: kind); completion?(nil) }
+            return
+        }
+        #endif
         let payload = WatchCommandPayload(command: command, kind: kind, mode: mode)
         guard let data = try? WCCodec.encoder.encode(payload) else { return }
         let session = WCSession.default
@@ -81,6 +107,9 @@ final class PhoneConnectivity: NSObject, ObservableObject {
 
     /// Envoie l'état de la séance à la montre (message si joignable, contexte applicatif dans tous les cas).
     func sendCoachState(_ mirror: CoachMirror) {
+        #if DEBUG
+        if fakeWatch != nil { return }
+        #endif
         guard WCSession.isSupported(), let data = try? WCCodec.encoder.encode(mirror) else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }

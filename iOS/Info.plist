@@ -30,6 +30,8 @@
 		<string>youtubemusic</string>
 		<string>soundcloud</string>
 	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>Jeffrey affiche le titre en cours et te laisse le mettre en pause ou passer au suivant pendant la séance.</string>
 	<key>NSHealthShareUsageDescription</key>
@@ -49,6 +51,8 @@
 		<string>audio</string>
 		<string>location</string>
 	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
