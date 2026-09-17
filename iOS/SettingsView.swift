@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(Prefs.model) private var model: String = "gpt-realtime"
     @AppStorage(Prefs.analysisModel) private var analysisModel: String = "gpt-5-mini"
+    @AppStorage(Prefs.analysisProvider) private var analysisProvider: String = "apple"
     @AppStorage(Prefs.voice) private var voice: String = "marin"
     @AppStorage(Prefs.maxHR) private var maxHR: Double = 0
     @AppStorage(Prefs.age) private var age: Int = 40
@@ -49,7 +50,12 @@ struct SettingsView: View {
                     TextField("Modèle voix", text: $model)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("Modèle bilan de fin de séance", text: $analysisModel)
+                    Picker("Bilan de fin de séance", selection: $analysisProvider) {
+                        Text("Apple Intelligence, OpenAI en secours").tag("apple")
+                        Text("OpenAI uniquement").tag("openai")
+                    }
+                    Text(AppleAnalyst.availabilityDescription()).font(.caption).foregroundStyle(.secondary)
+                    TextField("Modèle OpenAI du bilan", text: $analysisModel)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     Picker("Voix", selection: $voice) {

@@ -8,6 +8,7 @@ struct SessionEndView: View {
     @State private var route: LocalRoute?
     @State private var analyzing = false
     @State private var analysisError: String?
+    @State private var analysisSource: String?
 
     private var coordinates: [CLLocationCoordinate2D] {
         route?.locations.filter { $0.horizontalAccuracy < 60 }.map(\.coordinate) ?? []
@@ -132,6 +133,9 @@ struct SessionEndView: View {
                         Text("Pour la prochaine : \(advice)").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.citron)
                     }
                 }
+                if let src = analysisSource {
+                    Text(src).font(.system(size: 10, weight: .bold)).tracking(0.5).foregroundStyle(Theme.muted)
+                }
                 if let c = summary.caution, !c.isEmpty, c.lowercased() != "null" {
                     HStack(alignment: .top, spacing: 8) {
                         JIcon("information", size: 16).foregroundStyle(Theme.alerte)
@@ -157,7 +161,16 @@ struct SessionEndView: View {
             let dossier = SessionAnalyst.dossier(summary: summary, config: config, health: health, zones: summary.zoneCounts ?? [])
             do {
                 let model = UserDefaults.standard.string(forKey: Prefs.analysisModel) ?? "gpt-5-mini"
-                let r = try await SessionAnalyst.analyze(dossier: dossier, apiKey: config.apiKey, model: model, userName: userName)
+                let provider = UserDefaults.standard.string(forKey: Prefs.analysisProvider) ?? "apple"
+                var r: SessionAnalyst.Result
+                // Apple Intelligence d'abord (cloud privé Apple, sinon modèle local), OpenAI en secours.
+                if provider == "apple", let (apple, backend) = try? await AppleAnalyst.analyze(dossier: dossier, userName: userName) {
+                    r = apple
+                    analysisSource = backend == .privateCloud ? "Apple Private Cloud Compute" : "Modèle Apple sur l'iPhone"
+                } else {
+                    r = try await SessionAnalyst.analyze(dossier: dossier, apiKey: config.apiKey, model: model, userName: userName)
+                    analysisSource = provider == "apple" ? "OpenAI \(model) (Apple indisponible)" : "OpenAI \(model)"
+                }
                 summary.analysis = r.analysis
                 summary.advice = r.advice
                 summary.caution = r.caution

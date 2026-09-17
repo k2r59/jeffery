@@ -23,6 +23,7 @@ enum Prefs {
     static let goalCues = "pref.goalCues"
     static let voiceBoost = "pref.voiceBoost"
     static let analysisModel = "pref.analysisModel"
+    static let analysisProvider = "pref.analysisProvider"   // apple | openai
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
     static let basePrompt = "pref.basePrompt"
@@ -64,6 +65,7 @@ enum Prefs {
             goalCues: true,
             voiceBoost: true,
             analysisModel: "gpt-5-mini",
+            analysisProvider: "apple",
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
             basePrompt: defaultBasePrompt,

@@ -2,7 +2,7 @@ name: WatchCoach
 options:
   bundleIdPrefix: dev.promo
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "27.0"
     watchOS: "10.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
