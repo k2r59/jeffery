@@ -19,7 +19,6 @@ struct YouView: View {
     @State private var healthNotice: String?
     @State private var editingMeasures = false
     @State private var editingName = false
-    @State private var newNote = ""
     @FocusState private var notesFocused: Bool
 
     private var summaries: [SessionSummary] { SessionSummary.loadAll() }
@@ -318,42 +317,41 @@ struct YouView: View {
         .card()
     }
 
+    /// Carte compacte : le nombre de notes et les deux dernières, la liste complète s'ouvre sur une vue à part.
     private var memoryCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                JeffreyMark(size: 20)
-                Text("Ce que Jeffrey retient de toi").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme)
-            }
-            if memory.notes.isEmpty {
-                Text("Rien encore. Après chaque séance, Jeffrey note ce qui compte sur la durée : une gêne, un objectif, une préférence. Tu peux aussi lui écrire directement.")
-                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
-            }
-            ForEach(memory.notes) { note in
-                HStack(alignment: .top, spacing: 10) {
-                    Circle().fill(Theme.citron).frame(width: 6, height: 6).padding(.top, 6)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(note.text).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.creme)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(note.updatedAt.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.muted)
-                    }
+        NavigationLink { MemoryView() } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    JeffreyMark(size: 20)
+                    Text("Ce que Jeffrey retient de toi").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme)
                     Spacer()
-                    Button { memory.remove(note.id) } label: { JIcon("fermer", size: 14).foregroundStyle(Theme.muted) }
+                    if !memory.notes.isEmpty {
+                        Text("\(memory.notes.count)").font(.system(size: 12, weight: .heavy)).foregroundStyle(Theme.background)
+                            .padding(.horizontal, 8).frame(height: 22).background(Capsule().fill(Theme.citron))
+                    }
+                    JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
+                }
+                if memory.notes.isEmpty {
+                    Text("Rien encore. Après chaque séance, Jeffrey note ce qui compte sur la durée : une gêne, un objectif, une préférence.")
+                        .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
+                        .multilineTextAlignment(.leading)
+                } else {
+                    ForEach(memory.notes.prefix(2)) { note in
+                        HStack(alignment: .top, spacing: 10) {
+                            Circle().fill(Theme.citron).frame(width: 6, height: 6).padding(.top, 6)
+                            Text(note.text).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.creme)
+                                .lineLimit(2).multilineTextAlignment(.leading)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    if memory.notes.count > 2 {
+                        Text("Voir tout").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.citron)
+                    }
                 }
             }
-            HStack(spacing: 8) {
-                TextField("Dis-lui quelque chose à retenir…", text: $newNote)
-                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.creme)
-                    .padding(.horizontal, 12).frame(height: 40)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceRaised))
-                    .onSubmit { memory.add(newNote); newNote = "" }
-                Button { memory.add(newNote); newNote = "" } label: {
-                    JIcon("valider", size: 16).foregroundStyle(Theme.background)
-                        .frame(width: 40, height: 40).background(Circle().fill(Theme.citron))
-                }
-                .disabled(newNote.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
+            .card()
         }
-        .card()
+        .buttonStyle(.plain)
     }
 
     private var feelingsCard: some View {
@@ -393,5 +391,78 @@ struct YouView: View {
         loadingHealth = true
         health = await SessionAnalyst.healthContext()
         loadingHealth = false
+    }
+}
+
+/// Vue à part : toutes les notes durables de Jeffrey, avec suppression et ajout.
+struct MemoryView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var memory = JeffreyMemory.shared
+    @State private var newNote = ""
+
+    var body: some View {
+        ZStack {
+            Theme.background.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Button { dismiss() } label: { HStack(spacing: 6) { JIcon("retour", size: 14); Text("Retour") }.font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted) }
+                    HStack(spacing: 10) {
+                        JeffreyMark(size: 28)
+                        Text("Ce que Jeffrey\nretient de toi").font(.display(28, weight: .black)).foregroundStyle(Theme.creme)
+                    }
+                    Text("Après chaque séance, Jeffrey note ce qui compte sur la durée : une gêne, un objectif, une préférence. Tu peux corriger, retirer, ou lui écrire directement.")
+                        .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        TextField("Dis-lui quelque chose à retenir…", text: $newNote)
+                            .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.creme)
+                            .padding(.horizontal, 12).frame(height: 44)
+                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceRaised))
+                            .onSubmit { submit() }
+                        Button(action: submit) {
+                            JIcon("valider", size: 16).foregroundStyle(Theme.background)
+                                .frame(width: 44, height: 44).background(Circle().fill(Theme.citron))
+                        }
+                        .disabled(newNote.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+
+                    if memory.notes.isEmpty {
+                        Text("Rien encore.").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted).padding(.top, 8)
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(memory.notes.enumerated()), id: \.element.id) { index, note in
+                            HStack(alignment: .top, spacing: 10) {
+                                Circle().fill(Theme.citron).frame(width: 6, height: 6).padding(.top, 7)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(note.text).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.creme)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(note.updatedAt.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.muted)
+                                }
+                                Spacer()
+                                Button { withAnimation { memory.remove(note.id) } } label: {
+                                    JIcon("fermer", size: 14).foregroundStyle(Theme.muted).frame(width: 32, height: 32)
+                                }
+                            }
+                            .padding(.vertical, 10)
+                            if index < memory.notes.count - 1 { Divider().overlay(Theme.creme.opacity(0.08)) }
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 4)
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface))
+                }
+                .padding(18)
+                .padding(.bottom, 70)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private func submit() {
+        let text = newNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        memory.add(text)
+        newNote = ""
     }
 }

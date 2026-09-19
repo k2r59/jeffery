@@ -74,3 +74,19 @@ final class JeffreyUITests: XCTestCase {
         screenshot("09-sans-montre")
     }
 }
+
+extension JeffreyUITests {
+    func testMemoryViewOpensAndCloses() {
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.userName", "Test"]
+        app.launch()
+        app.tabBars.buttons["Toi"].tap()
+        let card = app.staticTexts["Ce que Jeffrey retient de toi"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        app.swipeUp(); app.swipeUp(); app.swipeUp()
+        card.tap()
+        XCTAssertTrue(app.textFields["Dis-lui quelque chose à retenir…"].waitForExistence(timeout: 3))
+        screenshot("10-memoire")
+        app.buttons["Retour"].tap()
+        XCTAssertTrue(app.staticTexts["Ton objectif personnel"].waitForExistence(timeout: 3) || card.waitForExistence(timeout: 3))
+    }
+}
