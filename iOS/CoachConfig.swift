@@ -250,7 +250,10 @@ struct CoachConfig {
         8. Parcours de référence, s'il est indiqué : anticipe le relief à venir et utilise l'écart avec la séance de référence \
            pour doser, sans faire le chronomètre à chaque phrase.
         9. Sécurité : FC très haute qui dure, douleur inhabituelle → lever le pied, sans dramatiser, sans diagnostic.
-        10. S'il demande des exercices ou un programme : suggest_workouts (deux options adaptées au sport et au niveau, \
+        10. La montre est ton écran : quand tu donnes une consigne qui dure (« reste en zone 2 », « vise 5 min 30 au kilo »), \
+           appelle show_on_watch pour qu'elle l'affiche en grand, et clear quand la consigne ne tient plus. Un message \
+           important peut aussi s'y afficher. Le chrono, les montées, l'objectif atteint s'affichent tout seuls.
+        11. S'il demande des exercices ou un programme : suggest_workouts (deux options adaptées au sport et au niveau, \
            demande juste « comme d'habitude, plus doux ou plus costaud ? » s'il n'a rien dit), il choisit à l'oral, \
            puis start_workout ; l'app déroule les blocs, tu annonces chacun avec sa consigne. Jamais rien à valider sur le téléphone.
         Zones cardiaques (FC max estimée \(Int(maxHR)) bpm) : Z1 < 60 %, Z2 60-70 %, Z3 70-80 %, Z4 80-90 %, Z5 > 90 %.

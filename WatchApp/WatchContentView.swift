@@ -14,16 +14,51 @@ struct WatchContentView: View {
 
     private var live: Bool { mirror.state.phase != "idle" || workout.isActive }
 
+    private var scene: WatchScene? { mirror.state.scene }
+
     var body: some View {
         if live {
             TabView(selection: $page) {
                 controlsPage.tag(0)
                 livePage.tag(1)
+                statsPage.tag(2)
+                if let scene { scenePage(scene).tag(3) }
             }
             .tabViewStyle(.page)
-            .onAppear { page = 1 }
+            .onAppear {
+                page = scene == nil ? 1 : 3
+                #if DEBUG
+                if let p = ProcessInfo.processInfo.environment["WATCHCOACH_PAGE"], let i = Int(p) { page = i }
+                #endif
+            }
+            // Jeffrey choisit l'écran : une scène qui apparaît prend la main, sa disparition ramène au direct.
+            .onChange(of: scene?.id) { _, id in
+                withAnimation { page = id == nil ? 1 : 3 }
+            }
+            .onChange(of: mirror.state) { _, m in
+                SceneHaptics.shared.observe(m.scene, heartRate: workout.snapshot.heartRate ?? m.heartRate)
+            }
         } else {
             startPage
+        }
+    }
+
+    // MARK: Stats (zones, kcal, FC, vitesse moyenne)
+
+    private var statsPage: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            WatchStatsView(mirror: mirror.state, snapshot: workout.snapshot, elapsed: liveElapsed(mirror.state, at: ctx.date))
+        }
+    }
+
+    // MARK: Scène pilotée par Jeffrey
+
+    private func scenePage(_ scene: WatchScene) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            WatchSceneView(scene: scene, heartRate: workout.snapshot.heartRate ?? mirror.state.heartRate, elapsed: liveElapsed(mirror.state, at: ctx.date))
+                .onChange(of: ctx.date) { _, now in
+                    SceneHaptics.shared.observe(scene, heartRate: workout.snapshot.heartRate ?? mirror.state.heartRate, now: now)
+                }
         }
     }
 
@@ -81,7 +116,7 @@ struct WatchContentView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    JeffreyMark(state: m.coachSpeaking ? .speaking : (m.phase == "live" ? .listening : .available), size: 20)
+                    JeffreyVoiceView(speaking: m.coachSpeaking, size: 22)
                     Text(stateLabel(m)).font(.system(size: 10, weight: .heavy)).foregroundStyle(m.coachSpeaking || m.userSpeaking ? citron : sauge)
                     Spacer()
                     Text(m.kind.label.uppercased()).font(.system(size: 9, weight: .heavy)).foregroundStyle(sauge)
@@ -133,7 +168,7 @@ struct WatchContentView: View {
                 if workout.needsBackgroundExtension {
                     Button("Prolonger l'arrière-plan") { workout.extendBackground() }.tint(citron).font(.system(size: 11, weight: .bold))
                 }
-                Text("← pause et fin").font(.system(size: 9)).foregroundStyle(sauge.opacity(0.7))
+                Text("← pause et fin · stats →").font(.system(size: 9)).foregroundStyle(sauge.opacity(0.7))
             }
             .padding(.horizontal, 4)
         }

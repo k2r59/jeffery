@@ -21,6 +21,15 @@ Projet personnel, installé hors App Store en signature de développement.
 - Objectif de séance (durée, distance ou libre) fixé avant de partir, dicté en langage naturel ou par boutons ; en cours
   de route, Jeffrey peut le changer après ton accord à l'oral, rien à toucher sur le téléphone.
 - Chronomètre piloté par Jeffrey (blocs, fractionné travail/récup) : l'app sonne et le prévient, il n'a jamais à compter.
+- La montre, écran de Jeffrey : à droite du direct, une page « stats » (temps par zone cardiaque, FC et moyenne, kcal,
+  vitesse ou allure moyenne selon le sport). Et des scènes plein écran qui prennent la main d'elles-mêmes : anneau de
+  compte à rebours (« dans 30 secondes tu marches »), fractionné effort/récup avec la répétition en cours, montée
+  (profil, pente, D+ restant), fantôme sur un parcours refait, fête à l'objectif atteint. Jeffrey en pilote d'autres à
+  la voix (outil `show_on_watch`) : zone cardiaque à tenir avec ta FC en curseur, allure cible avec l'écart, sa phrase
+  en grand. Vibrations à 3-2-1, à la fin d'un bloc, en sortie de zone, et à la fête.
+- Jeffrey parle : le J citron se transforme en sept barres vocales tant que la voix joue, puis reprend sa forme
+  (pack d'animation porté en natif dans `Shared/JeffreyVoiceView.swift`, sans bibliothèque ; iPhone et montre).
+- Écran de lancement : symbole Jeffrey puis logo et signature, fondu vers l'app.
 - Séances types : à l'accueil, Jeffrey demande si on fait la séance à sa façon ou s'il propose un exercice (on peut aussi
   le lui demander à tout moment). S'il propose, il demande juste « comme d'habitude, plus doux ou plus
   costaud ? », propose deux séances adaptées au sport choisi et au niveau (catalogue `iOS/WorkoutLibrary.swift`,
@@ -143,7 +152,9 @@ C'est le premier réflexe quand une séance s'est mal passée. `sessions.json`, 
   `WATCHCOACH_FAKE_WATCH=1 WATCHCOACH_FAKE_REALTIME=1 WATCHCOACH_AUTOSTART=1 WATCHCOACH_GOAL_MIN=2 WATCHCOACH_STOP_AFTER=150`
   (via `SIMCTL_CHILD_…` avec `simctl launch`). La montre factice envoie une FC réaliste et de la distance, le coach factice
   répond, déclenche le chrono et débriefe ; le journal et `sessions.json` en sortent comme en vrai.
-  `WATCHCOACH_NO_HEALTH=1` évite HealthKit, `WATCHCOACH_RESET=1` repart d'une app vierge.
+  `WATCHCOACH_NO_HEALTH=1` évite HealthKit, `WATCHCOACH_RESET=1` repart d'une app vierge, `WATCHCOACH_NO_SPLASH=1` saute
+  l'écran de lancement. Sur le simulateur montre : `WATCHCOACH_SCENE=countdown|interval|zone|pace|message|climb|ghost|celebration|stats`
+  affiche une scène avec un miroir factice, `WATCHCOACH_PAGE=0..3` choisit la page.
 - Commande : `xcodebuild -scheme WatchCoach -destination 'id=<simulateur>' test`. Séance simulée clé en main : `Tests/Scripts/sim-session.sh`.
 
 ## Limites connues

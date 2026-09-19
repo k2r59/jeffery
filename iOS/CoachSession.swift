@@ -47,6 +47,9 @@ final class CoachSession: ObservableObject {
     }
     private var sessionStartedAt: Date?
     private var hrSamples: [Double] = []
+    /// Secondes passées dans chaque zone (Z1…Z5), pour la page stats de la montre.
+    private var zoneSeconds = [Int](repeating: 0, count: 5)
+    private var lastZoneSampleAt: Date?
     private var referenceTracker: ReferenceTracker?
     private var referenceName: String?
     private var lastClimbWarnAt: Date = .distantPast
@@ -126,6 +129,12 @@ final class CoachSession: ObservableObject {
         let createdAt: Date
     }
     private var reminders: [Reminder] = []
+
+    /// Scène demandée par Jeffrey (zone, allure, message) : persiste jusqu'à `clear`, sauf le message (éphémère).
+    @Published private(set) var requestedScene: WatchScene?
+    /// Scène éphémère de fête (objectif atteint, programme fini), quelques secondes.
+    private var celebrationScene: WatchScene?
+    private var currentPaceSecPerKm: Double?
 
     var latest: MetricsSnapshot? { connectivity.latest }
 
@@ -242,6 +251,9 @@ final class CoachSession: ObservableObject {
         distanceHistory.removeAll()
         lastInjectedSnapshot = nil
         reminders.removeAll()
+        requestedScene = nil
+        celebrationScene = nil
+        currentPaceSecPerKm = nil
         lastAnnouncedZone = nil
         currentZone = nil
         pace = nil
@@ -251,6 +263,8 @@ final class CoachSession: ObservableObject {
         sessionStartedAt = Date()
         lastMirror = nil
         hrSamples.removeAll()
+        zoneSeconds = [Int](repeating: 0, count: 5)
+        lastZoneSampleAt = nil
         hrHistory.removeAll(); speedHistory.removeAll()
         lastUserSpokeAt = .distantPast; lastSpontaneousCueAt = .distantPast
         struggleAnnouncedForClimb = false; climbStartedAt = nil; lastCoachSpokeAt = .distantPast; fatigueAnnouncedAt = .distantPast; lastCueZone = nil
@@ -378,7 +392,102 @@ final class CoachSession: ObservableObject {
                            goalLabel: goal.kind == .free ? nil : goal.label, remaining: p.remaining, progress: p.fraction,
                            goalReached: goalReached, coachSpeaking: coachSpeaking, userSpeaking: userSpeaking,
                            lastLine: lastCoachLine.map { String($0.prefix(140)) }, heartRate: latest?.heartRate,
-                           distance: displayDistance, paused: isPaused, timerLabel: mirrorTimerLabel, timerEndsAt: timerEndsAt)
+                           distance: displayDistance, paused: isPaused, timerLabel: mirrorTimerLabel, timerEndsAt: timerEndsAt,
+                           scene: currentScene(), paceSecPerKm: currentPaceSecPerKm,
+                           zoneSeconds: zoneSeconds.reduce(0, +) > 0 ? zoneSeconds : nil,
+                           averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
+                           energy: latest?.activeEnergy,
+                           averageSpeed: (displayDistance ?? 0) > 20 && elapsed > 30 ? displayDistance! / elapsed : nil)
+    }
+
+    // MARK: - Scènes de la montre
+
+    /// La scène à afficher maintenant, par priorité : message de Jeffrey, fête, chrono, cible (zone/allure), montée, fantôme.
+    private func currentScene() -> WatchScene? {
+        let now = Date()
+        if let r = requestedScene, r.kind == .message {
+            if let until = r.until, until > now { return r }
+        }
+        if let c = celebrationScene {
+            if let until = c.until, until > now { return c }
+            celebrationScene = nil
+        }
+        if let label = timerLabel, let end = timerEndsAt {
+            let isPlanOrRepeat = planTitle != nil || timerRepeatsLeft > 1 || !timerPhaseIsWork
+            let start = end.addingTimeInterval(-TimeInterval(timerPhaseIsWork ? timerWorkSeconds : timerRestSeconds))
+            var next: String?
+            if timerPhaseIsWork, timerRepeatsLeft > 1 {
+                next = timerRestSeconds > 0 ? "récup \(Formatters.humanDuration(TimeInterval(timerRestSeconds))) ensuite" : "puis répétition suivante"
+            } else if !timerPhaseIsWork {
+                next = "puis effort \(Formatters.humanDuration(TimeInterval(timerWorkSeconds)))"
+            } else if let n = planQueue.first {
+                next = "puis \(n.label) · \(Formatters.humanDuration(TimeInterval(n.seconds)))"
+            }
+            return WatchScene(kind: isPlanOrRepeat ? .interval : .countdown, id: "timer-\(label)-\(Int(end.timeIntervalSince1970))",
+                              title: label.capitalized, subtitle: next, caption: planTitle.map { "\($0) · \(planStep ?? "")" },
+                              startsAt: start, endsAt: end, phase: timerPhaseIsWork ? "work" : "rest")
+        }
+        if let r = requestedScene, r.kind != .message {
+            var scene = r
+            if r.kind == .pace { scene.value = currentPaceSecPerKm }
+            return scene
+        }
+        if activity.terrain == .climb, let g = activity.grade, g >= 3 {
+            var sub = String(format: "D+ %.0f m depuis le départ", activity.ascent)
+            if let ref = reference, ref.gainNext >= 8 { sub = String(format: "encore +%.0f m sur 500 m", ref.gainNext) }
+            return WatchScene(kind: .climb, id: "climb-\(Int(activity.terrainSince.timeIntervalSince1970))",
+                              title: String(format: "Montée · %.0f %%", g), subtitle: sub,
+                              caption: lastCoachLine.map { String($0.prefix(60)) }, value: g, progress: activity.ascent)
+        }
+        if let ref = reference, !ref.offRoute, let ghost = ref.ghostDelta, let name = referenceName {
+            return WatchScene(kind: .ghost, id: "ghost-\(name)", title: "Fantôme · \(name)",
+                              subtitle: "\(Formatters.distance(ref.covered)) · reste \(Formatters.distance(max(0, ref.total - ref.covered)))",
+                              value: ghost, progress: ref.total > 0 ? min(1, ref.covered / ref.total) : 0)
+        }
+        return nil
+    }
+
+    private func celebrate(_ title: String, subtitle: String?, seconds: TimeInterval = 8) {
+        celebrationScene = WatchScene(kind: .celebration, id: "fete-\(Int(Date().timeIntervalSince1970))", title: title, subtitle: subtitle,
+                                      until: Date().addingTimeInterval(seconds))
+        sendMirror(force: true)
+    }
+
+    /// Outil show_on_watch : Jeffrey choisit ce que la montre affiche.
+    private func handleShowOnWatch(callId: String, json: [String: Any]) {
+        let what = (json["what"] as? String ?? "").lowercased()
+        switch what {
+        case "zone":
+            let z = HeartRateZone(rawValue: max(1, min(5, (json["zone"] as? Int) ?? 2))) ?? .z2
+            let b = z.bounds(maxHR: config.maxHR)
+            requestedScene = WatchScene(kind: .zone, id: "zone-\(z.rawValue)-\(Int(Date().timeIntervalSince1970))",
+                                        title: "Reste en \(z.label)", subtitle: "cible \(Int(b.low)) – \(Int(b.high))", low: b.low, high: b.high, zone: z.rawValue)
+            log(.info, "Montre : cible \(z.label) (\(Int(b.low))–\(Int(b.high)) bpm)")
+        case "pace":
+            let text = (json["pace"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            let parts = text.split(separator: ":").compactMap { Double($0) }
+            guard parts.count == 2 else { realtime.sendFunctionOutput(callId: callId, output: ["error": "allure attendue au format m:ss"]); return }
+            let target = parts[0] * 60 + parts[1]
+            let tol = max(5, (json["tolerance_seconds"] as? Double) ?? 10)
+            requestedScene = WatchScene(kind: .pace, id: "pace-\(Int(target))-\(Int(Date().timeIntervalSince1970))",
+                                        title: "Allure cible \(text)", subtitle: "min/km", low: target - tol, high: target + tol, value: currentPaceSecPerKm)
+            log(.info, "Montre : allure cible \(text) ±\(Int(tol)) s")
+        case "message":
+            let text = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { realtime.sendFunctionOutput(callId: callId, output: ["error": "texte vide"]); return }
+            let seconds = min(30, max(3, (json["seconds"] as? Double) ?? 8))
+            requestedScene = WatchScene(kind: .message, id: "msg-\(Int(Date().timeIntervalSince1970))", title: "Jeffrey", subtitle: String(text.prefix(90)),
+                                        until: Date().addingTimeInterval(seconds))
+            log(.info, "Montre : « \(text) »")
+        case "clear":
+            requestedScene = nil
+            log(.info, "Montre : retour à l'écran normal")
+        default:
+            realtime.sendFunctionOutput(callId: callId, output: ["error": "what doit valoir zone, pace, message ou clear"])
+            return
+        }
+        sendMirror(force: true)
+        realtime.sendFunctionOutput(callId: callId, output: ["shown": what], thenRespond: false)
     }
 
     private var mirrorTimerLabel: String? {
@@ -422,7 +531,7 @@ final class CoachSession: ObservableObject {
         let m = mirrorSnapshot()
         if !force, let last = lastMirror, last.phase == m.phase, last.coachSpeaking == m.coachSpeaking, last.userSpeaking == m.userSpeaking,
            last.lastLine == m.lastLine, last.paused == m.paused, abs(last.elapsed - m.elapsed) < 4, last.goalReached == m.goalReached,
-           last.timerLabel == m.timerLabel { return }
+           last.timerLabel == m.timerLabel, last.scene?.id == m.scene?.id, last.scene?.value == m.scene?.value { return }
         lastMirror = m
         updateLiveActivity()
         connectivity.sendCoachState(m)
@@ -623,6 +732,22 @@ final class CoachSession: ObservableObject {
                 ],
             ], [
                 "type": "function",
+                "name": "show_on_watch",
+                "description": "Choisir ce que la montre affiche en grand. what=zone avec zone 1-5 : jauge de fréquence cardiaque avec la zone à tenir (« reste en zone 2 »). what=pace avec pace « 5:30 » : allure cible et écart en direct (« vise 5 min 30 au kilo »). what=message avec text : ta phrase en grand quelques secondes (consigne importante, encouragement fort). what=clear : retour à l'écran normal quand la consigne ne tient plus. Le chrono, les montées, l'objectif atteint et le parcours fantôme s'affichent tout seuls, tu n'as rien à faire pour eux.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "what": ["type": "string", "enum": ["zone", "pace", "message", "clear"]],
+                        "zone": ["type": "integer", "description": "1 à 5, pour what=zone"],
+                        "pace": ["type": "string", "description": "m:ss par km, pour what=pace"],
+                        "tolerance_seconds": ["type": "number", "description": "Marge autour de l'allure cible, 10 par défaut"],
+                        "text": ["type": "string", "description": "Pour what=message, 90 caractères max"],
+                        "seconds": ["type": "number", "description": "Durée d'affichage du message, 8 par défaut"],
+                    ],
+                    "required": ["what"],
+                ],
+            ], [
+                "type": "function",
                 "name": "remind_me",
                 "description": "Rappel unique demandé par l'utilisateur : « préviens-moi dans 5 minutes », « dis-moi quand ça fait 30 secondes que je marche ». L'app compte (le décompte ne tourne que pendant l'activité visée et repart de zéro s'il en change) et te relance à l'échéance ; confirme en une phrase courte et n'annonce rien avant d'être relancé. Pour un bloc d'effort avec bip, préfère start_timer.",
                 "parameters": [
@@ -795,6 +920,10 @@ final class CoachSession: ObservableObject {
         if name == "cancel_timer" {
             cancelTimer()
             realtime.sendFunctionOutput(callId: callId, output: ["cancelled": true])
+            return
+        }
+        if name == "show_on_watch" {
+            handleShowOnWatch(callId: callId, json: json)
             return
         }
         if name == "remind_me" {
@@ -1036,7 +1165,7 @@ final class CoachSession: ObservableObject {
             planIndex = 0
             planTotal = 0
             log(.info, "Programme terminé : \(title)")
-            sendMirror(force: true)
+            celebrate("Programme terminé", subtitle: title)
             realtime.injectText("[PROGRAMME terminé] « \(title) », tous les blocs sont faits. " + metricsLine(prefix: "[MÉTRIQUES]"))
             realtime.requestResponse(instructions: "Le programme « \(title) » est terminé : félicite-le en une phrase et dis ce qu'on fait maintenant (retour au calme, fin de séance, ou continuer libre).")
             return
@@ -1259,7 +1388,17 @@ final class CoachSession: ObservableObject {
             distanceHistory.removeAll { snap.timestamp.timeIntervalSince($0.0) > 45 }
         }
         pace = computePace(snap)
-        if let hr = snap.heartRate, snap.state == .running { hrSamples.append(hr) }
+        if let hr = snap.heartRate, snap.state == .running {
+            hrSamples.append(hr)
+            let now = snap.timestamp
+            if let last = lastZoneSampleAt {
+                let dt = Int(min(15, max(0, now.timeIntervalSince(last))))
+                zoneSeconds[HeartRateZone.zone(for: hr, maxHR: config.maxHR).rawValue - 1] += dt
+            }
+            lastZoneSampleAt = now
+        } else {
+            lastZoneSampleAt = nil
+        }
         if let hr = snap.heartRate {
             let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
             currentZone = zone
@@ -1307,6 +1446,17 @@ final class CoachSession: ObservableObject {
             lastGhostWarnAt = now
             cue(reason: g < 0 ? "retard de \(Int(-g)) s sur la séance de référence" : "avance de \(Int(g)) s sur la séance de référence")
         }
+    }
+
+    /// Allure courante en s/km, pour la scène allure de la montre.
+    private func updatePaceNumber() {
+        var v: Double? = latest?.speed
+        if v == nil, latest?.distance == nil { v = gps.speed }
+        if v == nil, let first = distanceHistory.first, let last = distanceHistory.last, last.0 > first.0 {
+            let dt = last.0.timeIntervalSince(first.0), dd = last.1 - first.1
+            if dt >= 10, dd > 5 { v = dd / dt }
+        }
+        currentPaceSecPerKm = (v ?? 0) > 0.3 ? 1000 / v! : nil
     }
 
     private func computePace(_ snap: MetricsSnapshot) -> String? {
@@ -1382,6 +1532,7 @@ final class CoachSession: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if self.latest?.speed == nil, let v = self.gps.speed, !self.isPaused { self.pace = Formatters.pace(speedMetersPerSecond: v) }
+                self.updatePaceNumber()
                 self.evaluateGoal(); self.detectStruggle()
             }
         }
@@ -1522,6 +1673,7 @@ final class CoachSession: ObservableObject {
         if !goalReached, goal.isReached(elapsed: elapsed, distance: displayDistance) {
             goalReached = true
             lastCueAt = .distantPast
+            celebrate("Objectif atteint", subtitle: "\(goal.label) · \(Formatters.elapsed(elapsed))")
             cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
         } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues {
             if cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))") { halfwayAnnounced = true }

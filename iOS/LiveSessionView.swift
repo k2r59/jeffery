@@ -129,7 +129,9 @@ struct LiveSessionView: View {
     private var jeffreyLiveCard: some View {
         Button { showTalk = true } label: {
             HStack(alignment: .top, spacing: 12) {
-                JeffreyMark(state: coach.coachSpeaking ? .speaking : (coach.phase == .live ? .listening : .available), size: 44)
+                JeffreyVoiceView(speaking: coach.coachSpeaking, size: 44)
+                    .scaleEffect(coach.userSpeaking ? 1.06 : 1)
+                    .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: coach.userSpeaking)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(coach.phase == .connecting ? "JEFFREY ARRIVE" : (coach.coachSpeaking ? "JEFFREY TE PARLE" : (coach.userSpeaking ? "JEFFREY T'ÉCOUTE" : "JEFFREY EST LÀ")))
                         .font(.system(size: 10, weight: .heavy)).tracking(1.5)
@@ -298,8 +300,8 @@ struct TalkSheet: View {
                     Color.clear.frame(width: 20)
                 }
                 .padding(.top, 14)
-                JeffreyMark(state: coach.coachSpeaking ? .speaking : .listening, size: 96)
-                    .shadow(color: Theme.lime.opacity(0.5), radius: 24)
+                JeffreyVoiceView(speaking: coach.coachSpeaking, size: 120)
+                    .shadow(color: Theme.lime.opacity(coach.coachSpeaking ? 0.55 : 0.3), radius: 24)
                 Text(coach.coachSpeaking ? "Jeffrey te parle" : (coach.userSpeaking ? "Jeffrey t'écoute" : "Jeffrey est là, parle-lui"))
                     .font(.display(18, weight: .black)).foregroundStyle(.white)
                 ScrollViewReader { proxy in

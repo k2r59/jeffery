@@ -31,7 +31,10 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Jeffrey
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: JeffreyEncre
+          UIImageName: jeffrey-symbole-citron
+          UIImageRespectsSafeAreaInsets: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [audio, location]
         NSLocationWhenInUseUsageDescription: "Jeffrey enregistre le tracé GPS de ta séance et calcule distance et allure si la montre ne les fournit pas."

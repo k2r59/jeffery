@@ -102,6 +102,33 @@ enum WatchCommand: String, Codable {
 }
 
 /// État de la séance iPhone reflété sur la montre.
+/// Scène pilotée par Jeffrey, affichée en plein écran sur la montre (et reprise sur l'iPhone).
+/// Certaines sont automatiques (chrono, montée, objectif atteint), d'autres demandées par Jeffrey (zone, allure, message).
+struct WatchScene: Codable, Equatable {
+    enum Kind: String, Codable { case countdown, interval, zone, pace, message, climb, ghost, celebration }
+    var kind: Kind
+    /// Identifiant stable de l'épisode : la montre vibre quand il change.
+    var id: String
+    var title: String
+    var subtitle: String? = nil
+    var caption: String? = nil
+    var startsAt: Date? = nil
+    var endsAt: Date? = nil
+    /// interval : "work" ou "rest".
+    var phase: String? = nil
+    /// zone : bornes en bpm ; pace : bornes en s/km.
+    var low: Double? = nil
+    var high: Double? = nil
+    /// pace : allure courante en s/km ; ghost : secondes d'avance (+) / retard (−) ; climb : pente %.
+    var value: Double? = nil
+    /// ghost : avancement 0…1 sur le parcours ; climb : D+ cumulé.
+    var progress: Double? = nil
+    /// Nom de la zone cible (Z2), utile au texte.
+    var zone: Int? = nil
+    /// Limite d'affichage pour les scènes éphémères (message, célébration).
+    var until: Date? = nil
+}
+
 struct CoachMirror: Codable, Equatable {
     var phase: String            // idle, connecting, live, ending
     var elapsed: TimeInterval
@@ -119,6 +146,14 @@ struct CoachMirror: Codable, Equatable {
     var paused: Bool
     var timerLabel: String? = nil
     var timerEndsAt: Date? = nil
+    var scene: WatchScene? = nil
+    /// Allure courante en s/km (pour la scène allure).
+    var paceSecPerKm: Double? = nil
+    /// Page « stats » de la montre : secondes passées dans chaque zone (Z1…Z5), FC moyenne, calories, vitesse moyenne (m/s).
+    var zoneSeconds: [Int]? = nil
+    var averageHeartRate: Double? = nil
+    var energy: Double? = nil
+    var averageSpeed: Double? = nil
 
     static let idle = CoachMirror(phase: "idle", elapsed: 0, timestamp: Date(), kind: .running, goalLabel: nil, remaining: nil,
                                   progress: 0, goalReached: false, coachSpeaking: false, userSpeaking: false, lastLine: nil,
@@ -169,6 +204,19 @@ enum HeartRateZone: Int, CaseIterable {
     }
 
     var label: String { "Z\(rawValue)" }
+
+    /// Bornes en bpm de la zone pour une FC max donnée.
+    func bounds(maxHR: Double) -> (low: Double, high: Double) {
+        let pct: (Double, Double)
+        switch self {
+        case .z1: pct = (0.45, 0.60)
+        case .z2: pct = (0.60, 0.70)
+        case .z3: pct = (0.70, 0.80)
+        case .z4: pct = (0.80, 0.90)
+        case .z5: pct = (0.90, 1.0)
+        }
+        return ((pct.0 * maxHR).rounded(), (pct.1 * maxHR).rounded())
+    }
 
     var description: String {
         switch self {

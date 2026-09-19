@@ -9,6 +9,7 @@ final class JeffreyUITests: XCTestCase {
         app = XCUIApplication()
         app.launchEnvironment["WATCHCOACH_NO_HEALTH"] = "1"
         app.launchEnvironment["WATCHCOACH_FAKE_WATCH"] = "1"
+        app.launchEnvironment["WATCHCOACH_NO_SPLASH"] = "1"
     }
 
     private func screenshot(_ name: String) {

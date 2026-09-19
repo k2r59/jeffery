@@ -30,10 +30,18 @@ struct WatchCoachApp: App {
         #endif
     }
 
+    @State private var showSplash = ProcessInfo.processInfo.environment["WATCHCOACH_NO_SPLASH"] != "1"
+
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(coach)
+            ZStack {
+                RootView()
+                    .environmentObject(coach)
+                if showSplash {
+                    SplashView { showSplash = false }
+                        .zIndex(1)
+                }
+            }
         }
     }
 }
