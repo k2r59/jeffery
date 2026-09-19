@@ -117,6 +117,16 @@ final class CoachSession: ObservableObject {
     private var localPaused = false
     private var sessionToken = UUID()
 
+    /// Rappel demandé à l'oral (outil `remind_me`) : « préviens-moi dans 5 min », « dis-moi quand ça fait 30 s que je marche ».
+    private struct Reminder {
+        let seconds: TimeInterval
+        /// Activité à tenir sans interruption ; `nil` pour un simple délai.
+        let activity: ActivityMonitor.Activity?
+        let reason: String
+        let createdAt: Date
+    }
+    private var reminders: [Reminder] = []
+
     var latest: MetricsSnapshot? { connectivity.latest }
 
     init() {
@@ -144,6 +154,7 @@ final class CoachSession: ObservableObject {
         activity.speedProvider = { [weak self] in self?.gps.speed }
         activity.onLog = { [weak self] text in self?.log(.info, text) }
         activity.onEvent = { [weak self] event in self?.handle(activityEvent: event) }
+        activity.onTick = { [weak self] in self?.checkReminders() }
     }
 
     /// Marche, course, arrêt, montée, descente : Jeffrey réagit, avec au plus une réaction toutes les 30 s.
@@ -230,6 +241,7 @@ final class CoachSession: ObservableObject {
         transcript.removeAll()
         distanceHistory.removeAll()
         lastInjectedSnapshot = nil
+        reminders.removeAll()
         lastAnnouncedZone = nil
         currentZone = nil
         pace = nil
@@ -479,6 +491,9 @@ final class CoachSession: ObservableObject {
         guard phase == .ending else { return }
         endTimeoutTask?.cancel()
         endTimeoutTask = nil
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
+        reminders.removeAll()
         realtime.disconnect()
         appleVoice.stop()
         audio.stop()
@@ -605,6 +620,19 @@ final class CoachSession: ObservableObject {
                         "reason": ["type": "string", "description": "Pourquoi, en une phrase courte"],
                     ],
                     "required": ["kind", "target", "reason"],
+                ],
+            ], [
+                "type": "function",
+                "name": "remind_me",
+                "description": "Rappel unique demandé par l'utilisateur : « préviens-moi dans 5 minutes », « dis-moi quand ça fait 30 secondes que je marche ». L'app compte (le décompte ne tourne que pendant l'activité visée et repart de zéro s'il en change) et te relance à l'échéance ; confirme en une phrase courte et n'annonce rien avant d'être relancé. Pour un bloc d'effort avec bip, préfère start_timer.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "seconds": ["type": "integer", "description": "Délai, de 5 à 3600 s"],
+                        "while_activity": ["type": "string", "enum": ["any", "walking", "running", "stationary"], "description": "any pour un simple délai ; sinon le décompte ne tourne que tant qu'il est dans cette activité"],
+                        "reason": ["type": "string", "description": "Ce que tu diras au déclenchement, en quelques mots"],
+                    ],
+                    "required": ["seconds", "while_activity", "reason"],
                 ],
             ]],
             "tool_choice": "auto",
@@ -769,6 +797,21 @@ final class CoachSession: ObservableObject {
             realtime.sendFunctionOutput(callId: callId, output: ["cancelled": true])
             return
         }
+        if name == "remind_me" {
+            let seconds = min(3600, max(5, (json["seconds"] as? Int) ?? Int((json["seconds"] as? Double) ?? 60)))
+            let raw = json["while_activity"] as? String ?? "any"
+            let target: ActivityMonitor.Activity? = raw == "any" ? nil : ActivityMonitor.Activity(rawValue: raw)
+            let reason = (json["reason"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            reminders.append(Reminder(seconds: TimeInterval(seconds), activity: target, reason: reason.isEmpty ? "rappel demandé" : reason, createdAt: Date()))
+            let scope = target.map { " tant qu'il est en \($0.label)" } ?? ""
+            log(.info, "Rappel dans \(seconds) s\(scope) : \(reason)")
+            var out = timeStatus()
+            out["scheduled"] = true
+            out["seconds"] = seconds
+            out["while_activity"] = raw
+            realtime.sendFunctionOutput(callId: callId, output: out)
+            return
+        }
         if name == "start_timer" {
             let seconds = min(4 * 3600, max(5, (json["seconds"] as? Int) ?? Int((json["seconds"] as? Double) ?? 30)))
             let label = (json["label"] as? String ?? "bloc").trimmingCharacters(in: .whitespaces)
@@ -856,7 +899,39 @@ final class CoachSession: ObservableObject {
             out["workout_step"] = planStep ?? ""
             if let next = planQueue.first { out["workout_next_block"] = next.summary }
         }
+        if activity.activity != .unknown {
+            out["activity"] = activity.activity.rawValue
+            out["activity_held_seconds"] = Int(Date().timeIntervalSince(activity.activitySince))
+        }
+        if !reminders.isEmpty {
+            let now = Date()
+            out["reminders"] = reminders.map { r -> [String: Any] in
+                ["reason": r.reason, "while_activity": r.activity?.rawValue ?? "any",
+                 "remaining_seconds": Int(max(0, r.seconds - heldSeconds(for: r, at: now)))]
+            }
+        }
         return out
+    }
+
+    // MARK: - Rappels demandés à l'oral
+
+    /// Temps déjà tenu : depuis la demande, ou depuis le début de l'activité visée si elle a commencé après.
+    private func heldSeconds(for r: Reminder, at now: Date) -> TimeInterval {
+        guard let target = r.activity else { return now.timeIntervalSince(r.createdAt) }
+        guard activity.activity == target else { return 0 }
+        return now.timeIntervalSince(max(activity.activitySince, r.createdAt))
+    }
+
+    /// Chaque seconde : un rappel échu relance Jeffrey (en priorité, rejoué si quelqu'un parle).
+    private func checkReminders() {
+        guard phase == .live, !reminders.isEmpty, !isPaused else { return }
+        let now = Date()
+        for index in reminders.indices.reversed() where heldSeconds(for: reminders[index], at: now) >= reminders[index].seconds {
+            let r = reminders.remove(at: index)
+            log(.info, "Rappel : \(r.reason)")
+            realtime.injectText("[RAPPEL] échéance demandée par l'utilisateur : \(r.reason). " + metricsLine(prefix: "[MÉTRIQUES]"))
+            realtime.requestResponse(instructions: "Le rappel « \(r.reason) » vient de tomber : dis-le lui en une phrase et donne la suite.")
+        }
     }
 
     // MARK: - Programme de séance (catalogue)
@@ -983,6 +1058,8 @@ final class CoachSession: ObservableObject {
     /// Arrêt demandé (bouton, outil cancel_timer) : chrono et programme.
     func cancelTimer() {
         stopTimer()
+        if !reminders.isEmpty { log(.info, "Rappels annulés.") }
+        reminders.removeAll()
         if let planTitle { log(.info, "Programme arrêté : \(planTitle)") }
         planTitle = nil
         planStep = nil
@@ -1014,6 +1091,9 @@ final class CoachSession: ObservableObject {
     }
 
     private func onRealtimeReady() {
+        // Connexion établie : plus de délai à surveiller, même en attente de premier plan où la phase reste .connecting.
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
         errorMessage = nil
         reconnectAttempts = 0
         coachSpeaking = false

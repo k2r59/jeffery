@@ -50,6 +50,8 @@ final class ActivityMonitor: ObservableObject {
     var onEvent: ((Event) -> Void)?
     /// Journal des transitions (même sans intervention), pour relecture après la séance.
     var onLog: ((String) -> Void)?
+    /// Battement d'une seconde, pendant la séance (le minuteur interne existe déjà).
+    var onTick: (() -> Void)?
     /// Distance parcourue fournie par l'extérieur (GPS iPhone ou montre), en mètres.
     var distanceProvider: (() -> Double)?
     /// Vitesse instantanée (m/s) du GPS : sert à intégrer la distance horizontale finement pour la pente.
@@ -157,7 +159,8 @@ final class ActivityMonitor: ObservableObject {
         guard candidate != activity, Date().timeIntervalSince(candidateSince) >= needed else { return }
         let from = activity
         activity = candidate
-        activitySince = Date()
+        // Le vrai début de l'activité, pas l'instant où l'hystérésis de 15 s la confirme.
+        activitySince = candidateSince
         stationaryAnnounced = false
         onLog?("Détection : \(from.label) → \(activity.label)\(cadence.map { String(format: " (cadence %.0f)", $0) } ?? "")")
         if from != .unknown { onEvent?(.activity(from: from, to: activity)) }
@@ -217,6 +220,7 @@ final class ActivityMonitor: ObservableObject {
             stationaryAnnounced = true
             onEvent?(.stationaryLong(seconds: Int(now.timeIntervalSince(activitySince))))
         }
+        onTick?()
     }
 
     /// Résumé pour le prompt : « course depuis 3:20 · cadence 168 pas/min · montée 6 % · D+ 42 m / D- 10 m ».
