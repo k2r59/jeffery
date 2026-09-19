@@ -88,7 +88,7 @@ struct WatchContentView: View {
                 }
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(Formatters.elapsed(liveElapsed(m, at: context.date)))
-                        .font(.system(size: 34, weight: .black, design: .rounded).monospacedDigit())
+                        .font(.system(size: 34, weight: .black, design: .default).monospacedDigit())
                         .foregroundStyle(m.paused ? sauge : creme)
                 }
                 if let g = m.goalLabel {
@@ -119,7 +119,7 @@ struct WatchContentView: View {
                     HStack {
                         Text(tl.capitalized).font(.system(size: 11, weight: .bold)).foregroundStyle(creme)
                         Spacer()
-                        Text(Formatters.elapsed(max(0, te.timeIntervalSinceNow))).font(.system(size: 20, weight: .black, design: .rounded).monospacedDigit()).foregroundStyle(citron)
+                        Text(Formatters.elapsed(max(0, te.timeIntervalSinceNow))).font(.system(size: 20, weight: .black, design: .default).monospacedDigit()).foregroundStyle(citron)
                     }
                     .padding(8).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(citron.opacity(0.15)))
                 }
@@ -159,7 +159,7 @@ struct WatchContentView: View {
     private func metric(_ icon: String, _ value: String, _ unit: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             JIcon(icon, size: 11).foregroundStyle(sauge)
-            Text(value).font(.system(size: 17, weight: .black, design: .rounded).monospacedDigit()).foregroundStyle(creme)
+            Text(value).font(.system(size: 17, weight: .black, design: .default).monospacedDigit()).foregroundStyle(creme)
             Text(unit).font(.system(size: 9, weight: .bold)).foregroundStyle(sauge)
         }
     }

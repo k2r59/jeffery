@@ -37,8 +37,10 @@ enum Theme {
 }
 
 extension Font {
+    /// Titres et chiffres : SF Pro (police système, sans arrondi), choix d'Hervé du 19/09/2026.
+    /// Les graisses « black » de l'arrondi sont ramenées à « heavy », plus équilibrées en SF Pro.
     static func display(_ size: CGFloat, weight: Font.Weight = .heavy) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        .system(size: size, weight: weight == .black ? .heavy : weight, design: .default)
     }
 }
 

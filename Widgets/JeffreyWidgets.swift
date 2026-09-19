@@ -27,7 +27,7 @@ struct JeffreyLiveActivity: Widget {
                     Image("jeffrey-symbole-citron").resizable().scaledToFit().frame(width: 28, height: 28)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    timerText(context.state).font(.system(size: 22, weight: .black, design: .rounded).monospacedDigit()).foregroundStyle(creme)
+                    timerText(context.state).font(.system(size: 22, weight: .black, design: .default).monospacedDigit()).foregroundStyle(creme)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.attributes.kindLabel.uppercased()).font(.system(size: 11, weight: .heavy)).foregroundStyle(sauge)
@@ -93,7 +93,7 @@ struct LockView: View {
                     if let hr = s.heartRate { Text("\(hr) bpm").font(.system(size: 11, weight: .bold)).foregroundStyle(creme) }
                 }
                 HStack(alignment: .firstTextBaseline) {
-                    timer(s).font(.system(size: 26, weight: .black, design: .rounded).monospacedDigit()).foregroundStyle(creme)
+                    timer(s).font(.system(size: 26, weight: .black, design: .default).monospacedDigit()).foregroundStyle(creme)
                     Spacer()
                     if let tl = s.timerLabel, let te = s.timerEndsAt {
                         VStack(alignment: .trailing, spacing: 0) {
@@ -117,7 +117,7 @@ struct LockView: View {
                     Text(context.attributes.kindLabel.uppercased()).font(.system(size: 11, weight: .heavy)).foregroundStyle(sauge)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    timer(s).font(.system(size: 40, weight: .black, design: .rounded).monospacedDigit()).foregroundStyle(creme)
+                    timer(s).font(.system(size: 40, weight: .black, design: .default).monospacedDigit()).foregroundStyle(creme)
                     if let hr = s.heartRate { Label("\(hr) bpm", systemImage: "heart.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(creme) }
                     if let d = s.distanceMeters { Text(String(format: "%.2f km", d / 1000)).font(.system(size: 14, weight: .bold).monospacedDigit()).foregroundStyle(creme) }
                     Spacer()

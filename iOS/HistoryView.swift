@@ -56,7 +56,7 @@ struct HistoryView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {
-                Text(Formatters.elapsed(w.duration)).font(.system(.body, design: .rounded).weight(.bold).monospacedDigit())
+                Text(Formatters.elapsed(w.duration)).font(.system(.body, design: .default).weight(.bold).monospacedDigit())
                 if let d = WorkoutHistory.distanceMeters(w) {
                     Text(Formatters.distance(d)).font(.caption).foregroundStyle(Theme.ice)
                 }
@@ -203,7 +203,7 @@ struct WorkoutDetailView: View {
     private func stat(_ title: String, _ value: String, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.system(size: 10, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
-            Text(value).font(.system(.title3, design: .rounded).weight(.black).monospacedDigit()).foregroundStyle(color)
+            Text(value).font(.system(.title3, design: .default).weight(.black).monospacedDigit()).foregroundStyle(color)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
