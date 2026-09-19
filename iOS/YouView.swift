@@ -354,24 +354,25 @@ struct YouView: View {
         .buttonStyle(.plain)
     }
 
+    /// Carte compacte : les trois derniers ressentis, la liste complète s'ouvre sur une vue à part.
     private var feelingsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Tes derniers ressentis").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme)
-            ForEach(summaries.prefix(6)) { s in
-                HStack(spacing: 10) {
-                    JIcon(s.feeling?.icon ?? "libre", size: 18).foregroundStyle(s.feeling == nil ? Theme.muted : Theme.citron)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(s.kind.label) · \(Formatters.elapsed(s.elapsed))\(s.distance.map { " · \(Formatters.distance($0))" } ?? "")")
-                            .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.creme)
-                        Text("\(s.date.formatted(date: .abbreviated, time: .omitted))\(s.feeling.map { " · \($0.label)" } ?? "")\(s.goalLabel.map { " · objectif \($0)\(s.goalReached == true ? " ✓" : "")" } ?? "")")
-                            .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+        NavigationLink { FeelingsView() } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text("Tes derniers ressentis").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.creme)
                     Spacer()
+                    Text("\(summaries.count)").font(.system(size: 12, weight: .heavy)).foregroundStyle(Theme.background)
+                        .padding(.horizontal, 8).frame(height: 22).background(Capsule().fill(Theme.citron))
+                    JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
+                }
+                ForEach(summaries.prefix(3)) { s in feelingRow(s, compact: true) }
+                if summaries.count > 3 {
+                    Text("Voir tout").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.citron)
                 }
             }
+            .card()
         }
-        .card()
+        .buttonStyle(.plain)
     }
 
     // MARK: Helpers
@@ -464,5 +465,75 @@ struct MemoryView: View {
         guard !text.isEmpty else { return }
         memory.add(text)
         newNote = ""
+    }
+}
+
+/// Une ligne de ressenti : sport, durée, distance, date, ressenti, objectif.
+func feelingRow(_ s: SessionSummary, compact: Bool) -> some View {
+    HStack(spacing: 10) {
+        JIcon(s.feeling?.icon ?? "libre", size: compact ? 18 : 22).foregroundStyle(s.feeling == nil ? Theme.muted : Theme.citron)
+            .frame(width: compact ? 22 : 40, height: compact ? 22 : 40)
+            .background(compact ? AnyShapeStyle(.clear) : AnyShapeStyle(Theme.surfaceRaised), in: Circle())
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(s.kind.label) · \(Formatters.elapsed(s.elapsed))\(s.distance.map { " · \(Formatters.distance($0))" } ?? "")")
+                .font(.system(size: compact ? 13 : 14, weight: .bold)).foregroundStyle(Theme.creme)
+            Text("\(s.date.formatted(date: .abbreviated, time: .omitted))\(s.feeling.map { " · \($0.label)" } ?? " · sans ressenti")\(s.goalLabel.map { " · objectif \($0)\(s.goalReached == true ? " ✓" : "")" } ?? "")")
+                .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        Spacer()
+    }
+}
+
+/// Vue à part : tous les ressentis de fin de séance, du plus récent au plus ancien.
+struct FeelingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    private let summaries = SessionSummary.loadAll()
+
+    private var counts: [(Feeling, Int)] {
+        Feeling.allCases.map { f in (f, summaries.filter { $0.feeling == f }.count) }
+    }
+
+    var body: some View {
+        ZStack {
+            Theme.background.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Button { dismiss() } label: { HStack(spacing: 6) { JIcon("retour", size: 14); Text("Retour") }.font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted) }
+                    Text("Tes derniers\nressentis").font(.display(28, weight: .black)).foregroundStyle(Theme.creme)
+                    Text("Ce que tu as dit de chaque séance en la terminant. Jeffrey s'en sert pour doser les suivantes.")
+                        .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 0) {
+                        ForEach(counts, id: \.0) { f, n in
+                            VStack(spacing: 6) {
+                                JIcon(f.icon, size: 18).foregroundStyle(n > 0 ? Theme.citron : Theme.muted)
+                                Text("\(n)").font(.display(22, weight: .black)).foregroundStyle(Theme.creme)
+                                Text(f.label).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface))
+
+                    if summaries.isEmpty {
+                        Text("Rien encore : le ressenti se donne sur l'écran de fin de séance.").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(summaries.enumerated()), id: \.element.id) { index, s in
+                            feelingRow(s, compact: false).padding(.vertical, 10)
+                            if index < summaries.count - 1 { Divider().overlay(Theme.creme.opacity(0.08)) }
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 4)
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface))
+                }
+                .padding(18)
+                .padding(.bottom, 70)
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 }

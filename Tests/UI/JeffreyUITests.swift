@@ -89,4 +89,19 @@ extension JeffreyUITests {
         app.buttons["Retour"].tap()
         XCTAssertTrue(app.staticTexts["Ton objectif personnel"].waitForExistence(timeout: 3) || card.waitForExistence(timeout: 3))
     }
+
+    func testFeelingsViewOpensAndCloses() {
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.userName", "Test"]
+        app.launchEnvironment["WATCHCOACH_SEED_SESSIONS"] = "1"
+        app.launch()
+        app.tabBars.buttons["Toi"].tap()
+        let card = app.staticTexts["Tes derniers ressentis"]
+        for _ in 0..<5 where !card.exists { app.swipeUp() }
+        XCTAssertTrue(card.waitForExistence(timeout: 3))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["Ce que tu as dit de chaque séance en la terminant. Jeffrey s'en sert pour doser les suivantes."].waitForExistence(timeout: 3))
+        screenshot("11-ressentis")
+        app.buttons["Retour"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 3))
+    }
 }
