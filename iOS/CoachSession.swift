@@ -182,6 +182,27 @@ final class CoachSession: ObservableObject {
         activity.onLog = { [weak self] text in self?.log(.info, text) }
         activity.onEvent = { [weak self] event in self?.handle(activityEvent: event) }
         activity.onTick = { [weak self] in self?.checkReminders() }
+        // Fermeture de l'app par l'utilisateur (balayage dans le sélecteur) : c'est une fin de séance, pas une panne.
+        NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.handleAppTermination() }
+        }
+    }
+
+    /// iOS laisse quelques secondes avant de tuer le processus : montre arrêtée, Live Activity fermée, séance gardée
+    /// dans l'historique (sans bilan), point de reprise effacé pour ne pas reprendre au prochain lancement.
+    private func handleAppTermination() {
+        guard phase == .connecting || phase == .live else { return }
+        log(.info, "Application fermée par l'utilisateur : séance terminée.")
+        connectivity.send(command: .end, kind: kind, mode: mode)
+        if let start = sessionStartedAt, hrSamples.count + transcript.count > 2, !goal.isTrial {
+            let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
+            SessionSummary.upsert(makeSummary(start: start, elapsed: elapsed))
+        }
+        writeSessionJournal()
+        SessionCheckpoint.clear()
+        endLiveActivity()
+        realtime.disconnect()
+        phase = .idle
     }
 
     /// Marche, course, arrêt, montée, descente : Jeffrey réagit, avec au plus une réaction toutes les 30 s.

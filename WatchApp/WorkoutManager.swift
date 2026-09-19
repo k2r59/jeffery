@@ -37,6 +37,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var pausedAccumulated: TimeInterval = 0
     private var pauseStartedAt: Date?
     private var tickTimer: Timer?
+    /// iPhone silencieux (app fermée ou morte) : la montre arrête sa capture d'elle-même passé ce délai.
+    private let phoneSilenceLimit: TimeInterval = 5 * 60
     private var lastSendAt: Date = .distantPast
 
     var isActive: Bool { snapshot.state == .running || snapshot.state == .paused }
@@ -295,6 +297,14 @@ final class WorkoutManager: NSObject, ObservableObject {
             Task { @MainActor in
                 guard let self, self.isActive else { return }
                 self.publish(self.snapshot, force: true)
+                // Plus aucun miroir de l'iPhone depuis 5 min alors qu'il était en séance : l'app a été fermée ou est morte,
+                // on n'enregistre pas une séance fantôme sans Jeffrey.
+                let m = WatchMirror.shared.state
+                if m.phase != "idle", Date().timeIntervalSince(m.timestamp) > self.phoneSilenceLimit {
+                    self.statusMessage = "iPhone silencieux depuis 5 min : séance arrêtée."
+                    WatchMirror.shared.state = .idle
+                    self.end()
+                }
             }
         }
     }
