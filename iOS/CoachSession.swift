@@ -258,8 +258,8 @@ final class CoachSession: ObservableObject {
         goalReached = false
         halfwayAnnounced = false
         lastCoachLine = nil
-        guard !config.apiKey.isEmpty else {
-            errorMessage = "Renseigne ta clé API OpenAI dans les réglages."
+        guard OpenAIAccess.isConfigured || !config.apiKey.isEmpty else {
+            errorMessage = "Connecte-toi avec Apple (onglet Jeffrey) pour lancer une séance."
             return
         }
         self.kind = kind
@@ -333,7 +333,7 @@ final class CoachSession: ObservableObject {
                 }
             }
         }
-        realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
+        connectRealtime()
         endOrphanLiveActivities()
         startLiveActivity()
         saveCheckpoint()
@@ -668,11 +668,12 @@ final class CoachSession: ObservableObject {
         sendMirror(force: true)
         // Journal écrit tant que le départ de séance est connu : les horodatages s'y réfèrent.
         writeSessionJournal()
-        if let start = sessionStartedAt, hrSamples.count + transcript.count > 2 {
+        // Le tour d'essai de l'onboarding ne laisse pas de séance dans l'historique.
+        if let start = sessionStartedAt, hrSamples.count + transcript.count > 2, !goal.isTrial {
             let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
             endedSummary = makeSummary(start: start, elapsed: elapsed)
-            sessionStartedAt = nil
         }
+        sessionStartedAt = nil
         resuming = false
         pendingPlanAdvance = false
         SessionCheckpoint.clear()
@@ -763,8 +764,8 @@ final class CoachSession: ObservableObject {
         #if DEBUG
         if FakeRealtimeBackend.enabled, config.apiKey.isEmpty { config.apiKey = "fake" }
         #endif
-        guard !config.apiKey.isEmpty else {
-            errorMessage = "Renseigne ta clé API OpenAI dans les réglages."
+        guard OpenAIAccess.isConfigured || !config.apiKey.isEmpty else {
+            errorMessage = "Connecte-toi avec Apple (onglet Jeffrey) pour reprendre la séance."
             SessionCheckpoint.clear()
             sessionStartedAt = nil
             return
@@ -848,7 +849,7 @@ final class CoachSession: ObservableObject {
             }
         }
         if !useAppleVoice, let cached = try? Data(contentsOf: ackFileURL), cached.count > 4_800 { ackAudio = cached }
-        realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
+        connectRealtime()
         adoptOrStartLiveActivity()
         saveCheckpoint()
         let token = sessionToken
@@ -880,6 +881,28 @@ final class CoachSession: ObservableObject {
     }
 
     // MARK: - Realtime
+
+    /// Ouvre le WebSocket Realtime avec le justificatif du moment : jeton éphémère du compte Jeffrey (demandé au
+    /// backend, quelques centaines de ms) ou clé perso. Un refus (accès en attente, quota) arrête la séance avec le motif.
+    private func connectRealtime() {
+        #if DEBUG
+        if FakeRealtimeBackend.enabled { realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig()); return }
+        #endif
+        let token = sessionToken
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let access = try await OpenAIAccess.realtimeCredential()
+                guard self.sessionToken == token, self.phase == .connecting || self.phase == .live else { return }
+                self.realtime.connect(apiKey: access.credential, model: access.model ?? self.config.model, sessionConfig: self.sessionConfig())
+            } catch {
+                guard self.sessionToken == token, self.phase == .connecting || self.phase == .live else { return }
+                self.errorMessage = error.localizedDescription
+                self.log(.info, "Accès OpenAI refusé : \(error.localizedDescription)")
+                self.stop()
+            }
+        }
+    }
 
     private func sessionConfig() -> [String: Any] {
         [
@@ -1543,6 +1566,11 @@ final class CoachSession: ObservableObject {
 
     private func sendGreeting() {
         let name = config.userName.isEmpty ? "" : " Appelle-le \(config.userName)."
+        if goal.isTrial {
+            // Tour d'essai (onboarding) : on est chez soi, deux minutes pour faire connaissance et vérifier que tout marche.
+            realtime.requestResponse(instructions: "C'est un tour d'essai de deux minutes, à la maison, pour vérifier que tout marche : présente-toi comme Jeffrey en une phrase chaleureuse.\(name) Explique qu'on ne sort pas, demande-lui de marcher quelques pas dans la pièce et de te dire un mot, tu confirmeras que tu l'entends et que la montre te donne son cœur. Une question courte à la fin.")
+            return
+        }
         let goalPart = goal.kind == .free ? "" : " Rappelle l'objectif en quelques mots."
         realtime.requestResponse(instructions: "Présente-toi comme Jeffrey en une phrase chaleureuse.\(name)\(goalPart) Puis pose une seule question courte : il fait sa séance à sa façon, ou tu lui proposes un exercice adapté ? S'il veut une proposition, suis la règle 10 (suggest_workouts). S'il préfère sa façon, lance la séance sans insister.")
     }
@@ -1595,7 +1623,7 @@ final class CoachSession: ObservableObject {
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard let self, self.sessionToken == token, self.phase == .live || self.phase == .connecting else { return }
-            self.realtime.connect(apiKey: self.config.apiKey, model: self.config.model, sessionConfig: self.sessionConfig())
+            self.connectRealtime()
         }
     }
 
@@ -1928,7 +1956,16 @@ final class CoachSession: ObservableObject {
             goalReached = true
             lastCueAt = .distantPast
             celebrate("Objectif atteint", subtitle: "\(goal.label) · \(Formatters.elapsed(elapsed))")
-            if let planTitle {
+            if goal.isTrial {
+                let hr = latest?.heartRate.map { " Sa montre t'a donné \(Int($0)) bpm." } ?? " La montre n'a pas encore envoyé de cœur : dis-le sans dramatiser."
+                cue(reason: "fin du tour d'essai.\(hr) Dis en deux phrases que tout est prêt, que la prochaine fois ce sera dehors pour de vrai, et dis au revoir : la séance s'arrête toute seule")
+                let token = sessionToken
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 14_000_000_000)
+                    guard let self, self.sessionToken == token, self.phase == .live else { return }
+                    self.stop()
+                }
+            } else if let planTitle {
                 // Programme en cours : on félicite sans proposer d'arrêter, sinon Jeffrey dit « on s'arrête ? » puis
                 // « allez, dernière minute de course » trois secondes plus tard (séance du 19/09).
                 let left = planQueue.count + (timerLabel != nil ? 1 : 0)
@@ -1936,7 +1973,7 @@ final class CoachSession: ObservableObject {
             } else {
                 cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
             }
-        } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues {
+        } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues, !goal.isTrial {
             if cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))") { halfwayAnnounced = true }
         }
     }

@@ -125,7 +125,7 @@ enum SessionAnalyst {
     }
 
     /// Appel texte, réponse JSON {analysis, advice, caution}.
-    static func analyze(dossier: String, apiKey: String, model: String, userName: String) async throws -> Result {
+    static func analyze(dossier: String, model: String, userName: String) async throws -> Result {
         let system = """
         Tu es Jeffrey, coach sportif. Tu rédiges le bilan écrit d'une séance à partir d'un dossier factuel. En français, tutoiement, \
         ton chaleureux et concret, jamais moralisateur. Tu compares la séance au niveau, à l'intention et à l'historique de la personne, \
@@ -142,11 +142,8 @@ enum SessionAnalyst {
             "reasoning": ["effort": "low"],
             "text": ["verbosity": "low"],
         ]
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        // Compte Jeffrey (via le backend) ou clé perso : OpenAIAccess choisit.
+        var request = try await MainActor.run { try OpenAIAccess.responsesRequest(body: try JSONSerialization.data(withJSONObject: body)) }
         request.timeoutInterval = 60
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -164,7 +161,7 @@ enum SessionAnalyst {
     }
 
     /// Met à jour la mémoire longue à partir de la transcription de la séance : renvoie la liste fusionnée.
-    static func updateMemory(transcript: [String], existing: [String], summaryLine: String, apiKey: String, model: String) async throws -> [String] {
+    static func updateMemory(transcript: [String], existing: [String], summaryLine: String, model: String) async throws -> [String] {
         let system = """
         Tu tiens les notes durables d'un coach sportif sur la personne qu'il accompagne. À partir de la transcription d'une séance \
         et des notes existantes, renvoie la liste MISE À JOUR des notes : faits utiles sur la durée (blessures ou gênes, contexte de vie, \
@@ -178,11 +175,8 @@ enum SessionAnalyst {
             + "\n\nSÉANCE : \(summaryLine)\n\nTRANSCRIPTION :\n" + transcript.joined(separator: "\n")
         let body: [String: Any] = ["model": model, "instructions": system, "input": input, "max_output_tokens": 2500,
                                    "reasoning": ["effort": "low"], "text": ["verbosity": "low"]]
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        // Compte Jeffrey (via le backend) ou clé perso : OpenAIAccess choisit.
+        var request = try await MainActor.run { try OpenAIAccess.responsesRequest(body: try JSONSerialization.data(withJSONObject: body)) }
         request.timeoutInterval = 60
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {

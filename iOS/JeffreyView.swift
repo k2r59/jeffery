@@ -10,6 +10,9 @@ struct JeffreyView: View {
     @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var showAdvanced = false
+    @State private var showAccess = false
+    @AppStorage(Prefs.onboarded) private var onboarded: Bool = true
+    @ObservedObject private var account = AccountStore.shared
     @StateObject private var preview = VoicePreview()
 
     var body: some View {
@@ -83,6 +86,31 @@ struct JeffreyView: View {
                             .padding(4).background(Capsule().fill(Theme.surfaceRaised))
                         }
 
+                        Button { showAccess = true } label: {
+                            HStack {
+                                HStack(spacing: 8) { JIcon("profil", size: 18); Text(account.user?.isAdmin == true ? "Accès et utilisateurs" : "Mon compte") }
+                                    .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                                Spacer()
+                                Text(account.user.map { $0.roleLabel } ?? "pas connecté").font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(account.user?.canUse == true ? Theme.lime : Theme.muted)
+                                JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
+                            }
+                            .card()
+                        }
+                        .accessibilityIdentifier("Mon compte")
+
+                        Button { onboarded = false } label: {
+                            HStack {
+                                HStack(spacing: 8) { JIcon("valider", size: 18); Text("Refaire la configuration") }
+                                    .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                                Spacer()
+                                Text("montre, micro, position, clé, tour d'essai").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+                                JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
+                            }
+                            .card()
+                        }
+                        .accessibilityIdentifier("Refaire la configuration")
+
                         Button { showAdvanced = true } label: {
                             HStack {
                                 HStack(spacing: 8) { JIcon("reglages", size: 18); Text("Avancé") }
@@ -101,6 +129,7 @@ struct JeffreyView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showAdvanced) { SettingsView() }
+            .sheet(isPresented: $showAccess) { AccessView() }
         }
     }
 

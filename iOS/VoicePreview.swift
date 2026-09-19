@@ -24,8 +24,7 @@ final class VoicePreview: ObservableObject {
             playPCM(cached)
             return
         }
-        let apiKey = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
-        guard !apiKey.isEmpty else { error = "Clé API manquante"; return }
+        guard OpenAIAccess.isConfigured else { error = "Connecte-toi avec Apple (ou renseigne une clé)"; return }
         guard !isLoading else { return }
         isLoading = true
         buffer = Data()
@@ -78,7 +77,16 @@ final class VoicePreview: ObservableObject {
                 "output": ["format": ["type": "audio/pcm", "rate": 24_000], "voice": voice],
             ],
         ]
-        client.connect(apiKey: apiKey, model: model, sessionConfig: config)
+        Task { @MainActor [weak self] in
+            do {
+                let access = try await OpenAIAccess.realtimeCredential()
+                client.connect(apiKey: access.credential, model: access.model ?? model, sessionConfig: config)
+            } catch {
+                self?.error = error.localizedDescription
+                self?.isLoading = false
+                self?.client = nil
+            }
+        }
     }
 
     /// PCM16 mono 24 kHz → WAV en mémoire → AVAudioPlayer.

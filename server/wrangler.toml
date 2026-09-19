@@ -1,0 +1,17 @@
+name = "jeffrey-api"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[vars]
+APPLE_BUNDLE_ID = "dev.promo.watchcoach"
+ADMIN_EMAILS = "rv@colard.net"
+DAILY_SESSION_LIMIT = "4"
+REALTIME_MODEL = "gpt-realtime"
+RESPONSES_MODEL = "gpt-5-mini"
+
+# Secrets (wrangler secret put) : OPENAI_API_KEY, JWT_SECRET
+
+[[kv_namespaces]]
+binding = "JEFFREY"
+id = "8a21aa6d1f2f4a61b6ae2b61120de659"

@@ -101,6 +101,26 @@ Sans lui, l'app le signale et utilise le modèle local (Apple Intelligence activ
 Autres fournisseurs étudiés : Grok (API vocale compatible Realtime, remplacement quasi direct pour la voix), Gemini Live
 (voix native, protocole différent), Claude (texte uniquement). Non branchés.
 
+## Compte Jeffrey (backend)
+
+L'utilisateur se connecte avec Apple, rien à saisir. Un Worker Cloudflare (`server/`, voir son README) vérifie le jeton
+Apple, tient une liste blanche (rôles admin / autorisé / en attente / bloqué, gérés depuis l'onglet Jeffrey › Accès par
+l'administrateur) et délivre pour chaque séance un jeton éphémère OpenAI Realtime : la clé OpenAI reste sur le serveur.
+Le profil, la mémoire et la conversation ne transitent jamais par le backend. Quota par défaut : 4 séances par jour
+(illimité pour l'administrateur). Une clé OpenAI personnelle reste possible (onboarding › « J'ai ma propre clé », ou
+réglages avancés) : c'est le mode développeur.
+
+Jeffrey reste dans son rôle : forme, progression, comparaison avec les séances précédentes, matériel, récupération ;
+il décline tout ce qui sort du sport (règle 12 de ses consignes).
+
+## Premier lancement
+
+Huit étapes, une chose par écran, chaque étape vérifiée (✓) : intention, prénom + Santé, montre (détection en direct,
+ouverture de l'app Watch), micro (avec vumètre « je t'entends »), position + mouvement, compte (Apple ou clé perso),
+intelligence (OpenAI complet, ou Apple moins performant : voix et bilan sur l'iPhone, conversation toujours via OpenAI),
+récap avec « Régler » sur ce qui manque, puis un tour d'essai de deux minutes à la maison (Jeffrey se présente, on marche
+quelques pas, il confirme le micro et le cœur). « Refaire la configuration » dans l'onglet Jeffrey.
+
 ## Installation
 
 Prérequis : Xcode 27, iPhone sous iOS 27 avec Apple Watch, compte développeur Apple, [xcodegen](https://github.com/yonaskolb/XcodeGen).
@@ -137,6 +157,8 @@ Prérequis : Xcode 27, iPhone sous iOS 27 avec Apple Watch, compte développeur 
 - `Shared/` : modèles communs (métriques, commandes, état miroir, zones FC, symbole et logo Jeffrey).
 - `iOS/CoachSession.swift` : orchestration de la séance (Realtime, métriques, événements, objectif, miroir montre, bilan).
 - `iOS/SessionCheckpoint.swift` : point de reprise de la séance en cours (reprise après une mort de l'app).
+- `iOS/JeffreyAccount.swift`, `iOS/AccessView.swift`, `server/` : compte Jeffrey (Sign in with Apple, jetons éphémères, liste blanche).
+- `iOS/SetupState.swift`, `iOS/OnboardingView.swift` : configuration pas à pas et vérifications.
 - `iOS/ObjC/` : rattrapage des exceptions Objective-C des frameworks Apple (audio), exposé via le bridging header.
 - `iOS/RealtimeClient.swift`, `iOS/AudioPipeline.swift` : WebSocket Realtime, capture micro et lecture, atténuation musique.
 - `iOS/ActivityMonitor.swift`, `iOS/RouteRecorder.swift`, `iOS/ReferenceRoute.swift` : mouvement, baromètre, GPS, parcours de référence.

@@ -41,8 +41,8 @@ final class SessionAnalysisService: ObservableObject {
                         }
                     }
                     if result == nil {
-                        guard !config.apiKey.isEmpty else { throw NSError(domain: "Analysis", code: 1, userInfo: [NSLocalizedDescriptionKey: "clé API manquante et modèles Apple indisponibles"]) }
-                        result = try await SessionAnalyst.analyze(dossier: dossier, apiKey: config.apiKey, model: model, userName: userName)
+                        guard await OpenAIAccess.isConfigured else { throw NSError(domain: "Analysis", code: 1, userInfo: [NSLocalizedDescriptionKey: "ni compte Jeffrey ni clé API, et modèles Apple indisponibles"]) }
+                        result = try await SessionAnalyst.analyze(dossier: dossier, model: model, userName: userName)
                         lastSource = "OpenAI \(model)"
                     }
                     if let r = result, !r.analysis.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -68,8 +68,8 @@ final class SessionAnalysisService: ObservableObject {
                 var notes: [String]?
                 if provider == "apple", let (n, _) = try? await AppleAnalyst.updateMemory(transcript: lines, existing: memory.notes.map(\.text), summaryLine: line) {
                     notes = n
-                } else if !config.apiKey.isEmpty {
-                    notes = try? await SessionAnalyst.updateMemory(transcript: lines, existing: memory.notes.map(\.text), summaryLine: line, apiKey: config.apiKey, model: model)
+                } else if await OpenAIAccess.isConfigured {
+                    notes = try? await SessionAnalyst.updateMemory(transcript: lines, existing: memory.notes.map(\.text), summaryLine: line, model: model)
                 }
                 if let notes {
                     memory.replace(with: notes)

@@ -27,6 +27,11 @@ struct SessionGoal: Codable, Equatable {
 
     static let free = SessionGoal(kind: .free, target: 0)
 
+    /// Tour d'essai de l'onboarding : 2 minutes chez soi, Jeffrey se présente, on marche quelques pas, mini-bilan.
+    static let trialNote = "tour d'essai"
+    static let trial = SessionGoal(kind: .duration, target: 120, note: trialNote)
+    var isTrial: Bool { note == Self.trialNote }
+
     var label: String {
         switch kind {
         case .duration: return "\(Int(target / 60)) min"
