@@ -84,8 +84,11 @@ final class CoachSession: ObservableObject {
     @Published private(set) var planTitle: String?
     @Published private(set) var planStep: String?
     private var planQueue: [WorkoutBlock] = []
-    private var planTotal = 0
-    private var planIndex = 0
+    private(set) var planTotal = 0
+    private(set) var planIndex = 0
+    /// Durée du bloc de chrono en cours (travail ou récupération), pour la progression affichée.
+    var currentTimerSeconds: Int { timerPhaseIsWork ? timerWorkSeconds : timerRestSeconds }
+
     private var useAppleVoice = false
     private var sentenceBuffer = ""
     private var textResponseBuffer = ""
@@ -750,7 +753,9 @@ final class CoachSession: ObservableObject {
         hrSamples = c.hrSamples
         zoneSeconds = c.zoneSeconds.count == 5 ? c.zoneSeconds : [Int](repeating: 0, count: 5)
         lastKmAnnounced = c.lastKmAnnounced
-        if let p = c.plan { planTitle = p.title; planQueue = p.queue; planTotal = p.total; planIndex = p.index; planStep = "bloc \(p.index)/\(p.total)" }
+        if let p = c.plan {
+            planTitle = p.title; planQueue = p.queue; planTotal = p.total; planIndex = p.index; planStep = "bloc \(p.index)/\(p.total)"
+        }
     }
 
     private func resumeSession(interruptedFor gap: TimeInterval, checkpoint c: SessionCheckpoint) {
@@ -1923,7 +1928,14 @@ final class CoachSession: ObservableObject {
             goalReached = true
             lastCueAt = .distantPast
             celebrate("Objectif atteint", subtitle: "\(goal.label) · \(Formatters.elapsed(elapsed))")
-            cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
+            if let planTitle {
+                // Programme en cours : on félicite sans proposer d'arrêter, sinon Jeffrey dit « on s'arrête ? » puis
+                // « allez, dernière minute de course » trois secondes plus tard (séance du 19/09).
+                let left = planQueue.count + (timerLabel != nil ? 1 : 0)
+                cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite en une phrase, mais le programme « \(planTitle) » continue (encore \(left) bloc\(left > 1 ? "s" : "")) : ne propose pas d'arrêter, on le finit")
+            } else {
+                cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
+            }
         } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues {
             if cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))") { halfwayAnnounced = true }
         }

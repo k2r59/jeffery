@@ -13,25 +13,43 @@ struct WatchSceneView: View {
     private let surface = JeffreyPalette.surface
     private let alerte = JeffreyPalette.alerte
 
+    /// Échelle selon la montre : 1 à partir de 45 mm, un peu moins sur 40/41/42 mm (gabarit dessiné pour 223 pt de haut).
+    private var k: CGFloat { min(1, max(0.82, WKInterfaceDevice.current().screenBounds.height / 223)) }
+    /// Marge basse (bord arrondi de l'écran).
+    private let dotsInset: CGFloat = 6
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             content(now: ctx.date)
         }
-        .ignoresSafeArea(edges: .bottom)
     }
 
     @ViewBuilder
     private func content(now: Date) -> some View {
         switch scene.kind {
-        case .countdown, .interval: countdown(now: now)
-        case .zone: zone
-        case .pace: pace
+        case .countdown, .interval: framed { countdown(now: now) }
+        case .zone: framed { zone }
+        case .pace: framed { pace }
         case .message: message
-        case .climb: climb
-        case .ghost: ghost
+        case .climb: framed { climb }
+        case .ghost: framed { ghost }
         case .celebration: celebration
         }
     }
+
+    /// Grille commune : tout l'écran. Le titre partage la ligne de l'heure système (à gauche, comme l'app Exercice),
+    /// le reste de la hauteur va au visuel et aux infos.
+    private func framed<V: View>(@ViewBuilder _ content: () -> V) -> some View {
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 10)
+            .padding(.horizontal, 2)
+            .padding(.bottom, dotsInset)
+            .ignoresSafeArea(edges: [.horizontal, .top])
+    }
+
+    /// Espace élastique entre les étages d'une scène.
+    private var gap: some View { Spacer(minLength: 4 * k) }
 
     // MARK: Compte à rebours / fractionné
 
@@ -43,24 +61,29 @@ struct WatchSceneView: View {
         let fraction = min(1, max(0, remaining / total))
         let rest = scene.phase == "rest"
         let color: Color = scene.kind == .countdown ? citron : (rest ? sauge : alerte)
-        return VStack(spacing: 2) {
+        // Anneau contenu : le titre au-dessus et la suite en dessous restent lisibles, sans coller à l'anneau.
+        return VStack(spacing: 0) {
             header(scene.title, color: color)
+            gap
             ZStack {
-                Circle().stroke(surface, lineWidth: 10)
+                Circle().stroke(surface, lineWidth: 8)
                 Circle().trim(from: 0, to: fraction)
-                    .stroke(color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 1), value: fraction)
                 VStack(spacing: 0) {
                     Text(remaining >= 60 ? Formatters.elapsed(remaining) : "\(Int(remaining.rounded(.up)))")
-                        .font(.system(size: remaining >= 60 ? 34 : 44, weight: .heavy).monospacedDigit()).foregroundStyle(creme)
-                    Text(remaining >= 60 ? "restantes" : "secondes").font(.system(size: 10, weight: .semibold)).foregroundStyle(sauge)
-                    if let hr = heartRate { Text("\(Int(hr)) bpm").font(.system(size: 11, weight: .bold).monospacedDigit()).foregroundStyle(sauge) }
+                        .font(.system(size: (remaining >= 60 ? 30 : 40) * k, weight: .heavy).monospacedDigit()).foregroundStyle(creme)
+                    Text(remaining >= 60 ? "restantes" : "secondes").font(.system(size: 11 * k, weight: .semibold)).foregroundStyle(sauge)
                 }
             }
-            .frame(width: 118, height: 118)
-            .padding(.vertical, 2)
-            Text(scene.subtitle ?? scene.caption ?? " ").font(.system(size: 10, weight: .semibold)).foregroundStyle(sauge).lineLimit(1)
+            .frame(width: 114 * k, height: 114 * k)
+            gap
+            VStack(spacing: 3) {
+                if let hr = heartRate { Text("\(Int(hr)) bpm").font(.system(size: 15 * k, weight: .bold).monospacedDigit()).foregroundStyle(creme) }
+                Text(scene.subtitle ?? scene.caption ?? " ").font(.system(size: 13 * k, weight: .semibold)).foregroundStyle(sauge)
+                    .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.85)
+            }
         }
     }
 
@@ -75,25 +98,31 @@ struct WatchSceneView: View {
         let pos = min(1, max(0, (hr - gMin) / (gMax - gMin)))
         let inside = hr >= low && hr <= high
         let status = heartRate == nil ? "en attente du cœur" : (inside ? "dans la zone ✓" : (hr < low ? "accélère un peu" : "relâche"))
-        return VStack(spacing: 4) {
+        let size = 124 * k
+        return VStack(spacing: 0) {
             header(scene.title, color: citron)
+            gap
             ZStack {
-                Circle().trim(from: 0.12, to: 0.88).stroke(surface, style: StrokeStyle(lineWidth: 12, lineCap: .round)).rotationEffect(.degrees(90))
-                Circle().trim(from: 0.12 + 0.76 / 3, to: 0.12 + 0.76 * 2 / 3).stroke(citron, lineWidth: 12).rotationEffect(.degrees(90))
-                Circle().trim(from: 0.12 + 0.76 * 2 / 3, to: 0.88).stroke(alerte.opacity(0.7), style: StrokeStyle(lineWidth: 12, lineCap: .round)).rotationEffect(.degrees(90))
+                Circle().trim(from: 0.12, to: 0.88).stroke(surface, style: StrokeStyle(lineWidth: 10, lineCap: .round)).rotationEffect(.degrees(90))
+                Circle().trim(from: 0.12 + 0.76 / 3, to: 0.12 + 0.76 * 2 / 3).stroke(citron, lineWidth: 10).rotationEffect(.degrees(90))
+                Circle().trim(from: 0.12 + 0.76 * 2 / 3, to: 0.88).stroke(alerte.opacity(0.7), style: StrokeStyle(lineWidth: 10, lineCap: .round)).rotationEffect(.degrees(90))
                 if heartRate != nil {
-                    Circle().fill(creme).frame(width: 14, height: 14).overlay(Circle().stroke(Color.black, lineWidth: 3))
-                        .offset(y: -59)
+                    Circle().fill(creme).frame(width: 13, height: 13).overlay(Circle().stroke(Color.black, lineWidth: 3))
+                        .offset(y: -size / 2)
                         .rotationEffect(.degrees(-137 + 274 * pos))
                         .animation(.easeInOut(duration: 0.8), value: pos)
                 }
                 VStack(spacing: 0) {
-                    Text(heartRate.map { "\(Int($0))" } ?? "--").font(.system(size: 40, weight: .heavy).monospacedDigit()).foregroundStyle(creme)
-                    Text(status).font(.system(size: 10, weight: .bold)).foregroundStyle(inside ? citron : (hr > high ? alerte : sauge))
+                    Text(heartRate.map { "\(Int($0))" } ?? "--").font(.system(size: 36 * k, weight: .heavy).monospacedDigit()).foregroundStyle(creme)
+                    Text("bpm").font(.system(size: 10 * k, weight: .semibold)).foregroundStyle(sauge)
                 }
             }
-            .frame(width: 124, height: 124)
-            Text(scene.subtitle ?? "").font(.system(size: 10, weight: .semibold)).foregroundStyle(sauge)
+            .frame(width: size, height: size)
+            gap
+            VStack(spacing: 3) {
+                Text(status).font(.system(size: 14 * k, weight: .bold)).foregroundStyle(inside ? citron : (hr > high ? alerte : creme))
+                Text(scene.subtitle ?? "").font(.system(size: 12 * k, weight: .semibold)).foregroundStyle(sauge)
+            }
         }
     }
 
@@ -111,10 +140,15 @@ struct WatchSceneView: View {
         }()
         let ok = delta.map { abs($0) <= (high - low) / 2 } ?? false
         let pos = current.map { min(1, max(0, ($0 - (target - 90)) / 180)) } ?? 0.5
-        return VStack(spacing: 6) {
+        return VStack(spacing: 0) {
             header(scene.title, color: citron)
-            Text(current.map(fmtPace) ?? "--:--").font(.system(size: 46, weight: .heavy).monospacedDigit()).foregroundStyle(creme)
-            Text(status).font(.system(size: 11, weight: .bold)).foregroundStyle(ok ? citron : (delta.map { $0 < 0 } ?? false ? alerte : sauge))
+            gap
+            VStack(spacing: 0) {
+                Text(current.map(fmtPace) ?? "--:--").font(.system(size: 44 * k, weight: .heavy).monospacedDigit()).foregroundStyle(creme)
+                Text("min/km").font(.system(size: 10 * k, weight: .semibold)).foregroundStyle(sauge)
+            }
+            Text(status).font(.system(size: 14 * k, weight: .bold)).foregroundStyle(ok ? citron : (delta.map { $0 < 0 } ?? false ? alerte : creme))
+            gap
             GeometryReader { geo in
                 let w = geo.size.width
                 ZStack(alignment: .leading) {
@@ -127,9 +161,13 @@ struct WatchSceneView: View {
                     }
                 }
             }
-            .frame(height: 14).padding(.horizontal, 12)
-            Text("vite ← min/km → lent").font(.system(size: 9, weight: .semibold)).foregroundStyle(sauge)
-            if let hr = heartRate { Text("\(Int(hr)) bpm").font(.system(size: 11, weight: .bold).monospacedDigit()).foregroundStyle(sauge) }
+            .frame(height: 14).padding(.horizontal, 14)
+            gap
+            HStack(spacing: 8) {
+                Text("vite ←").font(.system(size: 10 * k, weight: .semibold)).foregroundStyle(sauge)
+                if let hr = heartRate { Text("\(Int(hr)) bpm").font(.system(size: 13 * k, weight: .bold).monospacedDigit()).foregroundStyle(creme) }
+                Text("→ lent").font(.system(size: 10 * k, weight: .semibold)).foregroundStyle(sauge)
+            }
         }
     }
 
@@ -138,32 +176,40 @@ struct WatchSceneView: View {
     private var message: some View {
         ZStack {
             citron.ignoresSafeArea()
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 HStack(spacing: 6) {
                     JeffreyVoiceView(speaking: true, size: 18, color: Color.black.opacity(0.75))
-                    Text("JEFFREY").font(.system(size: 10, weight: .heavy)).foregroundStyle(Color.black.opacity(0.6))
+                    Text("JEFFREY").font(.system(size: 12, weight: .heavy)).foregroundStyle(Color.black.opacity(0.6)).tracking(1.2)
                 }
-                Text(scene.subtitle ?? "").font(.system(size: 17, weight: .heavy)).foregroundStyle(Color.black)
+                Text(scene.subtitle ?? "").font(.system(size: 19 * k, weight: .heavy)).foregroundStyle(Color.black)
                     .multilineTextAlignment(.center).minimumScaleFactor(0.7)
             }
             .padding(.horizontal, 10)
+            .padding(.bottom, dotsInset)
         }
     }
 
     // MARK: Montée
 
     private var climb: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 0) {
             header(scene.title, color: citron)
+            gap
             ZStack(alignment: .bottomLeading) {
                 ClimbShape(grade: scene.value ?? 5).stroke(surface, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 ClimbShape(grade: scene.value ?? 5).trim(from: 0, to: 0.55).stroke(citron, style: StrokeStyle(lineWidth: 8, lineCap: .round))
             }
-            .frame(height: 54).padding(.horizontal, 14)
-            Text(String(format: "%.0f", scene.progress ?? 0) + " m").font(.system(size: 30, weight: .heavy).monospacedDigit()).foregroundStyle(creme)
-            Text(scene.subtitle ?? "D+").font(.system(size: 10, weight: .semibold)).foregroundStyle(sauge)
-            if let hr = heartRate { Text("\(Int(hr)) bpm").font(.system(size: 11, weight: .bold).monospacedDigit()).foregroundStyle(sauge) }
-            if let c = scene.caption { Text(c).font(.system(size: 10, weight: .medium)).foregroundStyle(creme).lineLimit(2).multilineTextAlignment(.center) }
+            .frame(height: 48 * k).padding(.horizontal, 18)
+            gap
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(String(format: "%.0f", scene.progress ?? 0) + " m").font(.system(size: 30 * k, weight: .heavy).monospacedDigit()).foregroundStyle(creme)
+                if let hr = heartRate { Text("\(Int(hr)) bpm").font(.system(size: 14 * k, weight: .bold).monospacedDigit()).foregroundStyle(sauge) }
+            }
+            gap
+            VStack(spacing: 3) {
+                Text(scene.subtitle ?? "D+").font(.system(size: 12 * k, weight: .semibold)).foregroundStyle(sauge)
+                if let c = scene.caption { Text(c).font(.system(size: 12 * k, weight: .medium)).foregroundStyle(creme).lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.85) }
+            }
         }
     }
 
@@ -172,10 +218,14 @@ struct WatchSceneView: View {
     private var ghost: some View {
         let d = scene.value ?? 0
         let ahead = d >= 0
-        return VStack(spacing: 6) {
+        return VStack(spacing: 0) {
             header(scene.title, color: citron)
-            Text("\(ahead ? "+" : "−")\(Int(abs(d).rounded())) s").font(.system(size: 44, weight: .heavy).monospacedDigit()).foregroundStyle(ahead ? citron : alerte)
-            Text(ahead ? "d'avance" : "de retard").font(.system(size: 12, weight: .bold)).foregroundStyle(creme)
+            gap
+            VStack(spacing: 0) {
+                Text("\(ahead ? "+" : "−")\(Int(abs(d).rounded())) s").font(.system(size: 44 * k, weight: .heavy).monospacedDigit()).foregroundStyle(ahead ? citron : alerte)
+                Text(ahead ? "d'avance" : "de retard").font(.system(size: 14 * k, weight: .bold)).foregroundStyle(creme)
+            }
+            gap
             GeometryReader { geo in
                 let w = geo.size.width
                 let p = CGFloat(min(1, max(0, scene.progress ?? 0)))
@@ -185,8 +235,12 @@ struct WatchSceneView: View {
                     Rectangle().fill(sauge).frame(width: 3, height: 14).offset(x: w * p - 3, y: -3)
                 }
             }
-            .frame(height: 14).padding(.horizontal, 12)
-            Text(scene.subtitle ?? "").font(.system(size: 10, weight: .semibold)).foregroundStyle(sauge)
+            .frame(height: 14).padding(.horizontal, 14)
+            gap
+            VStack(spacing: 3) {
+                Text(scene.subtitle ?? "").font(.system(size: 12 * k, weight: .semibold)).foregroundStyle(sauge)
+                if let hr = heartRate { Text("\(Int(hr)) bpm").font(.system(size: 13 * k, weight: .bold).monospacedDigit()).foregroundStyle(creme) }
+            }
         }
     }
 
@@ -195,20 +249,26 @@ struct WatchSceneView: View {
     private var celebration: some View {
         ZStack {
             RadialGradient(colors: [citron.opacity(0.45), Color.black], center: .init(x: 0.5, y: 0.35), startRadius: 10, endRadius: 150).ignoresSafeArea()
-            VStack(spacing: 6) {
-                Text(scene.title.uppercased()).font(.system(size: 10, weight: .heavy)).foregroundStyle(citron).tracking(1.5)
-                JIcon("arrivee", size: 34).foregroundStyle(citron)
-                Text(scene.subtitle ?? "").font(.system(size: 18, weight: .heavy)).foregroundStyle(creme).multilineTextAlignment(.center).minimumScaleFactor(0.7)
-                Text(Formatters.elapsed(elapsed)).font(.system(size: 12, weight: .bold).monospacedDigit()).foregroundStyle(sauge)
+            VStack(spacing: 8) {
+                Text(scene.title.uppercased()).font(.system(size: 12, weight: .heavy)).foregroundStyle(citron).tracking(1.5)
+                JIcon("arrivee", size: 34 * k).foregroundStyle(citron)
+                Text(scene.subtitle ?? "").font(.system(size: 20 * k, weight: .heavy)).foregroundStyle(creme).multilineTextAlignment(.center).minimumScaleFactor(0.7)
+                Text(Formatters.elapsed(elapsed)).font(.system(size: 14, weight: .bold).monospacedDigit()).foregroundStyle(sauge)
             }
             .padding(.horizontal, 8)
+            .padding(.bottom, dotsInset)
         }
     }
 
     // MARK: Helpers
 
+    /// Titre à gauche, à hauteur de l'heure système ; place réservée à droite pour l'heure.
     private func header(_ text: String, color: Color) -> some View {
-        Text(text.uppercased()).font(.system(size: 10, weight: .heavy)).foregroundStyle(color).tracking(1.2).lineLimit(1).minimumScaleFactor(0.8)
+        Text(text.uppercased()).font(.system(size: 13 * k, weight: .heavy)).foregroundStyle(color).tracking(1.2).lineLimit(1).minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 14)
+            .padding(.trailing, 62)
+            .frame(height: 24)
     }
 
     private func fmtPace(_ secPerKm: Double) -> String {
@@ -287,16 +347,19 @@ struct WatchStatsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("STATS").font(.system(size: 10, weight: .heavy)).foregroundStyle(sauge).tracking(1.2)
-                    Spacer()
-                    Text(Formatters.elapsed(elapsed)).font(.system(size: 11, weight: .bold).monospacedDigit()).foregroundStyle(creme)
+                // En-tête sur la ligne de l'heure système.
+                HStack(spacing: 8) {
+                    Text("STATS").font(.system(size: 12, weight: .heavy)).foregroundStyle(sauge).tracking(1.2)
+                    Text(Formatters.elapsed(elapsed)).font(.system(size: 13, weight: .bold).monospacedDigit()).foregroundStyle(creme)
                 }
+                .frame(height: 24).padding(.trailing, 62).padding(.top, 10)
                 if let z = mirror.zoneSeconds, z.reduce(0, +) > 0 { zones(z) }
                 statGrid
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 6)
         }
+        .ignoresSafeArea(edges: .top)
     }
 
     private func zones(_ z: [Int]) -> some View {

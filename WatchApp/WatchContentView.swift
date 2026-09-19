@@ -6,6 +6,9 @@ struct WatchContentView: View {
     @ObservedObject private var mirror = WatchMirror.shared
     @State private var page = 1
     @State private var sending = false
+    @State private var sceneReturnTask: Task<Void, Never>?
+    /// Identifiant du chrono pour lequel le décompte final a déjà repris l'écran.
+    @State private var finalCountdownShownFor: String?
 
     private let citron = JeffreyPalette.citron
     private let creme = JeffreyPalette.creme
@@ -24,22 +27,45 @@ struct WatchContentView: View {
                 statsPage.tag(2)
                 if let scene { scenePage(scene).tag(3) }
             }
-            .tabViewStyle(.page)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            // En séance, tout l'écran pour Jeffrey : ni l'heure système ni les points de pagination.
+            .persistentSystemOverlays(.hidden)
             .onAppear {
-                page = scene == nil ? 1 : 3
+                if let scene { showScene(scene) } else { page = 1 }
                 #if DEBUG
                 if let p = ProcessInfo.processInfo.environment["WATCHCOACH_PAGE"], let i = Int(p) { page = i }
                 #endif
             }
             // Jeffrey choisit l'écran : une scène qui apparaît prend la main, sa disparition ramène au direct.
-            .onChange(of: scene?.id) { _, id in
-                withAnimation { page = id == nil ? 1 : 3 }
+            .onChange(of: scene?.id) { _, _ in
+                if let scene { showScene(scene) } else { sceneReturnTask?.cancel(); withAnimation { page = 1 } }
+            }
+            .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now in
+                // Dernières secondes d'un chrono : le décompte revient pour le 3-2-1, une fois par bloc.
+                guard let scene, scene.kind == .countdown || scene.kind == .interval, let end = scene.endsAt,
+                      page != 3, finalCountdownShownFor != scene.id else { return }
+                let left = end.timeIntervalSince(now)
+                if left > 0, left <= 10 { finalCountdownShownFor = scene.id; withAnimation { page = 3 } }
             }
             .onChange(of: mirror.state) { _, m in
                 SceneHaptics.shared.observe(m.scene, heartRate: workout.snapshot.heartRate ?? m.heartRate)
             }
         } else {
             startPage
+        }
+    }
+
+    /// Une scène prend l'écran. Un chrono ne le garde pas : un coup d'œil à son lancement, puis retour au direct
+    /// (FC, distance, allure, avec le chrono en carte), sinon on est coupé des mesures pendant tout un programme.
+    private func showScene(_ scene: WatchScene) {
+        sceneReturnTask?.cancel()
+        withAnimation { page = 3 }
+        guard scene.kind == .countdown || scene.kind == .interval else { return }
+        let id = scene.id
+        sceneReturnTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            guard !Task.isCancelled, self.scene?.id == id, page == 3 else { return }
+            withAnimation { page = 1 }
         }
     }
 
@@ -114,24 +140,24 @@ struct WatchContentView: View {
         let s = workout.snapshot
         let hr = s.heartRate ?? m.heartRate
         return ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
+                // En-tête sur la ligne de l'heure système (place réservée à droite pour l'heure).
                 HStack(spacing: 6) {
-                    JeffreyVoiceView(speaking: m.coachSpeaking, size: 22)
-                    Text(stateLabel(m)).font(.system(size: 10, weight: .heavy)).foregroundStyle(m.coachSpeaking || m.userSpeaking ? citron : sauge)
-                    Spacer()
-                    Text(m.kind.label.uppercased()).font(.system(size: 9, weight: .heavy)).foregroundStyle(sauge)
+                    JeffreyVoiceView(speaking: m.coachSpeaking, size: 20)
+                    Text(stateLabel(m)).font(.system(size: 12, weight: .heavy)).foregroundStyle(m.coachSpeaking || m.userSpeaking ? citron : sauge).lineLimit(1).minimumScaleFactor(0.7)
                 }
+                .frame(height: 24).padding(.trailing, 62).padding(.top, 10)
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(Formatters.elapsed(liveElapsed(m, at: context.date)))
-                        .font(.system(size: 34, weight: .black, design: .default).monospacedDigit())
+                        .font(.system(size: 40, weight: .black, design: .default).monospacedDigit())
                         .foregroundStyle(m.paused ? sauge : creme)
                 }
                 if let g = m.goalLabel {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
-                            Text("Objectif · \(g)").font(.system(size: 10, weight: .bold)).foregroundStyle(creme)
+                            Text("Objectif · \(g)").font(.system(size: 12, weight: .bold)).foregroundStyle(creme)
                             Spacer()
-                            Text(m.goalReached ? "Atteint ✓" : (m.remaining ?? "")).font(.system(size: 10, weight: .semibold).monospacedDigit())
+                            Text(m.goalReached ? "Atteint ✓" : (m.remaining ?? "")).font(.system(size: 12, weight: .semibold).monospacedDigit())
                                 .foregroundStyle(m.goalReached ? citron : sauge)
                         }
                         GeometryReader { geo in
@@ -152,26 +178,28 @@ struct WatchContentView: View {
                 }
                 if let tl = m.timerLabel, let te = m.timerEndsAt {
                     HStack {
-                        Text(tl.capitalized).font(.system(size: 11, weight: .bold)).foregroundStyle(creme)
+                        Text(tl.capitalized).font(.system(size: 13, weight: .bold)).foregroundStyle(creme).lineLimit(1).minimumScaleFactor(0.8)
                         Spacer()
-                        Text(Formatters.elapsed(max(0, te.timeIntervalSinceNow))).font(.system(size: 20, weight: .black, design: .default).monospacedDigit()).foregroundStyle(citron)
+                        Text(Formatters.elapsed(max(0, te.timeIntervalSinceNow))).font(.system(size: 22, weight: .black, design: .default).monospacedDigit()).foregroundStyle(citron)
                     }
                     .padding(8).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(citron.opacity(0.15)))
                 }
                 if m.phase == "foreground" {
-                    Text("Ouvre Jeffrey sur l'iPhone pour lancer la voix").font(.system(size: 10, weight: .bold)).foregroundStyle(citron)
+                    Text("Ouvre Jeffrey sur l'iPhone pour lancer la voix").font(.system(size: 12, weight: .bold)).foregroundStyle(citron)
                 } else if let line = m.lastLine {
-                    Text(line).font(.system(size: 11, weight: .medium)).foregroundStyle(creme).lineLimit(3)
+                    Text(line).font(.system(size: 13, weight: .medium)).foregroundStyle(creme).lineLimit(4)
                         .padding(8).frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(surface))
                 }
                 if workout.needsBackgroundExtension {
                     Button("Prolonger l'arrière-plan") { workout.extendBackground() }.tint(citron).font(.system(size: 11, weight: .bold))
                 }
-                Text("← pause et fin · stats →").font(.system(size: 9)).foregroundStyle(sauge.opacity(0.7))
+                Text("← pause et fin · stats →").font(.system(size: 10)).foregroundStyle(sauge.opacity(0.7)).frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 6)
         }
+        .ignoresSafeArea(edges: .top)
     }
 
     /// Plus de nouvelles de l'iPhone depuis 2 min alors qu'il était en séance : l'app s'est arrêtée ou il est hors de portée.
@@ -199,9 +227,9 @@ struct WatchContentView: View {
 
     private func metric(_ icon: String, _ value: String, _ unit: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            JIcon(icon, size: 11).foregroundStyle(sauge)
-            Text(value).font(.system(size: 17, weight: .black, design: .default).monospacedDigit()).foregroundStyle(creme)
-            Text(unit).font(.system(size: 9, weight: .bold)).foregroundStyle(sauge)
+            JIcon(icon, size: 12).foregroundStyle(sauge)
+            Text(value).font(.system(size: 24, weight: .black, design: .default).monospacedDigit()).foregroundStyle(creme)
+            Text(unit).font(.system(size: 11, weight: .bold)).foregroundStyle(sauge)
         }
     }
 
@@ -228,9 +256,10 @@ struct WatchContentView: View {
                 }
             }
             Text(mirror.phoneReachable ? "Commandes envoyées à l'iPhone" : "iPhone hors de portée")
-                .font(.system(size: 10, weight: .medium)).foregroundStyle(sauge)
+                .font(.system(size: 11, weight: .medium)).foregroundStyle(sauge).multilineTextAlignment(.center)
         }
         .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func controlButton(_ icon: String, _ title: String, _ color: Color, action: @escaping () -> Void) -> some View {

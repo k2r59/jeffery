@@ -12,6 +12,18 @@ enum WorkoutKind: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Pictogramme du pack Jeffrey (`JIcon`).
+    var iconName: String {
+        switch self {
+        case .running: return "course"
+        case .walking: return "marche"
+        case .cycling: return "velo"
+        case .hiking: return "randonnee"
+        case .functionalStrength, .hiit: return "renforcement"
+        case .other: return "libre"
+        }
+    }
+
     var label: String {
         switch self {
         case .running: return "Course"
