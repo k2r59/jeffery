@@ -63,7 +63,7 @@ struct JeffreyLiveActivity: Widget {
             if let d = s.distanceMeters { Text(String(format: "%.2f km", d / 1000)).foregroundStyle(creme) }
             if let r = s.remaining { Text(r).foregroundStyle(sauge) }
             Spacer()
-            Text(stateLabel(s.coachState)).foregroundStyle(citron)
+            Text(context.isStale ? "Jeffrey ne répond plus" : stateLabel(s.coachState)).foregroundStyle(context.isStale ? sauge : citron)
         }
         .font(.system(size: 12, weight: .bold).monospacedDigit())
     }
@@ -98,7 +98,7 @@ struct LockView: View {
                     if let tl = s.timerLabel, let te = s.timerEndsAt {
                         VStack(alignment: .trailing, spacing: 0) {
                             Text(tl).font(.system(size: 9, weight: .bold)).foregroundStyle(sauge)
-                            Text(timerInterval: Date()...te, countsDown: true).font(.system(size: 14, weight: .black).monospacedDigit()).foregroundStyle(citron)
+                            countdown(to: te).font(.system(size: 14, weight: .black).monospacedDigit()).foregroundStyle(citron)
                         }
                     } else if let r = s.remaining {
                         Text(r).font(.system(size: 11, weight: .semibold)).foregroundStyle(sauge)
@@ -137,7 +137,7 @@ struct LockView: View {
                         Image(systemName: "timer").foregroundStyle(citron)
                         Text(tl.capitalized).font(.system(size: 12, weight: .bold)).foregroundStyle(creme)
                         Spacer()
-                        Text(timerInterval: Date()...te, countsDown: true).font(.system(size: 18, weight: .black).monospacedDigit()).foregroundStyle(citron)
+                        countdown(to: te).font(.system(size: 18, weight: .black).monospacedDigit()).foregroundStyle(citron)
                     }
                 }
                 if let line = s.lastLine {
@@ -145,6 +145,17 @@ struct LockView: View {
                 }
             }
             .padding(14)
+        }
+    }
+
+    /// Compte à rebours du chrono ; échu (app arrêtée, bloc sonné), on affiche 0:00 plutôt qu'un intervalle
+    /// inversé, qui fait planter l'extension (plantages du 19/09).
+    @ViewBuilder
+    private func countdown(to end: Date) -> some View {
+        if end > Date() {
+            Text(timerInterval: Date()...end, countsDown: true)
+        } else {
+            Text("0:00")
         }
     }
 

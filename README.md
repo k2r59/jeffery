@@ -36,6 +36,11 @@ Projet personnel, installé hors App Store en signature de développement.
   7 sports × 3 niveaux), et déroule celle qu'on choisit bloc par bloc avec le chronomètre. Tout à l'oral, rien à valider
   sur le téléphone ; la carte chrono (iPhone, montre, écran verrouillé) montre le bloc en cours et sa position.
 - La montre est obligatoire : sans montre joignable, pas de départ ; montre perdue plus de deux minutes, séance arrêtée.
+- L'app meurt en route (plantage, mémoire, arrêt par iOS) ? Un point de reprise est réécrit sur disque à chaque événement
+  et au moins toutes les 15 s (`Documents/seance-en-cours.json`) : au lancement suivant, Jeffrey reprend là où il en était
+  (objectif, chrono avec le temps qui reste, programme, dernières répliques, tracé GPS, compteurs marche/course) et dit
+  simplement qu'il est de retour. Passé 30 min, la séance est close proprement avec bilan. La Live Activity et la montre
+  signalent d'elles-mêmes un iPhone qui ne donne plus de nouvelles depuis 2 min (« Jeffrey ne répond plus »).
 - Parcours de référence : rejouer une sortie précédente avec le relief à venir et un « fantôme » (avance ou retard).
 - Musique : elle continue, s'atténue quand Jeffrey parle, et sa voix passe au-dessus.
 
@@ -131,6 +136,8 @@ Prérequis : Xcode 27, iPhone sous iOS 27 avec Apple Watch, compte développeur 
 
 - `Shared/` : modèles communs (métriques, commandes, état miroir, zones FC, symbole et logo Jeffrey).
 - `iOS/CoachSession.swift` : orchestration de la séance (Realtime, métriques, événements, objectif, miroir montre, bilan).
+- `iOS/SessionCheckpoint.swift` : point de reprise de la séance en cours (reprise après une mort de l'app).
+- `iOS/ObjC/` : rattrapage des exceptions Objective-C des frameworks Apple (audio), exposé via le bridging header.
 - `iOS/RealtimeClient.swift`, `iOS/AudioPipeline.swift` : WebSocket Realtime, capture micro et lecture, atténuation musique.
 - `iOS/ActivityMonitor.swift`, `iOS/RouteRecorder.swift`, `iOS/ReferenceRoute.swift` : mouvement, baromètre, GPS, parcours de référence.
 - `iOS/SessionAnalyst.swift`, `iOS/AppleAnalyst.swift`, `iOS/JeffreyMemory.swift`, `iOS/SessionLog.swift` : bilan, mémoire, journal.
@@ -140,9 +147,10 @@ Prérequis : Xcode 27, iPhone sous iOS 27 avec Apple Watch, compte développeur 
 
 ## Journal de séance
 
-À la fin de chaque séance, l'app écrit `derniere-seance.txt` dans ses Documents (visible dans Fichiers > Sur mon iPhone > Jeffrey) :
-tout ce que Jeffrey a dit et entendu, horodaté, plus les événements internes (chrono, changement d'objectif, montre, GPS).
-C'est le premier réflexe quand une séance s'est mal passée. `sessions.json`, au même endroit, garde l'historique et les bilans.
+Pendant et à la fin de chaque séance, l'app écrit `derniere-seance.txt` dans ses Documents (visible dans Fichiers > Sur mon iPhone > Jeffrey) :
+tout ce que Jeffrey a dit et entendu, horodaté, plus les événements internes (chrono, changement d'objectif, montre, GPS, reprise).
+Il est réécrit en continu, donc présent même si l'app est morte en route. C'est le premier réflexe quand une séance s'est mal passée ;
+le second, les rapports de plantage du téléphone (`pymobiledevice3 crash pull` avec l'iPhone branché, ou Réglages › Confidentialité › Analyse). `sessions.json`, au même endroit, garde l'historique et les bilans.
 
 ## Tests
 
@@ -153,7 +161,8 @@ C'est le premier réflexe quand une séance s'est mal passée. `sessions.json`, 
   (via `SIMCTL_CHILD_…` avec `simctl launch`). La montre factice envoie une FC réaliste et de la distance, le coach factice
   répond, déclenche le chrono et débriefe ; le journal et `sessions.json` en sortent comme en vrai.
   `WATCHCOACH_NO_HEALTH=1` évite HealthKit, `WATCHCOACH_RESET=1` repart d'une app vierge, `WATCHCOACH_NO_SPLASH=1` saute
-  l'écran de lancement. Sur le simulateur montre : `WATCHCOACH_SCENE=countdown|interval|zone|pace|message|climb|ghost|celebration|stats`
+  l'écran de lancement. Reprise après une mort de l'app : lancer la séance simulée, `simctl terminate` en cours de route,
+  relancer sans `WATCHCOACH_AUTOSTART` (avec `WATCHCOACH_STOP_AFTER` pour la clôture) : le journal montre la ligne « Reprise ». Sur le simulateur montre : `WATCHCOACH_SCENE=countdown|interval|zone|pace|message|climb|ghost|celebration|stats`
   affiche une scène avec un miroir factice, `WATCHCOACH_PAGE=0..3` choisit la page.
 - Commande : `xcodebuild -scheme WatchCoach -destination 'id=<simulateur>' test`. Séance simulée clé en main : `Tests/Scripts/sim-session.sh`.
 

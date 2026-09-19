@@ -138,6 +138,14 @@ final class ActivityMonitor: ObservableObject {
         }
     }
 
+    /// Reprise après une mort de l'app : on repart des compteurs sauvegardés (à appeler après `start()`).
+    func restore(walking: TimeInterval, running: TimeInterval, stationary: TimeInterval, climbing: TimeInterval, ascent: Double, descent: Double) {
+        secondsByActivity = [.walking: walking, .running: running, .stationary: stationary].filter { $0.value > 0 }
+        secondsClimbing = climbing
+        self.ascent = ascent
+        self.descent = descent
+    }
+
     func stop() {
         motion.stopActivityUpdates()
         pedometer.stopUpdates()

@@ -145,3 +145,42 @@ final class WorkoutLibraryTests: XCTestCase {
         XCTAssertEqual(w.toolPayload["minutes"] as? Int, Int((Double(w.totalSeconds) / 60).rounded()))
     }
 }
+
+final class SessionCheckpointTests: XCTestCase {
+    private func sample(savedAt: Date) -> SessionCheckpoint {
+        SessionCheckpoint(
+            kind: .running, mode: .companion, goal: SessionGoal(kind: .duration, target: 1500, note: "test"),
+            goalReached: false, halfwayAnnounced: true, startedAt: savedAt.addingTimeInterval(-420), savedAt: savedAt,
+            transcript: [.init(role: "coach", text: "Salut Hervé.", at: savedAt.addingTimeInterval(-400)),
+                         .init(role: "user", text: "On y va.", at: savedAt.addingTimeInterval(-390))],
+            hrSamples: [120, 130, 140], zoneSeconds: [10, 20, 30, 0, 0], lastKmAnnounced: 1,
+            timer: .init(label: "échauffement 1/3", baseLabel: "échauffement", index: 1, endsAt: savedAt.addingTimeInterval(60),
+                         workSeconds: 300, restSeconds: 0, repeatsLeft: 1, phaseIsWork: true),
+            plan: .init(title: "Reprise douce", queue: [WorkoutBlock(label: "footing", seconds: 600)], total: 3, index: 1),
+            routeID: "2026-09-19T09-10-00Z", walkingSeconds: 30, runningSeconds: 380, stationarySeconds: 10, climbingSeconds: 45,
+            ascent: 12, descent: 3)
+    }
+
+    func testRoundTripThroughDisk() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("checkpoint-\(UUID().uuidString).json")
+        defer { SessionCheckpoint.clear(at: url) }
+        let original = sample(savedAt: Date())
+        original.save(to: url)
+        let back = SessionCheckpoint.load(from: url)
+        XCTAssertNotNil(back)
+        XCTAssertEqual(back?.kind, .running)
+        XCTAssertEqual(back?.goal.target, 1500)
+        XCTAssertEqual(back?.transcript.count, 2)
+        XCTAssertEqual(back?.timer?.label, "échauffement 1/3")
+        XCTAssertEqual(back?.plan?.queue.first?.label, "footing")
+        XCTAssertEqual(back?.hrSamples, [120, 130, 140])
+        XCTAssertEqual(back?.routeID, "2026-09-19T09-10-00Z")
+        SessionCheckpoint.clear(at: url)
+        XCTAssertNil(SessionCheckpoint.load(from: url))
+    }
+
+    func testResumableOnlyWhenRecent() {
+        XCTAssertTrue(sample(savedAt: Date().addingTimeInterval(-5 * 60)).isResumable)
+        XCTAssertFalse(sample(savedAt: Date().addingTimeInterval(-45 * 60)).isResumable)
+    }
+}

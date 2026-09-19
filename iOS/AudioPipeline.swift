@@ -68,6 +68,7 @@ final class AudioPipeline {
     private let playback = PCMPlaybackQueue()
     private var observers: [NSObjectProtocol] = []
     private(set) var isRunning = false
+    private var restartTask: DispatchWorkItem?
 
     private let captureFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 24_000, channels: 1, interleaved: true)!
     private let playbackFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
@@ -93,6 +94,7 @@ final class AudioPipeline {
 
     func stop() {
         isRunning = false
+        restartTask?.cancel(); restartTask = nil
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers.removeAll()
         engine.inputNode.removeTap(onBus: 0)
@@ -190,6 +192,15 @@ final class AudioPipeline {
         }
     }
 
+    /// Exception Objective-C d'AVFAudio (format de tap qui ne colle plus au matériel après un changement de route,
+    /// moteur pas prêt) rendue comme une erreur Swift au lieu d'un abort de l'app.
+    private func guarded(_ what: String, _ block: () -> Void) throws {
+        do { try ObjCExceptionCatcher.run(block) } catch {
+            throw NSError(domain: "AudioPipeline", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "\(what) : \(error.localizedDescription)"])
+        }
+    }
+
     private func startEngine() throws {
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
@@ -199,8 +210,11 @@ final class AudioPipeline {
         }
         converter = AVAudioConverter(from: inputFormat, to: captureFormat)
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
-            self?.handleCaptured(buffer)
+        // Format nil : le tap prend le format courant du nœud, jamais un format lu avant un changement de route
+        // (le convertisseur suit dans handleCaptured si le format des trames diffère). Variante iOS 27 qui
+        // renvoie une erreur au lieu de lever une exception (plantage du 19/09 sur un changement d'écouteurs).
+        try input.installAudioTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, _ in
+            self?.handleCaptured(AVAudioPCMBuffer(copying: buffer))
         }
 
         if sourceNode == nil {
@@ -212,15 +226,46 @@ final class AudioPipeline {
                 return noErr
             }
             engine.attach(node)
-            engine.connect(node, to: engine.mainMixerNode, format: playbackFormat)
+            try engine.connectNode(node, to: engine.mainMixerNode, format: playbackFormat)
             sourceNode = node
         }
         engine.prepare()
-        try engine.start()
+        var startError: Error?
+        try guarded("démarrage du moteur audio") {
+            do { try engine.start() } catch { startError = error }
+        }
+        if let startError { throw startError }
+    }
+
+    /// Après un changement de route ou une remise à zéro du serveur audio : le matériel met un instant à se
+    /// stabiliser, on relance un peu plus tard et on réessaie deux fois avant d'abandonner (l'app survit dans tous les cas).
+    private func scheduleRestart(rebuildSession: Bool, attempt: Int = 0) {
+        restartTask?.cancel()
+        let task = DispatchWorkItem { [weak self] in
+            guard let self, self.isRunning else { return }
+            do {
+                if rebuildSession { try self.configureSession() }
+                try self.startEngine()
+                let name = AVAudioSession.sharedInstance().currentRoute.inputs.first?.portName ?? "micro"
+                self.onRouteChanged?(name)
+            } catch {
+                if attempt < 2 {
+                    self.scheduleRestart(rebuildSession: rebuildSession, attempt: attempt + 1)
+                } else {
+                    self.onRouteChanged?("erreur audio : \(error.localizedDescription)")
+                }
+            }
+        }
+        restartTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? 0.3 : 0.8), execute: task)
     }
 
     private func handleCaptured(_ buffer: AVAudioPCMBuffer) {
-        guard let converter, buffer.frameLength > 0 else { return }
+        guard buffer.frameLength > 0 else { return }
+        if converter == nil || converter?.inputFormat != buffer.format {
+            converter = AVAudioConverter(from: buffer.format, to: captureFormat)
+        }
+        guard let converter else { return }
         let ratio = captureFormat.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
         guard let out = AVAudioPCMBuffer(pcmFormat: captureFormat, frameCapacity: capacity) else { return }
@@ -261,8 +306,7 @@ final class AudioPipeline {
             self.engine.inputNode.removeTap(onBus: 0)
             if let node = self.sourceNode { self.engine.detach(node) }
             self.sourceNode = nil
-            try? self.configureSession()
-            try? self.startEngine()
+            self.scheduleRestart(rebuildSession: true)
         })
         observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
             guard let self, let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -277,16 +321,10 @@ final class AudioPipeline {
             guard let self, self.isRunning, let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
                   let reason = AVAudioSession.RouteChangeReason(rawValue: raw) else { return }
             guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable || (reason == .categoryChange && !self.internalCategoryChange) else { return }
-            // Le format d'entrée change avec la route (AirPods ↔ micro interne) : on réinstalle la capture.
+            // Le format d'entrée change avec la route (AirPods ↔ micro interne) : on réinstalle la capture, un
+            // instant plus tard, le temps que le matériel se stabilise (plantage du 19/09 : tap installé trop tôt).
             self.engine.stop()
-            do {
-                try self.startEngine()
-                let route = AVAudioSession.sharedInstance().currentRoute
-                let name = route.inputs.first?.portName ?? "micro"
-                self.onRouteChanged?(name)
-            } catch {
-                self.onRouteChanged?("erreur audio : \(error.localizedDescription)")
-            }
+            self.scheduleRestart(rebuildSession: false)
         })
     }
 }

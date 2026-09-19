@@ -31,6 +31,13 @@ struct LocalRoute: Codable, Identifiable {
         return dir
     }
 
+    static func load(id: String) -> LocalRoute? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: directory.appendingPathComponent("\(id).json")) else { return nil }
+        return try? decoder.decode(LocalRoute.self, from: data)
+    }
+
     static func loadAll() -> [LocalRoute] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -73,6 +80,8 @@ final class RouteRecorder: NSObject, ObservableObject {
     private var lastSaveAt: Date = .distantPast
 
     var isRecording: Bool { route != nil }
+    /// Identifiant du tracé en cours, pour le point de reprise.
+    var routeID: String? { route?.id }
 
     override init() {
         super.init()
@@ -87,7 +96,8 @@ final class RouteRecorder: NSObject, ObservableObject {
         if manager.authorizationStatus == .notDetermined { manager.requestWhenInUseAuthorization() }
     }
 
-    func start(kind: WorkoutKind) {
+    /// `resuming` : reprise après une mort de l'app, on continue le tracé sauvegardé (points et distance conservés).
+    func start(kind: WorkoutKind, resuming routeID: String? = nil) {
         guard route == nil else { return }
         let status = manager.authorizationStatus
         guard status == .authorizedWhenInUse || status == .authorizedAlways else {
@@ -99,14 +109,26 @@ final class RouteRecorder: NSObject, ObservableObject {
         pendingKind = nil
         paused = false
         let now = Date()
-        route = LocalRoute(id: ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-"),
-                           start: now, end: now, kind: kind.rawValue, points: [])
-        distance = 0
+        if let id = routeID, let saved = LocalRoute.load(id: id) {
+            route = saved
+            distance = saved.locations.reduce(into: (0.0, nil as CLLocation?)) { acc, l in
+                if let p = acc.1 { acc.0 += l.distance(from: p) }
+                acc.1 = l
+            }.0
+            pointCount = saved.points.count
+            lastGood = saved.locations.last
+            lastLocation = lastGood
+            startedAt = saved.start
+        } else {
+            route = LocalRoute(id: ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-"),
+                               start: now, end: now, kind: kind.rawValue, points: [])
+            distance = 0
+            pointCount = 0
+            lastGood = nil
+            lastLocation = nil
+            startedAt = now
+        }
         speed = nil
-        pointCount = 0
-        lastGood = nil
-        lastLocation = nil
-        startedAt = now
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
         manager.startUpdatingLocation()

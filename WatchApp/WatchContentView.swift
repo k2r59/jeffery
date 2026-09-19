@@ -174,14 +174,20 @@ struct WatchContentView: View {
         }
     }
 
+    /// Plus de nouvelles de l'iPhone depuis 2 min alors qu'il était en séance : l'app s'est arrêtée ou il est hors de portée.
+    private func phoneLost(_ m: CoachMirror, at now: Date = Date()) -> Bool {
+        m.phase != "idle" && now.timeIntervalSince(m.timestamp) > 120
+    }
+
     private func liveElapsed(_ m: CoachMirror, at now: Date = Date()) -> TimeInterval {
-        if m.phase == "live", !m.paused { return m.elapsed + max(0, now.timeIntervalSince(m.timestamp)) }
+        // Chrono figé sur la dernière nouvelle : on n'extrapole pas un iPhone qui ne répond plus.
+        if m.phase == "live", !m.paused, !phoneLost(m, at: now) { return m.elapsed + max(0, now.timeIntervalSince(m.timestamp)) }
         if m.phase != "idle" { return m.elapsed }
         return workout.snapshot.elapsed
     }
 
     private func stateLabel(_ m: CoachMirror) -> String {
-        if !mirror.phoneReachable, Date().timeIntervalSince(m.timestamp) > 120, m.phase != "idle" { return "IPHONE PERDU" }
+        if phoneLost(m) { return mirror.phoneReachable ? "JEFFREY NE RÉPOND PLUS" : "IPHONE PERDU" }
         switch m.phase {
         case "connecting": return "JEFFREY ARRIVE"
         case "foreground": return "EN ATTENTE DE L'IPHONE"

@@ -6,11 +6,17 @@ import ActivityKit
 import AVFAudio
 
 struct TranscriptLine: Identifiable, Equatable {
-    enum Role { case user, coach, info }
+    enum Role: String { case user, coach, info }
     let id = UUID()
     let role: Role
     var text: String
-    let at = Date()
+    let at: Date
+
+    init(role: Role, text: String, at: Date = Date()) {
+        self.role = role
+        self.text = text
+        self.at = at
+    }
 }
 
 /// Orchestre une séance : montre → métriques → contexte pour le coach vocal (OpenAI Realtime) ↔ audio.
@@ -119,6 +125,15 @@ final class CoachSession: ObservableObject {
     /// Pause demandée localement, en attendant la confirmation de la montre.
     private var localPaused = false
     private var sessionToken = UUID()
+    /// Séance reprise après une mort de l'app (point de reprise sur disque).
+    private var resuming = false
+    /// Un bloc du programme a sonné pendant la coupure : le suivant démarre dès que Jeffrey est de retour.
+    private var pendingPlanAdvance = false
+    private var timerBaseLabel = ""
+    private var timerIndex = 1
+    /// Référence du chien de garde montre : départ ou reprise, tant qu'aucun instantané n'est arrivé.
+    private var watchdogFrom = Date()
+    private var lastCheckpointAt: Date = .distantPast
 
     /// Rappel demandé à l'oral (outil `remind_me`) : « préviens-moi dans 5 min », « dis-moi quand ça fait 30 s que je marche ».
     private struct Reminder {
@@ -258,9 +273,12 @@ final class CoachSession: ObservableObject {
         currentZone = nil
         pace = nil
         reconnectAttempts = 0
+        resuming = false
+        pendingPlanAdvance = false
         phase = .connecting
         status = "Connexion au coach…"
         sessionStartedAt = Date()
+        watchdogFrom = Date()
         lastMirror = nil
         hrSamples.removeAll()
         zoneSeconds = [Int](repeating: 0, count: 5)
@@ -313,7 +331,9 @@ final class CoachSession: ObservableObject {
             }
         }
         realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
+        endOrphanLiveActivities()
         startLiveActivity()
+        saveCheckpoint()
         let token = sessionToken
         connectTimeoutTask?.cancel()
         connectTimeoutTask = Task { [weak self] in
@@ -508,16 +528,40 @@ final class CoachSession: ObservableObject {
             lastLine: lastCoachLine.map { String($0.prefix(120)) }, timerLabel: mirrorTimerLabel, timerEndsAt: timerEndsAt)
     }
 
+    /// Sans nouvelle de l'app passé ce délai, l'écran verrouillé dit que Jeffrey ne répond plus.
+    private var liveActivityStaleDate: Date { Date().addingTimeInterval(120) }
+
     private func startLiveActivity() {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let attributes = JeffreyActivityAttributes(kindLabel: kind.label)
-        liveActivity = try? Activity.request(attributes: attributes, content: .init(state: activityState(), staleDate: nil))
+        liveActivity = try? Activity.request(attributes: attributes, content: .init(state: activityState(), staleDate: liveActivityStaleDate))
+    }
+
+    /// Reprise : on récupère la Live Activity laissée par l'app morte plutôt que d'en empiler une deuxième.
+    private func adoptOrStartLiveActivity() {
+        if let existing = Activity<JeffreyActivityAttributes>.activities.first {
+            liveActivity = existing
+            for extra in Activity<JeffreyActivityAttributes>.activities.dropFirst() {
+                Task { await extra.end(nil, dismissalPolicy: .immediate) }
+            }
+            updateLiveActivity()
+        } else {
+            startLiveActivity()
+        }
+    }
+
+    /// Live Activity d'une séance dont on n'a plus trace (app morte, pas de reprise) : on la ferme.
+    private func endOrphanLiveActivities() {
+        for activity in Activity<JeffreyActivityAttributes>.activities where activity.id != liveActivity?.id {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+        }
     }
 
     private func updateLiveActivity() {
         guard let activity = liveActivity else { return }
         let state = activityState()
-        Task { await activity.update(.init(state: state, staleDate: nil)) }
+        let stale = liveActivityStaleDate
+        Task { await activity.update(.init(state: state, staleDate: stale)) }
     }
 
     private func endLiveActivity() {
@@ -535,6 +579,7 @@ final class CoachSession: ObservableObject {
         lastMirror = m
         updateLiveActivity()
         connectivity.sendCoachState(m)
+        if force || Date().timeIntervalSince(lastCheckpointAt) > 15 { saveCheckpoint() }
     }
 
     func stop() {
@@ -618,24 +663,198 @@ final class CoachSession: ObservableObject {
         status = "Séance terminée"
         waitingForForeground = false
         sendMirror(force: true)
+        // Journal écrit tant que le départ de séance est connu : les horodatages s'y réfèrent.
+        writeSessionJournal()
         if let start = sessionStartedAt, hrSamples.count + transcript.count > 2 {
             let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
-            endedSummary = SessionSummary(
-                id: ISO8601DateFormatter().string(from: start), date: latest?.sessionStart ?? start, kind: kind,
-                elapsed: elapsed,
-                distance: displayDistance,
-                averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
-                maxHeartRate: hrSamples.max(), feeling: nil,
-                goalLabel: goal.kind == .free ? nil : goal.label, goalReached: goal.kind == .free ? nil : goalReached,
-                lastCoachLine: transcript.last(where: { $0.role == .coach })?.text,
-                zoneCounts: HeartRateZone.allCases.map { z in hrSamples.filter { HeartRateZone.zone(for: $0, maxHR: config.maxHR) == z }.count },
-                transcriptExcerpt: transcript.filter { $0.role != .info }.suffix(80).map { ($0.role == .user ? "Lui : " : "Jeffrey : ") + $0.text },
-                walkingSeconds: activity.secondsByActivity[.walking], runningSeconds: activity.secondsByActivity[.running],
-                stationarySeconds: activity.secondsByActivity[.stationary], ascent: activity.ascent, descent: activity.descent,
-                climbingSeconds: activity.secondsClimbing)
+            endedSummary = makeSummary(start: start, elapsed: elapsed)
             sessionStartedAt = nil
         }
+        resuming = false
+        pendingPlanAdvance = false
+        SessionCheckpoint.clear()
+    }
+
+    private func makeSummary(start: Date, elapsed: TimeInterval) -> SessionSummary {
+        SessionSummary(
+            id: ISO8601DateFormatter().string(from: start), date: latest?.sessionStart ?? start, kind: kind,
+            elapsed: elapsed,
+            distance: displayDistance,
+            averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
+            maxHeartRate: hrSamples.max(), feeling: nil,
+            goalLabel: goal.kind == .free ? nil : goal.label, goalReached: goal.kind == .free ? nil : goalReached,
+            lastCoachLine: transcript.last(where: { $0.role == .coach })?.text,
+            zoneCounts: HeartRateZone.allCases.map { z in hrSamples.filter { HeartRateZone.zone(for: $0, maxHR: config.maxHR) == z }.count },
+            transcriptExcerpt: transcript.filter { $0.role != .info }.suffix(80).map { ($0.role == .user ? "Lui : " : "Jeffrey : ") + $0.text },
+            walkingSeconds: activity.secondsByActivity[.walking], runningSeconds: activity.secondsByActivity[.running],
+            stationarySeconds: activity.secondsByActivity[.stationary], ascent: activity.ascent, descent: activity.descent,
+            climbingSeconds: activity.secondsClimbing)
+    }
+
+    // MARK: - Point de reprise (l'app meurt, la séance survit)
+
+    /// État de la séance sur disque, réécrit à chaque événement et au moins toutes les 15 s ; le journal suit,
+    /// pour qu'une séance interrompue laisse quand même sa trace.
+    private func saveCheckpoint() {
+        guard phase == .connecting || phase == .live, let start = sessionStartedAt else { return }
+        lastCheckpointAt = Date()
+        var timer: SessionCheckpoint.TimerState?
+        if let label = timerLabel, let end = timerEndsAt {
+            timer = .init(label: label, baseLabel: timerBaseLabel, index: timerIndex, endsAt: end, workSeconds: timerWorkSeconds,
+                          restSeconds: timerRestSeconds, repeatsLeft: timerRepeatsLeft, phaseIsWork: timerPhaseIsWork)
+        }
+        let plan = planTitle.map { SessionCheckpoint.PlanState(title: $0, queue: planQueue, total: planTotal, index: planIndex) }
+        SessionCheckpoint(
+            kind: kind, mode: mode, goal: goal, goalReached: goalReached, halfwayAnnounced: halfwayAnnounced,
+            startedAt: start, savedAt: Date(),
+            transcript: transcript.map { .init(role: $0.role.rawValue, text: $0.text, at: $0.at) },
+            hrSamples: hrSamples, zoneSeconds: zoneSeconds, lastKmAnnounced: lastKmAnnounced,
+            timer: timer, plan: plan, routeID: gps.routeID,
+            walkingSeconds: activity.secondsByActivity[.walking] ?? 0, runningSeconds: activity.secondsByActivity[.running] ?? 0,
+            stationarySeconds: activity.secondsByActivity[.stationary] ?? 0, climbingSeconds: activity.secondsClimbing,
+            ascent: activity.ascent, descent: activity.descent
+        ).save()
         writeSessionJournal()
+    }
+
+    /// Au lancement : une séance était en cours quand l'app s'est arrêtée. Récente, on la reprend là où elle en
+    /// était ; trop vieille, on la clôt proprement avec ce qu'on a (bilan, journal, montre prévenue).
+    func recoverIfNeeded() {
+        guard phase == .idle else { return }
+        guard let checkpoint = SessionCheckpoint.load() else { endOrphanLiveActivities(); return }
+        restore(checkpoint)
+        guard checkpoint.isResumable else {
+            log(.info, "Séance interrompue il y a \(Int(checkpoint.age / 60)) min : close sans reprise.")
+            endOrphanLiveActivities()
+            connectivity.send(command: .end, kind: kind, mode: mode)
+            if hrSamples.count + transcript.count > 2 {
+                endedSummary = makeSummary(start: checkpoint.startedAt, elapsed: checkpoint.savedAt.timeIntervalSince(checkpoint.startedAt))
+            }
+            writeSessionJournal()
+            SessionCheckpoint.clear()
+            sessionStartedAt = nil
+            return
+        }
+        resumeSession(interruptedFor: checkpoint.age, checkpoint: checkpoint)
+    }
+
+    private func restore(_ c: SessionCheckpoint) {
+        kind = c.kind
+        mode = c.mode
+        goal = c.goal
+        goalReached = c.goalReached
+        halfwayAnnounced = c.halfwayAnnounced
+        sessionStartedAt = c.startedAt
+        transcript = c.transcript.map { TranscriptLine(role: TranscriptLine.Role(rawValue: $0.role) ?? .info, text: $0.text, at: $0.at) }
+        lastCoachLine = transcript.last(where: { $0.role == .coach })?.text
+        hrSamples = c.hrSamples
+        zoneSeconds = c.zoneSeconds.count == 5 ? c.zoneSeconds : [Int](repeating: 0, count: 5)
+        lastKmAnnounced = c.lastKmAnnounced
+        if let p = c.plan { planTitle = p.title; planQueue = p.queue; planTotal = p.total; planIndex = p.index; planStep = "bloc \(p.index)/\(p.total)" }
+    }
+
+    private func resumeSession(interruptedFor gap: TimeInterval, checkpoint c: SessionCheckpoint) {
+        config = CoachConfig.load()
+        #if DEBUG
+        if FakeRealtimeBackend.enabled, config.apiKey.isEmpty { config.apiKey = "fake" }
+        #endif
+        guard !config.apiKey.isEmpty else {
+            errorMessage = "Renseigne ta clé API OpenAI dans les réglages."
+            SessionCheckpoint.clear()
+            sessionStartedAt = nil
+            return
+        }
+        resuming = true
+        pendingPlanAdvance = false
+        errorMessage = nil
+        reconnectAttempts = 0
+        phase = .connecting
+        status = "Jeffrey revient…"
+        watchdogFrom = Date()
+        lastMirror = nil
+        lastZoneSampleAt = nil
+        distanceHistory.removeAll(); lastInjectedSnapshot = nil; reminders.removeAll()
+        requestedScene = nil; celebrationScene = nil; currentPaceSecPerKm = nil; lastAnnouncedZone = nil; currentZone = nil; pace = nil
+        hrHistory.removeAll(); speedHistory.removeAll()
+        lastUserSpokeAt = .distantPast; lastSpontaneousCueAt = .distantPast; lastEventCueAt = .distantPast
+        struggleAnnouncedForClimb = false; climbStartedAt = nil; lastCoachSpokeAt = .distantPast; fatigueAnnouncedAt = .distantPast; lastCueZone = nil
+        lastKmAt = nil; routineTopic = 0
+        connectivity.reset()
+        connectivity.acceptSnapshotsSince = Date().addingTimeInterval(-3)
+        connectivity.requestHealthAuthorization()
+        UIApplication.shared.isIdleTimerDisabled = true
+        audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
+        audio.noiseGate = config.micSensitivity.noiseGate
+        audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
+        useAppleVoice = config.voiceEngine == "apple"
+        audio.useHeadsetMic = (UserDefaults.standard.string(forKey: Prefs.micSource) ?? "headset") == "headset"
+        appleVoice.refresh()
+        sentenceBuffer = ""; textResponseBuffer = ""
+        gps.start(kind: kind, resuming: c.routeID)
+        activity.start()
+        activity.restore(walking: c.walkingSeconds, running: c.runningSeconds, stationary: c.stationarySeconds,
+                         climbing: c.climbingSeconds, ascent: c.ascent, descent: c.descent)
+        if let ref = ReferenceRoute.load() {
+            referenceTracker = ReferenceTracker(route: ref)
+            referenceName = ref.name
+        } else {
+            referenceTracker = nil
+            referenceName = nil
+        }
+        reference = nil
+        sessionToken = UUID()
+        localPaused = false
+        pendingPriorityCues.removeAll()
+        partialCoachLine = nil
+        log(.info, "Reprise : l'app s'était arrêtée pendant \(gap < 60 ? "\(Int(gap)) s" : Formatters.humanDuration(gap)).")
+
+        // Chrono : encore en cours, on le relance pour le temps qui reste ; sonné pendant la coupure, on passe la main.
+        if let t = c.timer {
+            timerWorkSeconds = t.workSeconds; timerRestSeconds = t.restSeconds; timerRepeatsLeft = t.repeatsLeft; timerPhaseIsWork = t.phaseIsWork
+            let remaining = Int(t.endsAt.timeIntervalSinceNow.rounded())
+            if remaining >= 3 {
+                runTimerPhase(seconds: remaining, label: t.label, baseLabel: t.baseLabel, index: t.index)
+            } else {
+                log(.info, "Chrono « \(t.label) » sonné pendant la coupure.")
+                timerRepeatsLeft = 0
+                if planTitle != nil {
+                    if planQueue.isEmpty {
+                        log(.info, "Programme terminé : \(planTitle ?? "")")
+                        planTitle = nil; planStep = nil; planIndex = 0; planTotal = 0
+                    } else {
+                        pendingPlanAdvance = true
+                    }
+                }
+            }
+        }
+
+        if UIApplication.shared.applicationState == .active {
+            do { try audio.start() } catch {
+                var tolerate = false
+                #if DEBUG
+                tolerate = FakeRealtimeBackend.enabled
+                #endif
+                if !tolerate {
+                    errorMessage = "Audio : \(error.localizedDescription)"
+                    phase = .idle
+                    resuming = false
+                    return
+                }
+            }
+        }
+        if !useAppleVoice, let cached = try? Data(contentsOf: ackFileURL), cached.count > 4_800 { ackAudio = cached }
+        realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
+        adoptOrStartLiveActivity()
+        saveCheckpoint()
+        let token = sessionToken
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 25_000_000_000)
+            guard let self, self.sessionToken == token, self.phase == .connecting, !self.waitingForForeground else { return }
+            self.errorMessage = self.errorMessage ?? "Connexion au coach impossible (délai dépassé)."
+            self.stop()
+        }
+        sendMirror(force: true)
     }
 
     /// Journal complet de la séance (échanges + événements internes horodatés) dans Documents/derniere-seance.txt :
@@ -1099,6 +1318,8 @@ final class CoachSession: ObservableObject {
 
     private func runTimerPhase(seconds: Int, label: String, baseLabel: String, index: Int) {
         timerLabel = label
+        timerBaseLabel = baseLabel
+        timerIndex = index
         timerEndsAt = Date().addingTimeInterval(TimeInterval(seconds))
         log(.info, "Chrono : \(label), \(seconds) s")
         sendMirror(force: true)
@@ -1254,6 +1475,11 @@ final class CoachSession: ObservableObject {
             log(.info, "Coach connecté (\(config.model), voix \(config.voice)).")
             startTimers()
             sendMirror(force: true)
+            if resuming {
+                resuming = false
+                sendResumeContext()
+                return
+            }
             realtime.injectText("La séance de \(kind.coachLabel) démarre maintenant. Objectif du jour : \(goal.coachLabel()). " + metricsLine(prefix: "[MÉTRIQUES]"))
             if useAppleVoice {
                 sendGreeting()
@@ -1284,6 +1510,29 @@ final class CoachSession: ObservableObject {
             if let planTitle { resume += " Programme « \(planTitle) » en cours, \(planStep ?? "")." }
             if !recent.isEmpty { resume += "\nDernières répliques :\n" + recent }
             realtime.injectText(resume + "\n" + metricsLine(prefix: "[MÉTRIQUES]"))
+        }
+    }
+
+    /// Reprise après une mort de l'app : Jeffrey reçoit où on en était et dit qu'il est de retour, sans repartir de zéro.
+    private func sendResumeContext() {
+        let recent = transcript.filter { $0.role != .info }.suffix(20)
+            .map { ($0.role == .user ? "Lui : " : "Toi : ") + $0.text }.joined(separator: "\n")
+        var resume = "L'application s'est arrêtée quelques instants (coupure technique) et vient de redémarrer : la séance de \(kind.coachLabel) continue, elle a commencé il y a \(Formatters.humanDuration(liveElapsed())). Objectif : \(goal.coachLabel())."
+        if let label = timerLabel, let end = timerEndsAt { resume += " Chrono en cours « \(label) », \(Int(max(0, end.timeIntervalSinceNow))) s restantes." }
+        if let planTitle { resume += " Programme « \(planTitle) » en cours, \(planStep ?? "")." }
+        var next: WorkoutBlock?
+        if pendingPlanAdvance, let n = planQueue.first {
+            next = n
+            resume += " Un bloc a sonné pendant la coupure ; le bloc suivant « \(n.label) » (\(n.summary)) démarre maintenant."
+        }
+        if !recent.isEmpty { resume += "\nDernières répliques :\n" + recent }
+        realtime.injectText(resume + "\n" + metricsLine(prefix: "[MÉTRIQUES]"))
+        var ask = "Dis en une phrase que tu es de retour après une petite coupure, sans t'étendre, et reprends là où vous en étiez."
+        if let next { ask += " Annonce le bloc « \(next.label) » (\(next.summary)) et sa consigne d'intensité." }
+        realtime.requestResponse(instructions: ask)
+        if pendingPlanAdvance {
+            pendingPlanAdvance = false
+            startNextPlanBlock()
         }
     }
 
@@ -1411,7 +1660,7 @@ final class CoachSession: ObservableObject {
             if lastAnnouncedZone == nil { lastAnnouncedZone = zone }
         }
         evaluateGoal()
-        if phase == .connecting, snap.state == .ended, Date().timeIntervalSince(sessionStartedAt ?? Date()) > 5 {
+        if phase == .connecting, snap.state == .ended, Date().timeIntervalSince(watchdogFrom) > 5 {
             log(.info, "La montre a terminé avant le début : séance annulée.")
             stop()
             return
@@ -1567,7 +1816,7 @@ final class CoachSession: ObservableObject {
     /// Montre obligatoire : plus de données depuis 2 min et montre injoignable → la séance s'arrête.
     private func watchWatchdog() {
         guard phase == .live, !isPaused else { return }
-        let stale = latest.map { Date().timeIntervalSince($0.timestamp) > 120 } ?? (Date().timeIntervalSince(sessionStartedAt ?? Date()) > 120)
+        let stale = latest.map { Date().timeIntervalSince($0.timestamp) > 120 } ?? (Date().timeIntervalSince(watchdogFrom) > 120)
         if stale, !connectivity.isReachable {
             errorMessage = "Montre perdue : séance arrêtée."
             log(.info, "Montre injoignable depuis plus de 2 minutes, arrêt de la séance.")
@@ -1752,5 +2001,6 @@ final class CoachSession: ObservableObject {
     private func log(_ role: TranscriptLine.Role, _ text: String) {
         transcript.append(TranscriptLine(role: role, text: text))
         if transcript.count > 300 { transcript.removeFirst(transcript.count - 300) }
+        saveCheckpoint()
     }
 }

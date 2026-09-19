@@ -28,7 +28,12 @@ struct RootView: View {
         }
         .sheet(item: $summaryToShow) { summary in SessionEndView(summary: summary) }
         .fullScreenCover(isPresented: Binding(get: { !onboarded }, set: { _ in })) { OnboardingView() }
-        .task { await history.load(); SessionAnalysisService.shared.catchUp() }
+        .task {
+            await history.load(); SessionAnalysisService.shared.catchUp()
+            // Une séance était en cours quand l'app s'est arrêtée : reprise, ou bilan si elle est trop vieille.
+            coach.recoverIfNeeded()
+            if coach.phase == .idle, let s = coach.endedSummary { coach.endedSummary = nil; summaryToShow = s }
+        }
         .onChange(of: coach.phase) { _, phase in
             if phase == .idle { Task { await history.load() } }
         }
@@ -43,9 +48,10 @@ struct RootView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     coach.start(kind: .running, mode: .companion, goal: SessionGoal(kind: .duration, target: minutes * 60, note: "banc d'essai"))
                 }
-                let stopAfter = Double(ProcessInfo.processInfo.environment["WATCHCOACH_STOP_AFTER"] ?? "0") ?? 0
-                if stopAfter > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + stopAfter) { coach.stop() } }
             }
+            // Arrêt programmé, aussi pour une séance reprise après une mort de l'app (banc de test de la reprise).
+            let stopAfter = Double(ProcessInfo.processInfo.environment["WATCHCOACH_STOP_AFTER"] ?? "0") ?? 0
+            if stopAfter > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + stopAfter) { coach.stop() } }
             #endif
             let appearance = UITabBarAppearance()
             appearance.configureWithOpaqueBackground()

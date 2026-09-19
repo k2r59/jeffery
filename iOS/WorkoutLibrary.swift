@@ -2,7 +2,7 @@ import Foundation
 
 /// Catalogue de séances types, par sport et par niveau. Jeffrey les propose à l'oral quand on lui demande des
 /// exercices (outil suggest_workouts) puis les fait dérouler bloc par bloc avec le chronomètre (outil start_workout).
-struct WorkoutBlock: Equatable {
+struct WorkoutBlock: Codable, Equatable {
     var label: String
     var seconds: Int
     var repeats: Int = 1

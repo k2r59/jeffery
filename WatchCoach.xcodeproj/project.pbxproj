@@ -21,6 +21,7 @@
 		283FD722227E973622E5D7CE /* SessionAnalyst.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC8C31809CD02803421C632 /* SessionAnalyst.swift */; };
 		2ACB625130B2D0D66AD0772C /* AppleAnalyst.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F9EC583F66EEBE0A4F6A881 /* AppleAnalyst.swift */; };
 		2CD4BE415E6407756280E286 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E815CF64D6BC9EC9969F4101 /* Assets.xcassets */; };
+		32CD48B00CB8417CF2F9E2F7 /* ObjCExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = 73D163B1EA465CB9492E5FF9 /* ObjCExceptionCatcher.m */; };
 		3856BEC48F6C967B792BF246 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3E1F94AF9504750D0AC84335 /* Assets.xcassets */; };
 		386E28887225C03332FE61BB /* AppleVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = E062557903F7829899F6BCFE /* AppleVoice.swift */; };
 		39C4EB41C5567F2D873BD327 /* JeffreyVoiceGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9708536B556A73369BF0D001 /* JeffreyVoiceGeometry.swift */; };
@@ -30,6 +31,7 @@
 		48A9A39515C84655284DF338 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD82806422AB8276FBD93DB2 /* OnboardingView.swift */; };
 		48B34E824CC2E58A4B52982A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A63CF06A05D2BA57DB5461 /* RootView.swift */; };
 		4A6C94955EF3E4443DD6175A /* SessionEndView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */; };
+		4DF632D978F09FB6349E5C42 /* SessionCheckpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AFF59D00152AF73C8A232E7 /* SessionCheckpoint.swift */; };
 		4EC84103B5AB0B8C3C3CB051 /* YouView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8EE1F43250706F36FF0C16 /* YouView.swift */; };
 		509C76BD84E7D18BBD014B3F /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */; };
 		57D26E3739DEBCE115D10AEB /* WorkoutHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */; };
@@ -152,9 +154,11 @@
 		404CFB6572CFA845E57B2EFD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4058C3F6AD9D59EB9596853A /* JeffreyVoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyVoiceView.swift; sourceTree = "<group>"; };
 		4258493F240A344A20E69581 /* WorkoutLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLibrary.swift; sourceTree = "<group>"; };
+		474EEACB50F315D0D866388C /* WatchCoach-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "WatchCoach-Bridging-Header.h"; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
 		4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeepPlayer.swift; sourceTree = "<group>"; };
 		50D4AA1667A3275F3D77C3C7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		52A82CCD5D6A35897EA2DA91 /* ObjCExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ObjCExceptionCatcher.h; sourceTree = "<group>"; };
 		5679A20688F985B95732882B /* ActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitor.swift; sourceTree = "<group>"; };
 		5E3F53CE58B179A6AF3DC43C /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
 		6007B40D0AD1397CFB26FD68 /* JeffreyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = JeffreyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -162,6 +166,7 @@
 		67F577FE663392DD612E8BDE /* JeffreyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyUITests.swift; sourceTree = "<group>"; };
 		6B2DA5DD09E89CF2639E1253 /* MusicController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicController.swift; sourceTree = "<group>"; };
 		6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEndView.swift; sourceTree = "<group>"; };
+		73D163B1EA465CB9492E5FF9 /* ObjCExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ObjCExceptionCatcher.m; sourceTree = "<group>"; };
 		7B70BA75F2844F85D5CBA6B2 /* JeffreyActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyActivityAttributes.swift; sourceTree = "<group>"; };
 		7E02BD34C7EDAE2584384F97 /* WatchSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSender.swift; sourceTree = "<group>"; };
 		82D7D2911298C496B06F52EA /* JeffreyMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyMark.swift; sourceTree = "<group>"; };
@@ -172,6 +177,7 @@
 		915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHistory.swift; sourceTree = "<group>"; };
 		928176BE1F8766A035A4A58D /* JeffreyWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyWidgets.swift; sourceTree = "<group>"; };
 		9708536B556A73369BF0D001 /* JeffreyVoiceGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyVoiceGeometry.swift; sourceTree = "<group>"; };
+		9AFF59D00152AF73C8A232E7 /* SessionCheckpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCheckpoint.swift; sourceTree = "<group>"; };
 		A2097E145A239323A219EBC1 /* CoachConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachConfig.swift; sourceTree = "<group>"; };
 		A433BC192FA6379ABE91035B /* ObjectiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveView.swift; sourceTree = "<group>"; };
 		A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatchCoachWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -247,6 +253,16 @@
 			path = UI;
 			sourceTree = "<group>";
 		};
+		6E3376355A53D7E87E1F20DB /* ObjC */ = {
+			isa = PBXGroup;
+			children = (
+				52A82CCD5D6A35897EA2DA91 /* ObjCExceptionCatcher.h */,
+				73D163B1EA465CB9492E5FF9 /* ObjCExceptionCatcher.m */,
+				474EEACB50F315D0D866388C /* WatchCoach-Bridging-Header.h */,
+			);
+			path = ObjC;
+			sourceTree = "<group>";
+		};
 		9450222908086875F81C9E31 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
@@ -278,6 +294,7 @@
 				C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */,
 				3E565DD4B3701C8EEC7FD653 /* SessionAnalysisService.swift */,
 				0FC8C31809CD02803421C632 /* SessionAnalyst.swift */,
+				9AFF59D00152AF73C8A232E7 /* SessionCheckpoint.swift */,
 				6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */,
 				CB07464CCC26C18B28EB4F8B /* SessionGoal.swift */,
 				E436D5C4A739476728581A22 /* SessionLog.swift */,
@@ -292,6 +309,7 @@
 				915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */,
 				4258493F240A344A20E69581 /* WorkoutLibrary.swift */,
 				FD8EE1F43250706F36FF0C16 /* YouView.swift */,
+				6E3376355A53D7E87E1F20DB /* ObjC */,
 			);
 			path = iOS;
 			sourceTree = "<group>";
@@ -602,6 +620,7 @@
 				66AA65F7EF3F6CFBCE483782 /* LiveSessionView.swift in Sources */,
 				BC6BD45271DCEDCF2841AB41 /* MetricsSnapshot.swift in Sources */,
 				A01D1049225F6E303D785128 /* MusicController.swift in Sources */,
+				32CD48B00CB8417CF2F9E2F7 /* ObjCExceptionCatcher.m in Sources */,
 				AA8054D04A39FFBD9DEA1CBA /* ObjectiveView.swift in Sources */,
 				48A9A39515C84655284DF338 /* OnboardingView.swift in Sources */,
 				0FCF8FACF728ECDBF3B0ADC3 /* PhoneConnectivity.swift in Sources */,
@@ -612,6 +631,7 @@
 				827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */,
 				0BEB9A6157CAAA7BDAE7583A /* SessionAnalysisService.swift in Sources */,
 				283FD722227E973622E5D7CE /* SessionAnalyst.swift in Sources */,
+				4DF632D978F09FB6349E5C42 /* SessionCheckpoint.swift in Sources */,
 				4A6C94955EF3E4443DD6175A /* SessionEndView.swift in Sources */,
 				9329260E9C7DA8A64B02B2A9 /* SessionGoal.swift in Sources */,
 				0E824A8B7E8D8F9B3B3FB42C /* SessionLog.swift in Sources */,
@@ -702,6 +722,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.promo.watchcoach;
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "iOS/ObjC/WatchCoach-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
@@ -913,6 +934,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.promo.watchcoach;
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "iOS/ObjC/WatchCoach-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
