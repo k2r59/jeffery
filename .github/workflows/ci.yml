@@ -1,0 +1,94 @@
+name: CI
+
+# Compilation iPhone + Apple Watch et tests unitaires, à chaque poussée et chaque pull request.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Compilation et tests unitaires
+    # Le projet vise iOS 27 / watchOS 27 : seule l'image « xcode-27 » (macOS 27, Xcode 27)
+    # embarque les SDK nécessaires. Les images macos-26 / macos-latest s'arrêtent au SDK iOS 26.
+    # Image en préversion publique chez GitHub : à repasser sur macos-latest quand Xcode 27 y arrivera.
+    runs-on: xcode-27
+    timeout-minutes: 60
+
+    env:
+      # La machine de build n'a ni certificat ni profil : on compile et on teste sans signature.
+      # C'est suffisant pour le simulateur, qui ne vérifie pas la signature.
+      SIGNING: CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM=
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v5
+
+      - name: Afficher la version de Xcode
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E 'iOS|watchOS' || true
+
+      - name: Installer xcodegen
+        run: brew install xcodegen
+
+      - name: Régénérer le projet Xcode depuis project.yml
+        run: xcodegen generate
+
+      - name: Choisir un simulateur iPhone
+        run: |
+          set -euo pipefail
+          udid=$(xcrun simctl list devices available --json | jq -r '
+            .devices
+            | to_entries
+            | map(select(.key | test("SimRuntime\\.iOS-")))
+            | sort_by(.key)
+            | last.value
+            | map(select(.name | startswith("iPhone")))
+            | first.udid // empty')
+          if [ -z "$udid" ]; then
+            echo "Aucun simulateur iPhone disponible sur cette machine." >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          echo "Simulateur retenu : $udid"
+          echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+
+      - name: Compiler l'app iPhone et lancer les tests unitaires
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project WatchCoach.xcodeproj \
+            -scheme WatchCoach \
+            -configuration Debug \
+            -destination "id=$SIMULATOR_UDID" \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/Resultats-iOS.xcresult \
+            -only-testing:WatchCoachTests \
+            $SIGNING
+
+      - name: Compiler l'app Apple Watch
+        # Lancé même si les tests iPhone échouent, pour avoir les deux signaux d'un coup.
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project WatchCoach.xcodeproj \
+            -scheme WatchCoachWatch \
+            -configuration Debug \
+            -destination 'generic/platform=watchOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            $SIGNING
+
+      - name: Conserver le rapport de test en cas d'échec
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultats-tests
+          path: build/Resultats-iOS.xcresult
+          retention-days: 7
+          if-no-files-found: ignore

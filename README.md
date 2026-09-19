@@ -156,6 +156,11 @@ C'est le premier réflexe quand une séance s'est mal passée. `sessions.json`, 
   l'écran de lancement. Sur le simulateur montre : `WATCHCOACH_SCENE=countdown|interval|zone|pace|message|climb|ghost|celebration|stats`
   affiche une scène avec un miroir factice, `WATCHCOACH_PAGE=0..3` choisit la page.
 - Commande : `xcodebuild -scheme WatchCoach -destination 'id=<simulateur>' test`. Séance simulée clé en main : `Tests/Scripts/sim-session.sh`.
+- Intégration continue (`.github/workflows/ci.yml`) : à chaque poussée et chaque pull request, GitHub régénère le projet
+  avec xcodegen, compile l'app iPhone (widgets et app montre embarquée compris), lance les tests unitaires sur un
+  simulateur iPhone, puis compile l'app Apple Watch seule. Tout se fait sans signature (`CODE_SIGNING_ALLOWED=NO`) :
+  la machine de build n'a ni certificat ni profil, et le simulateur ne les réclame pas. Elle tourne sur l'image
+  `xcode-27` (macOS 27, Xcode 27), la seule à embarquer les SDK iOS 27 et watchOS 27 dont le projet a besoin.
 
 ## Limites connues
 
