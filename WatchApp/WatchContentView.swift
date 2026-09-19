@@ -7,10 +7,10 @@ struct WatchContentView: View {
     @State private var page = 1
     @State private var sending = false
 
-    private let citron = Color(red: 0.831, green: 1.0, blue: 0.294)
-    private let creme = Color(red: 0.949, green: 0.941, blue: 0.906)
-    private let sauge = Color(red: 0.592, green: 0.643, blue: 0.549)
-    private let surface = Color(red: 0.137, green: 0.169, blue: 0.125)
+    private let citron = JeffreyPalette.citron
+    private let creme = JeffreyPalette.creme
+    private let sauge = JeffreyPalette.sauge
+    private let surface = JeffreyPalette.surface
 
     private var live: Bool { mirror.state.phase != "idle" || workout.isActive }
 
@@ -74,7 +74,6 @@ struct WatchContentView: View {
         let m = mirror.state
         let s = workout.snapshot
         let hr = s.heartRate ?? m.heartRate
-        let elapsed = liveElapsed(m)
         return ScrollView {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -83,9 +82,11 @@ struct WatchContentView: View {
                     Spacer()
                     Text(m.kind.label.uppercased()).font(.system(size: 9, weight: .heavy)).foregroundStyle(sauge)
                 }
-                Text(Formatters.elapsed(elapsed))
-                    .font(.system(size: 34, weight: .black, design: .rounded).monospacedDigit())
-                    .foregroundStyle(m.paused ? sauge : creme)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(Formatters.elapsed(liveElapsed(m, at: context.date)))
+                        .font(.system(size: 34, weight: .black, design: .rounded).monospacedDigit())
+                        .foregroundStyle(m.paused ? sauge : creme)
+                }
                 if let g = m.goalLabel {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
@@ -115,7 +116,7 @@ struct WatchContentView: View {
                 } else if let line = m.lastLine {
                     Text(line).font(.system(size: 11, weight: .medium)).foregroundStyle(creme).lineLimit(3)
                         .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(surface))
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(surface))
                 }
                 if workout.needsBackgroundExtension {
                     Button("Prolonger l'arrière-plan") { workout.extendBackground() }.tint(citron).font(.system(size: 11, weight: .bold))
@@ -126,8 +127,8 @@ struct WatchContentView: View {
         }
     }
 
-    private func liveElapsed(_ m: CoachMirror) -> TimeInterval {
-        if m.phase == "live", !m.paused { return m.elapsed + max(0, Date().timeIntervalSince(m.timestamp)) }
+    private func liveElapsed(_ m: CoachMirror, at now: Date = Date()) -> TimeInterval {
+        if m.phase == "live", !m.paused { return m.elapsed + max(0, now.timeIntervalSince(m.timestamp)) }
         if m.phase != "idle" { return m.elapsed }
         return workout.snapshot.elapsed
     }
@@ -156,17 +157,17 @@ struct WatchContentView: View {
         let m = mirror.state
         return VStack(spacing: 12) {
             HStack(spacing: 18) {
-                controlButton("xmark", "Terminer", Color(red: 1.0, green: 0.384, blue: 0.345)) {
+                controlButton("arreter", "Terminer", JeffreyPalette.alerte) {
                     WatchSender.shared.request(.requestEnd, kind: m.kind) { ok in
                         if !ok { workout.end() }
                     }
                 }
                 if m.paused {
-                    controlButton("play.fill", "Reprendre", citron) {
+                    controlButton("lecture", "Reprendre", citron) {
                         WatchSender.shared.request(.requestResume, kind: m.kind) { _ in page = 1 }
                     }
                 } else {
-                    controlButton("pause.fill", "Pause", Color.yellow) {
+                    controlButton("pause", "Pause", creme) {
                         WatchSender.shared.request(.requestPause, kind: m.kind) { _ in }
                     }
                 }
@@ -180,7 +181,7 @@ struct WatchContentView: View {
     private func controlButton(_ icon: String, _ title: String, _ color: Color, action: @escaping () -> Void) -> some View {
         VStack(spacing: 6) {
             Button(action: action) {
-                Image(systemName: icon).font(.system(size: 24, weight: .bold)).frame(width: 60, height: 60)
+                JIcon(icon, size: 24).frame(width: 60, height: 60)
             }
             .buttonStyle(.plain)
             .foregroundStyle(color)

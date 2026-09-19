@@ -87,6 +87,23 @@ final class CoachSession: ObservableObject {
     private var distanceHistory: [(Date, Double)] = []
     private var reconnectAttempts = 0
     private var endTimeoutTask: Task<Void, Never>?
+    private var connectTimeoutTask: Task<Void, Never>?
+
+    /// Chronomètre tenu par le téléphone pour Jeffrey (outil `set_timer`) : échéance unique ou tic répété.
+    private struct CoachTimer {
+        let id: String
+        /// Délai avant déclenchement, et intervalle entre deux tics quand `repeats` est vrai.
+        let seconds: TimeInterval
+        let repeats: Bool
+        /// Vrai : Jeffrey parle au déclenchement. Faux : il reçoit les mesures sans rien dire.
+        let speak: Bool
+        /// Activité à tenir sans interruption ; `nil` pour un simple délai.
+        let activity: ActivityMonitor.Activity?
+        let reason: String
+        /// Départ du décompte en cours, recalé à chaque tic.
+        var anchor: Date
+    }
+    private var coachTimers: [CoachTimer] = []
 
     var latest: MetricsSnapshot? { connectivity.latest }
 
@@ -106,6 +123,7 @@ final class CoachSession: ObservableObject {
             .store(in: &cancellables)
         activity.distanceProvider = { [weak self] in self?.displayDistance ?? 0 }
         activity.onEvent = { [weak self] event in self?.handle(activityEvent: event) }
+        activity.onTick = { [weak self] in self?.checkTimers() }
     }
 
     /// Marche, course, arrêt, montée, descente : Jeffrey réagit, avec au plus une réaction toutes les 30 s.
@@ -173,6 +191,7 @@ final class CoachSession: ObservableObject {
         transcript.removeAll()
         distanceHistory.removeAll()
         lastInjectedSnapshot = nil
+        coachTimers.removeAll()
         lastAnnouncedZone = nil
         currentZone = nil
         pace = nil
@@ -207,9 +226,10 @@ final class CoachSession: ObservableObject {
         }
 
         realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig())
-        Task { [weak self] in
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 20_000_000_000)
-            guard let self, self.phase == .connecting else { return }
+            guard !Task.isCancelled, let self, self.phase == .connecting else { return }
             self.errorMessage = self.errorMessage ?? "Connexion au coach impossible (délai dépassé)."
             self.stop()
         }
@@ -351,6 +371,9 @@ final class CoachSession: ObservableObject {
     private func finishTeardown() {
         endTimeoutTask?.cancel()
         endTimeoutTask = nil
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
+        coachTimers.removeAll()
         realtime.disconnect()
         audio.stop()
         audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
@@ -401,6 +424,32 @@ final class CoachSession: ObservableObject {
                     ],
                     "required": ["kind", "target", "reason"],
                 ],
+            ], [
+                "type": "function",
+                "name": "set_timer",
+                "description": "Le chronomètre de la séance, tenu par le téléphone. Deux usages : une échéance unique (« dis-moi quand ça fait 30 secondes que je marche », « préviens-moi dans 5 minutes »), ou un tic répété qui t'envoie les mesures toutes les N secondes pour que tu suives quelque chose en direct sans avoir à compter. Tu n'as pas d'horloge : passe toujours par cet outil, ne compte jamais de tête, et n'annonce rien avant d'être relancé.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "seconds": ["type": "number", "description": "Délai avant déclenchement, et intervalle entre deux tics si repeats vaut true. De 5 à 3600."],
+                        "repeats": ["type": "boolean", "description": "true pour recevoir l'info toutes les N secondes jusqu'à annulation, false pour un seul déclenchement"],
+                        "speak": ["type": "boolean", "description": "true si tu dois parler à voix haute au déclenchement, false si tu veux seulement recevoir les mesures pour savoir où on en est, sans rien dire. Un suivi répété est presque toujours silencieux."],
+                        "while_activity": ["type": "string", "enum": ["any", "walking", "running", "stationary", "cycling"],
+                                           "description": "any pour un simple délai ; sinon le décompte ne tourne que tant qu'il est dans cette activité, et repart de zéro s'il en change"],
+                        "reason": ["type": "string", "description": "Ce que tu suis, ou ce que tu diras au déclenchement, en quelques mots"],
+                    ],
+                    "required": ["seconds", "repeats", "speak", "while_activity", "reason"],
+                ],
+            ], [
+                "type": "function",
+                "name": "get_chrono",
+                "description": "Lire l'heure exacte de la séance MAINTENANT : temps écoulé, depuis combien de temps il marche ou court, distance, allure, avancement de l'objectif, chronomètres en cours. À appeler dès qu'il te demande un temps précis (« ça fait combien de temps que je marche ? », « il me reste combien ? ») plutôt que de te fier à la dernière ligne [MÉTRIQUES], qui peut avoir jusqu'à 15 secondes de retard.",
+                "parameters": ["type": "object", "properties": [String: Any](), "required": [String]()],
+            ], [
+                "type": "function",
+                "name": "cancel_timers",
+                "description": "Arrêter tous les chronomètres et suivis en cours quand il change d'avis (« laisse tomber », « annule », « arrête de me le répéter »).",
+                "parameters": ["type": "object", "properties": [String: Any](), "required": [String]()],
             ]],
             "tool_choice": "auto",
             "audio": [
@@ -503,21 +552,118 @@ final class CoachSession: ObservableObject {
     }
 
     private func handleFunctionCall(name: String, callId: String, arguments: String) {
-        guard name == "propose_goal",
-              let data = arguments.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let kindRaw = json["kind"] as? String, let kind = SessionGoal.Kind(rawValue: kindRaw) else {
+        let json = (arguments.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any] ?? [:]
+        switch name {
+        case "propose_goal": handleProposeGoal(callId: callId, json: json)
+        case "set_timer": handleSetTimer(callId: callId, json: json)
+        case "get_chrono": handleGetChrono(callId: callId)
+        case "cancel_timers": handleCancelTimers(callId: callId)
+        default: realtime.sendFunctionOutput(callId: callId, output: ["error": "fonction inconnue : \(name)"])
+        }
+    }
+
+    private func handleProposeGoal(callId: String, json: [String: Any]) {
+        guard let kindRaw = json["kind"] as? String, let kind = SessionGoal.Kind(rawValue: kindRaw) else {
             realtime.sendFunctionOutput(callId: callId, output: ["error": "arguments invalides"])
             return
         }
         let value = (json["target"] as? Double) ?? 0
         let target: Double = kind == .duration ? value * 60 : (kind == .distance ? value * 1000 : 0)
         let reason = json["reason"] as? String ?? ""
-        proposal = GoalProposal(callId: callId, goal: SessionGoal(kind: kind, target: target), reason: reason)
-        log(.info, "Jeffrey propose : \(proposal!.goal.label)\(reason.isEmpty ? "" : " · \(reason)")")
+        let goal = SessionGoal(kind: kind, target: target)
+        proposal = GoalProposal(callId: callId, goal: goal, reason: reason)
+        log(.info, "Jeffrey propose : \(goal.label)\(reason.isEmpty ? "" : " · \(reason)")")
+    }
+
+    /// Le téléphone tient le chronomètre : Jeffrey programme, on le relance à l'échéance ou à chaque tic.
+    private func handleSetTimer(callId: String, json: [String: Any]) {
+        guard let seconds = json["seconds"] as? Double, seconds >= 5, seconds <= 3600 else {
+            realtime.sendFunctionOutput(callId: callId, output: ["error": "durée invalide : attendue entre 5 et 3600 secondes"])
+            return
+        }
+        let raw = json["while_activity"] as? String ?? "any"
+        let target: ActivityMonitor.Activity? = raw == "any" ? nil : ActivityMonitor.Activity(rawValue: raw)
+        guard raw == "any" || target != nil else {
+            realtime.sendFunctionOutput(callId: callId, output: ["error": "activité inconnue : \(raw)"])
+            return
+        }
+        let repeats = json["repeats"] as? Bool ?? false
+        let reason = (json["reason"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        coachTimers.append(CoachTimer(id: callId, seconds: seconds, repeats: repeats,
+                                      speak: json["speak"] as? Bool ?? !repeats, activity: target,
+                                      reason: reason.isEmpty ? "le suivi demandé" : reason, anchor: Date()))
+        let scope = target.map { " tant qu'il est en \($0.label)" } ?? ""
+        log(.info, "\(repeats ? "Suivi toutes les" : "Chrono dans") \(Int(seconds)) s\(scope) : \(reason)")
+        realtime.sendFunctionOutput(callId: callId,
+                                    output: ["scheduled": true, "seconds": seconds, "repeats": repeats, "while_activity": raw])
+    }
+
+    /// Lecture immédiate du chronomètre, sans attendre la prochaine ligne [MÉTRIQUES].
+    private func handleGetChrono(callId: String) {
+        let now = Date()
+        let elapsed = liveElapsed(at: now)
+        var out: [String: Any] = [
+            "session_elapsed_seconds": Int(elapsed),
+            "session_elapsed": Formatters.elapsed(elapsed),
+            "activity": activity.activity.rawValue,
+            "activity_held_seconds": Int(now.timeIntervalSince(activity.activitySince)),
+            "terrain": activity.terrain.rawValue,
+            "paused": isPaused,
+        ]
+        if let d = displayDistance { out["distance_meters"] = Int(d) }
+        if let p = pace { out["pace"] = p }
+        if let hr = latest?.heartRate { out["heart_rate_bpm"] = Int(hr) }
+        if let c = activity.cadence, c > 0 { out["cadence_spm"] = Int(c) }
+        if goal.kind != .free {
+            let p = goal.progress(elapsed: elapsed, distance: displayDistance)
+            out["goal"] = goal.coachLabel()
+            out["goal_percent"] = Int(p.fraction * 100)
+            if let r = p.remaining { out["goal_remaining"] = r }
+        }
+        if !coachTimers.isEmpty {
+            out["timers"] = coachTimers.map { t -> [String: Any] in
+                ["reason": t.reason, "while_activity": t.activity?.rawValue ?? "any", "repeats": t.repeats,
+                 "remaining_seconds": Int(max(0, t.seconds - heldSeconds(for: t, at: now)))]
+            }
+        }
+        realtime.sendFunctionOutput(callId: callId, output: out)
+    }
+
+    private func handleCancelTimers(callId: String) {
+        let count = coachTimers.count
+        coachTimers.removeAll()
+        if count > 0 { log(.info, count == 1 ? "Chronomètre arrêté." : "\(count) chronomètres arrêtés.") }
+        realtime.sendFunctionOutput(callId: callId, output: ["cancelled": count])
+    }
+
+    /// Temps déjà tenu : depuis le dernier tic, ou depuis le début de l'activité visée si elle a commencé après.
+    private func heldSeconds(for timer: CoachTimer, at now: Date) -> TimeInterval {
+        guard let target = timer.activity else { return now.timeIntervalSince(timer.anchor) }
+        guard activity.activity == target else { return 0 }
+        return now.timeIntervalSince(max(activity.activitySince, timer.anchor))
+    }
+
+    /// Chaque seconde : déclenche les chronomètres échus. Un déclenchement parlé qui tombe pendant que
+    /// quelqu'un parle reste en attente ; un tic silencieux passe toujours.
+    private func checkTimers() {
+        guard phase == .live, realtime.isConnected, !coachTimers.isEmpty else { return }
+        let now = Date()
+        for index in coachTimers.indices.reversed() {
+            let timer = coachTimers[index]
+            guard heldSeconds(for: timer, at: now) >= timer.seconds else { continue }
+            if timer.speak {
+                guard cue(reason: "chronomètre que l'utilisateur t'a demandé : \(timer.reason)") else { continue }
+            } else {
+                realtime.injectText(metricsLine(prefix: "[MÉTRIQUES]") + " · suivi en cours : \(timer.reason)")
+            }
+            if timer.repeats { coachTimers[index].anchor = now } else { coachTimers.remove(at: index) }
+        }
     }
 
     private func onRealtimeReady() {
+        // Connexion établie : plus de délai à surveiller, même en attente de premier plan où la phase reste .connecting.
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
         errorMessage = nil
         reconnectAttempts = 0
         if phase == .connecting {
@@ -881,9 +1027,10 @@ final class CoachSession: ObservableObject {
         }
     }
 
-    /// Demande une intervention courte du coach, sauf si quelqu'un parle déjà.
-    func cue(reason: String) {
-        guard phase == .live, realtime.isConnected, !responseInProgress, !userSpeaking, !coachSpeaking else { return }
+    /// Demande une intervention courte du coach, sauf si quelqu'un parle déjà. Renvoie false si elle n'a pas eu lieu.
+    @discardableResult
+    func cue(reason: String) -> Bool {
+        guard phase == .live, realtime.isConnected, !responseInProgress, !userSpeaking, !coachSpeaking else { return false }
         lastCueAt = Date()
         if let hr = latest?.heartRate {
             lastAnnouncedZone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
@@ -892,6 +1039,7 @@ final class CoachSession: ObservableObject {
         lastInjectedSnapshot = latest
         realtime.injectText(metricsLine(prefix: "[MÉTRIQUES]") + " · motif : \(reason)")
         realtime.requestResponse(instructions: "Intervention coach spontanée (\(reason)) : 1 à 2 phrases orales, utiles, sans répéter la précédente.")
+        return true
     }
 
     // MARK: - Transcript

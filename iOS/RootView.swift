@@ -9,7 +9,7 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            TodayView(history: history, goToSessions: { tab = 1 })
+            TodayView(history: history, goToSessions: { tab = 1 }, goToJeffrey: { tab = 3 })
                 .tabItem { Label { Text("Aujourd'hui") } icon: { Image("accueil-creme").renderingMode(.template) } }.tag(0)
             SessionsView(history: history)
                 .tabItem { Label { Text("Séances") } icon: { Image("seances-creme").renderingMode(.template) } }.tag(1)
@@ -89,39 +89,6 @@ struct PrimaryButton: View {
             .frame(maxWidth: .infinity).frame(height: 56)
             .background(Capsule().fill(Theme.lime))
             .shadow(color: Theme.lime.opacity(0.35), radius: 14, y: 5)
-        }
-    }
-}
-
-struct KindChips: View {
-    @Binding var kindRaw: String
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(WorkoutKind.allCases) { k in
-                    let selected = k.rawValue == kindRaw
-                    Button { withAnimation(.snappy) { kindRaw = k.rawValue } } label: {
-                        VStack(spacing: 4) {
-                            JIcon(icon(k), size: 20)
-                            Text(k.label).font(.system(size: 11, weight: .bold))
-                        }
-                        .foregroundStyle(selected ? Theme.background : .white)
-                        .frame(width: 72, height: 56)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(selected ? Theme.lime : Theme.surface))
-                    }
-                }
-            }
-        }
-    }
-    private func icon(_ k: WorkoutKind) -> String {
-        switch k {
-        case .running: return "course"
-        case .walking: return "marche"
-        case .cycling: return "velo"
-        case .hiking: return "randonnee"
-        case .functionalStrength: return "renforcement"
-        case .hiit: return "objectif"
-        case .other: return "libre"
         }
     }
 }

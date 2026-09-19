@@ -43,6 +43,8 @@ final class ActivityMonitor: ObservableObject {
     @Published private(set) var available = false
 
     var onEvent: ((Event) -> Void)?
+    /// Battement d'une seconde, pendant la séance (le minuteur interne existe déjà).
+    var onTick: (() -> Void)?
     /// Distance parcourue fournie par l'extérieur (GPS iPhone ou montre), en mètres.
     var distanceProvider: (() -> Double)?
 
@@ -129,7 +131,8 @@ final class ActivityMonitor: ObservableObject {
         guard candidate != activity, Date().timeIntervalSince(candidateSince) >= 15 else { return }
         let from = activity
         activity = candidate
-        activitySince = Date()
+        // Le vrai début de l'activité, pas l'instant où l'hystérésis de 15 s la confirme.
+        activitySince = candidateSince
         stationaryAnnounced = false
         if from != .unknown { onEvent?(.activity(from: from, to: activity)) }
     }
@@ -177,6 +180,7 @@ final class ActivityMonitor: ObservableObject {
             stationaryAnnounced = true
             onEvent?(.stationaryLong(seconds: Int(now.timeIntervalSince(activitySince))))
         }
+        onTick?()
     }
 
     /// Résumé pour le prompt : « course depuis 3:20 · cadence 168 pas/min · montée 6 % · D+ 42 m / D- 10 m ».

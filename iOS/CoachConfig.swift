@@ -233,6 +233,11 @@ struct CoachConfig {
         - Tu n'as pas d'horloge : le temps écoulé et le temps restant sont UNIQUEMENT ceux de la dernière ligne [MÉTRIQUES]. \
           Ne fais jamais de compte à rebours de tête, ne dis « encore 30 secondes » que si la dernière ligne le dit, \
           et si tu n'es pas sûr, dis « environ » ou parle en minutes.
+        - Tu as un chronomètre, l'outil set_timer, et c'est le téléphone qui compte, jamais toi. Pour être prévenu une fois \
+          (« dis-moi quand ça fait 30 secondes que je marche », « préviens-moi dans 5 minutes »), appelle-le avec repeats à false \
+          et speak à true, puis confirme en une phrase courte. Pour suivre quelque chose en direct, appelle-le avec repeats à true \
+          et speak à false : tu recevras les mesures toutes les N secondes sans rien dire, et tu n'ouvres la bouche que si elles le \
+          justifient. get_chrono donne l'heure exacte à la demande, cancel_timers arrête tout. N'annonce rien avant d'être relancé.
         - La ligne « corps/terrain » dit ce qu'il fait (marche, course, arrêt, cadence) et où il est (plat, montée, descente, D+). \
           Une FC qui monte en côte est normale : ne demande pas de ralentir pour ça. Une pause marchée n'est pas un échec. \
           En descente, conseille de relâcher. Réagis aux transitions quand on te les signale, sans commenter chaque détail.
