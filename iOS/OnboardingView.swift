@@ -49,6 +49,7 @@ struct OnboardingView: View {
     @StateObject private var preview = VoicePreview()
     @StateObject private var appleVoice = AppleVoice()
     @AppStorage(Prefs.onboarded) private var onboarded: Bool = false
+    @AppStorage(Prefs.setupVersion) private var setupVersion: Int = 0
     @AppStorage(Prefs.intent) private var intentRaw: String = ""
     @AppStorage(Prefs.level) private var level: String = AthleteLevel.amateur.rawValue
     @AppStorage(Prefs.userName) private var userName: String = ""
@@ -120,7 +121,7 @@ struct OnboardingView: View {
     // MARK: 1. Bonjour
 
     private var welcome: some View {
-        page(title: "Moi, c'est Jeffrey.", subtitle: "Ton coach vocal. On prend deux minutes pour tout régler, puis on ne touche plus au téléphone.") {
+        page(title: onboarded ? "Du nouveau." : "Moi, c'est Jeffrey.", subtitle: onboarded ? "Jeffrey a évolué : compte, montre, micro… On refait le tour ensemble, deux minutes, tout est déjà pré-rempli." : "Ton coach vocal. On prend deux minutes pour tout régler, puis on ne touche plus au téléphone.") {
             VStack(spacing: 10) {
                 ForEach(Intent.allCases) { intent in
                     Button {
@@ -289,6 +290,8 @@ struct OnboardingView: View {
                 if account.isBusy { ProgressView().tint(Theme.lime).frame(maxWidth: .infinity) }
                 if let e = account.error { statusLine(ok: false, e) }
             }
+            // Clé perso : réservé à l'administrateur (ou à un téléphone qui en a déjà une).
+            if account.user?.isAdmin == true || !(KeychainStore.read(KeychainStore.apiKeyAccount) ?? "").isEmpty {
             Button { withAnimation(.snappy) { showOwnKey.toggle() } } label: {
                 HStack(spacing: 6) {
                     Text("J'ai ma propre clé OpenAI").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
@@ -297,6 +300,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: .infinity)
             }
             if showOwnKey { ownKeyFields }
+            }
         } footer: {
             primaryButton("Continuer") { go(.voice) }.disabled(setup.access != .ok).opacity(setup.access == .ok ? 1 : 0.4)
             skipButton(account.user?.role == "pending" ? "Continuer en attendant" : "Plus tard") { go(.voice) }
@@ -415,11 +419,12 @@ struct OnboardingView: View {
             let canTrial = setup.watch == .ok && setup.microphone == .ok && setup.access == .ok
             primaryButton("Faire un tour d'essai (2 min)") {
                 onboarded = true
+                setupVersion = Prefs.currentSetupVersion
                 UserDefaults.standard.set(WorkoutKind.walking.rawValue, forKey: Prefs.kind)
                 coach.start(kind: .walking, mode: .owned, goal: .trial)
             }
             .disabled(!canTrial).opacity(canTrial ? 1 : 0.4)
-            skipButton(canTrial ? "Commencer sans tour d'essai" : "Commencer") { onboarded = true }
+            skipButton(canTrial ? "Commencer sans tour d'essai" : "Commencer") { onboarded = true; setupVersion = Prefs.currentSetupVersion }
         }
         .onAppear { setup.refresh(); syncWatch() }
     }

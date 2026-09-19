@@ -14,12 +14,12 @@ xcrun simctl install $UDID "$APP" || exit 1
 for svc in motion location microphone media-library; do xcrun simctl privacy $UDID grant $svc $BID; done
 CONT=$(xcrun simctl get_app_container $UDID $BID data)
 rm -f "$CONT/Documents/sessions.json" "$CONT/Documents/derniere-seance.txt"
-xcrun simctl launch --terminate-running-process $UDID $BID -pref.onboarded YES -pref.userName Test >/dev/null
+xcrun simctl launch --terminate-running-process $UDID $BID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null
 sleep 3
 xcrun simctl terminate $UDID $BID
 SIMCTL_CHILD_WATCHCOACH_FAKE_WATCH=1 SIMCTL_CHILD_WATCHCOACH_FAKE_REALTIME=1 SIMCTL_CHILD_WATCHCOACH_AUTOSTART=1 \
 SIMCTL_CHILD_WATCHCOACH_GOAL_MIN=2 SIMCTL_CHILD_WATCHCOACH_NO_SPLASH=1 SIMCTL_CHILD_WATCHCOACH_STOP_AFTER=170 SIMCTL_CHILD_WATCHCOACH_NO_HEALTH=1 \
-xcrun simctl launch $UDID $BID -pref.onboarded YES -pref.userName Test
+xcrun simctl launch $UDID $BID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test
 sleep 30; xcrun simctl io $UDID screenshot "$OUT/live-30s.png" >/dev/null 2>&1
 sleep 60; xcrun simctl io $UDID screenshot "$OUT/live-90s.png" >/dev/null 2>&1
 sleep 60; xcrun simctl io $UDID screenshot "$OUT/live-150s.png" >/dev/null 2>&1

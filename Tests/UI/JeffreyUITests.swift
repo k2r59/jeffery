@@ -61,13 +61,12 @@ final class JeffreyUITests: XCTestCase {
         app.buttons["Discret"].tap()
         app.buttons["Micro iPhone"].tap()
         screenshot("08-jeffrey")
-        app.buttons["Avancé"].tap()
-        XCTAssertTrue(app.staticTexts["OpenAI"].waitForExistence(timeout: 3))
-        screenshot("09-avance")
+        // « Avancé » est réservé à l'administrateur : absent sans compte.
+        XCTAssertFalse(app.buttons["Avancé"].exists)
     }
 
     func testObjectiveSheetOpensWithFakeWatch() {
-        app.launchArguments += ["-pref.onboarded", "YES", "-pref.userName", "Test"]
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2", "-pref.userName", "Test"]
         app.launch()
         let start = app.buttons["Démarrer avec Jeffrey"]
         XCTAssertTrue(start.waitForExistence(timeout: 5), "la montre simulée doit rendre le départ possible")
@@ -80,7 +79,7 @@ final class JeffreyUITests: XCTestCase {
 
     func testNoWatchBlocksStart() {
         app.launchEnvironment["WATCHCOACH_FAKE_WATCH"] = "0"
-        app.launchArguments += ["-pref.onboarded", "YES"]
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Installe Jeffrey sur ta montre pour démarrer"].waitForExistence(timeout: 5)
                       || app.staticTexts["Ouvre Jeffrey sur ta montre pour démarrer"].waitForExistence(timeout: 5))
@@ -91,7 +90,7 @@ final class JeffreyUITests: XCTestCase {
 
 extension JeffreyUITests {
     func testMemoryViewOpensAndCloses() {
-        app.launchArguments += ["-pref.onboarded", "YES", "-pref.userName", "Test"]
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2", "-pref.userName", "Test"]
         app.launch()
         app.tabBars.buttons["Toi"].tap()
         let card = app.staticTexts["Ce que Jeffrey retient de toi"]
@@ -105,7 +104,7 @@ extension JeffreyUITests {
     }
 
     func testFeelingsViewOpensAndCloses() {
-        app.launchArguments += ["-pref.onboarded", "YES", "-pref.userName", "Test"]
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2", "-pref.userName", "Test"]
         app.launchEnvironment["WATCHCOACH_SEED_SESSIONS"] = "1"
         app.launch()
         app.tabBars.buttons["Toi"].tap()

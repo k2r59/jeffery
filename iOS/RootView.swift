@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var coach: CoachSession
     @AppStorage(Prefs.onboarded) private var onboarded: Bool = false
+    @AppStorage(Prefs.setupVersion) private var setupVersion: Int = 0
     @StateObject private var history = WorkoutHistory()
     @State private var tab = 0
     @State private var summaryToShow: SessionSummary?
@@ -27,7 +28,7 @@ struct RootView: View {
             LiveSessionView().environmentObject(coach)
         }
         .sheet(item: $summaryToShow) { summary in SessionEndView(summary: summary) }
-        .fullScreenCover(isPresented: Binding(get: { !onboarded }, set: { _ in })) { OnboardingView() }
+        .fullScreenCover(isPresented: Binding(get: { !onboarded || setupVersion < Prefs.currentSetupVersion }, set: { _ in })) { OnboardingView() }
         .task {
             await history.load(); SessionAnalysisService.shared.catchUp()
             // Une séance était en cours quand l'app s'est arrêtée : reprise, ou bilan si elle est trop vieille.

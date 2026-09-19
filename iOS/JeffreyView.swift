@@ -11,7 +11,7 @@ struct JeffreyView: View {
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var showAdvanced = false
     @State private var showAccess = false
-    @AppStorage(Prefs.onboarded) private var onboarded: Bool = true
+    @AppStorage(Prefs.setupVersion) private var setupVersion: Int = 0
     @ObservedObject private var account = AccountStore.shared
     @StateObject private var preview = VoicePreview()
 
@@ -99,7 +99,7 @@ struct JeffreyView: View {
                         }
                         .accessibilityIdentifier("Mon compte")
 
-                        Button { onboarded = false } label: {
+                        Button { setupVersion = 0 } label: {
                             HStack {
                                 HStack(spacing: 8) { JIcon("valider", size: 18); Text("Refaire la configuration") }
                                     .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
@@ -111,6 +111,8 @@ struct JeffreyView: View {
                         }
                         .accessibilityIdentifier("Refaire la configuration")
 
+                        // Réglages avancés (clé, modèles, prompt) : administrateur seulement.
+                        if account.user?.isAdmin == true {
                         Button { showAdvanced = true } label: {
                             HStack {
                                 HStack(spacing: 8) { JIcon("reglages", size: 18); Text("Avancé") }
@@ -122,6 +124,7 @@ struct JeffreyView: View {
                             .card()
                         }
                         .accessibilityIdentifier("Avancé")
+                        }
                     }
                     .padding(18)
                     .padding(.bottom, 70)

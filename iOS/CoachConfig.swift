@@ -18,6 +18,10 @@ enum Prefs {
     static let userName = "pref.userName"
     static let intent = "pref.intent"
     static let onboarded = "pref.onboarded"
+    /// Version de la configuration pas à pas faite sur ce téléphone : quand l'app en connaît une plus récente
+    /// (nouvelles étapes : compte, montre, micro…), elle la propose une fois, même à un utilisateur déjà installé.
+    static let setupVersion = "pref.setupVersion"
+    static let currentSetupVersion = 2
     static let micSensitivity = "pref.micSensitivity"
     static let presence = "pref.presence"        // discreet | present
     static let goalCues = "pref.goalCues"
