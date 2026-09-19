@@ -144,7 +144,7 @@ C'est le premier réflexe quand une séance s'est mal passée. `sessions.json`, 
   (via `SIMCTL_CHILD_…` avec `simctl launch`). La montre factice envoie une FC réaliste et de la distance, le coach factice
   répond, déclenche le chrono et débriefe ; le journal et `sessions.json` en sortent comme en vrai.
   `WATCHCOACH_NO_HEALTH=1` évite HealthKit, `WATCHCOACH_RESET=1` repart d'une app vierge.
-- Commande : `xcodebuild -scheme WatchCoach -destination 'id=<simulateur>' test`.
+- Commande : `xcodebuild -scheme WatchCoach -destination 'id=<simulateur>' test`. Séance simulée clé en main : `Tests/Scripts/sim-session.sh`.
 
 ## Limites connues
 
