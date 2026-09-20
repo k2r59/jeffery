@@ -124,6 +124,8 @@ final class AppleCoachLink: NSObject, CoachLink {
 
     func injectText(_ text: String, role: String = "system", itemId: String? = nil) {
         DispatchQueue.main.async {
+            // Texte au nom du sportif (bouton de la montre) : un tour utilisateur, pas du contexte.
+            if role == "user" { self.queue.append(.user(text)); self.pump(); return }
             self.pendingContext.append(text)
             if self.pendingContext.count > 8 { self.pendingContext.removeFirst(self.pendingContext.count - 8) }
         }

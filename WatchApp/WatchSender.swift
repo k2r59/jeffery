@@ -90,9 +90,9 @@ final class WatchSender: NSObject, WCSessionDelegate {
     /// Demande à l'iPhone de démarrer / mettre en pause / reprendre / terminer la séance Jeffrey.
     /// Demande à l'iPhone ; `completion` reçoit nil si accepté, sinon la raison à afficher (iPhone injoignable ou refus
     /// explicite de l'iPhone, par exemple quand il n'affiche pas « Montre connectée »).
-    func request(_ command: WatchCommand, kind: WorkoutKind, completion: @escaping (String?) -> Void) {
+    func request(_ command: WatchCommand, kind: WorkoutKind, text: String? = nil, completion: @escaping (String?) -> Void) {
         let unreachable = "iPhone injoignable : ouvre Jeffrey sur l'iPhone"
-        let payload = WatchCommandPayload(command: command, kind: kind, mode: .companion)
+        let payload = WatchCommandPayload(command: command, kind: kind, mode: .companion, text: text)
         guard WCSession.isSupported(), let data = try? WCCodec.encoder.encode(payload) else { completion(unreachable); return }
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable else { completion(unreachable); return }

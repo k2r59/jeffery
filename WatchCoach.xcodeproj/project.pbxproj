@@ -76,6 +76,7 @@
 		ED81313ABC4345D83BA104B6 /* AccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF5170B00B8B8A486571F309 /* AccessView.swift */; };
 		EDCF91F2A7B9462E66319FA6 /* RealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */; };
 		EE859564CB86D8E2665ECB31 /* JeffreyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F577FE663392DD612E8BDE /* JeffreyUITests.swift */; };
+		F28251A87F48891415527F88 /* WatchSessionPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75D4F47F4777C8F562C4E40 /* WatchSessionPages.swift */; };
 		F2DC8CB0D16F9403F45983B8 /* JeffreyMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D7D2911298C496B06F52EA /* JeffreyMark.swift */; };
 		F55E74FE7A7CC4D291C25571 /* JeffreyActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B70BA75F2844F85D5CBA6B2 /* JeffreyActivityAttributes.swift */; };
 		FE39D07F4536F0D9A40ECACB /* DebugFakes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5AB293DEF66C1989E86B75F /* DebugFakes.swift */; };
@@ -215,6 +216,7 @@
 		F01028830AC541CE94AA809A /* MetricsSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsSnapshot.swift; sourceTree = "<group>"; };
 		F16EC8AB3E3AFC4B4D7E2C88 /* WatchCoach.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WatchCoach.entitlements; sourceTree = "<group>"; };
 		F5AB293DEF66C1989E86B75F /* DebugFakes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugFakes.swift; sourceTree = "<group>"; };
+		F75D4F47F4777C8F562C4E40 /* WatchSessionPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSessionPages.swift; sourceTree = "<group>"; };
 		FAB112F058BBADDA9A8B2F7C /* CoachSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachSession.swift; sourceTree = "<group>"; };
 		FD8EE1F43250706F36FF0C16 /* YouView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouView.swift; sourceTree = "<group>"; };
 		FF9D0601D0198354EBD8FBF4 /* RealtimeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeClient.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 				12C280D7DA9559C6A13D621E /* WatchIcons.swift */,
 				12039FFC5C964B10D50E0E94 /* WatchSceneView.swift */,
 				7E02BD34C7EDAE2584384F97 /* WatchSender.swift */,
+				F75D4F47F4777C8F562C4E40 /* WatchSessionPages.swift */,
 				1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */,
 			);
 			path = WatchApp;
@@ -613,6 +616,7 @@
 				9FDA1EBD7CE8D8ABE7FF7890 /* WatchIcons.swift in Sources */,
 				BBFFBD6C2ED31F6DB8501447 /* WatchSceneView.swift in Sources */,
 				5B0CE21D56CC710BDD6EFC61 /* WatchSender.swift in Sources */,
+				F28251A87F48891415527F88 /* WatchSessionPages.swift in Sources */,
 				3E0BED32725F9FD516A9645A /* WorkoutKind+HealthKit.swift in Sources */,
 				A795789D70318C0FFA83C6C6 /* WorkoutManager.swift in Sources */,
 			);

@@ -127,7 +127,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         case .pause: pause()
         case .resume: resume()
         case .end: end()
-        case .requestStart, .requestPause, .requestResume, .requestEnd:
+        case .requestStart, .requestPause, .requestResume, .requestEnd, .ask:
             break // demandes montre → iPhone, jamais reçues ici
         }
     }

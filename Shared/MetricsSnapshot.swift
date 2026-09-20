@@ -111,6 +111,8 @@ enum WatchCommand: String, Codable {
     case requestPause
     case requestResume
     case requestEnd
+    /// Question posée depuis la montre (boutons de la page Jeffrey) : `text` dans la charge utile.
+    case ask
 }
 
 /// État de la séance iPhone reflété sur la montre.
@@ -166,6 +168,11 @@ struct CoachMirror: Codable, Equatable {
     var averageHeartRate: Double? = nil
     var energy: Double? = nil
     var averageSpeed: Double? = nil
+    /// Zone cardiaque courante (1–5) et nom court, calculés sur l'iPhone (qui connaît la FC max).
+    var zone: Int? = nil
+    /// Programme en cours : « Bloc 2 / 6 » et ce qui vient ensuite (« course · 2 min »).
+    var planStep: String? = nil
+    var planNext: String? = nil
 
     static let idle = CoachMirror(phase: "idle", elapsed: 0, timestamp: Date(), kind: .running, goalLabel: nil, remaining: nil,
                                   progress: 0, goalReached: false, coachSpeaking: false, userSpeaking: false, lastLine: nil,
@@ -176,6 +183,7 @@ struct WatchCommandPayload: Codable {
     var command: WatchCommand
     var kind: WorkoutKind
     var mode: CaptureMode
+    var text: String? = nil
 }
 
 /// Clés des dictionnaires WatchConnectivity.

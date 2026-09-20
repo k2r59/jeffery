@@ -447,6 +447,13 @@ final class CoachSession: ObservableObject {
             if phase == .idle, let message = errorMessage { refusal = message }
         case .requestPause, .requestResume:
             togglePause()
+        case .ask:
+            // Bouton de la page Jeffrey sur la montre : la question passe comme s'il l'avait dite.
+            guard phase == .live, let text = payload.text, !text.isEmpty else { refusal = "Jeffrey n'est pas en ligne"; break }
+            log(.user, text + " (montre)")
+            lastUserSpokeAt = Date()
+            realtime.injectText(text, role: "user", itemId: nil)
+            if !(realtime is AppleCoachLink) { realtime.requestResponse() }
         case .requestEnd:
             if phase == .idle {
                 // Rien en cours côté iPhone : la montre doit quand même arrêter sa capture.
@@ -482,7 +489,21 @@ final class CoachSession: ObservableObject {
                            zoneSeconds: zoneSeconds.reduce(0, +) > 0 ? zoneSeconds : nil,
                            averageHeartRate: hrSamples.isEmpty ? nil : hrSamples.reduce(0, +) / Double(hrSamples.count),
                            energy: latest?.activeEnergy,
-                           averageSpeed: (displayDistance ?? 0) > 20 && elapsed > 30 ? displayDistance! / elapsed : nil)
+                           averageSpeed: (displayDistance ?? 0) > 20 && elapsed > 30 ? displayDistance! / elapsed : nil,
+                           zone: currentZone?.rawValue,
+                           planStep: planTotal > 0 ? "Bloc \(planIndex) / \(planTotal)" : (timerRepeatsLeft > 1 ? "Répétition · reste \(timerRepeatsLeft)" : nil),
+                           planNext: mirrorPlanNext)
+    }
+
+    /// Ce qui suit le bloc en cours, pour la page Intervalles de la montre.
+    private var mirrorPlanNext: String? {
+        guard timerLabel != nil else { return nil }
+        if timerPhaseIsWork, timerRepeatsLeft > 1 {
+            return timerRestSeconds > 0 ? "récup · \(Formatters.humanDuration(TimeInterval(timerRestSeconds)))" : "répétition suivante"
+        }
+        if !timerPhaseIsWork { return "effort · \(Formatters.humanDuration(TimeInterval(timerWorkSeconds)))" }
+        if let n = planQueue.first { return "\(n.label) · \(Formatters.humanDuration(TimeInterval(n.seconds)))" }
+        return nil
     }
 
     // MARK: - Scènes de la montre

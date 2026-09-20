@@ -28,6 +28,8 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
             m.goalLabel = "5 km"; m.remaining = "2,86 km"; m.progress = 0.43; m.scene = scene; m.paceSecPerKm = 312
             m.coachSpeaking = ProcessInfo.processInfo.environment["WATCHCOACH_SPEAKING"] == "1"; m.lastLine = "Belle relance, garde ça jusqu'au pont."
             m.zoneSeconds = [40, 180, 310, 150, 74]; m.averageHeartRate = 147; m.energy = 212; m.averageSpeed = 2.84
+            m.zone = 2; m.planStep = "Bloc 2 / 6"; m.planNext = "course · 2 min"
+            m.paused = ProcessInfo.processInfo.environment["WATCHCOACH_PAUSED"] == "1"
             Task { @MainActor in WatchMirror.shared.state = m; WatchMirror.shared.phoneReachable = true }
             return
         }

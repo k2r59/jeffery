@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 
 /// La montre est le miroir et la télécommande de l'iPhone : un bouton pour démarrer, l'état de Jeffrey, Pause et Terminer.
 struct WatchContentView: View {
@@ -18,30 +19,39 @@ struct WatchContentView: View {
     private var live: Bool { mirror.state.phase != "idle" || workout.isActive }
 
     private var scene: WatchScene? { mirror.state.scene }
+    private var hasTimer: Bool { mirror.state.timerEndsAt != nil || scene?.kind == .countdown || scene?.kind == .interval }
 
+    /// Bilan affiché après la séance jusqu'à « Voir sur iPhone ».
+    @State private var summary: CoachMirror?
+    @State private var summaryEnergy: Double?
+
+    // Pages : 0 contrôles (ou pause) · 1 séance · 2 effort · 3 intervalles (si chrono) · 4 Jeffrey
     var body: some View {
         if live {
             TabView(selection: $page) {
-                controlsPage.tag(0)
-                livePage.tag(1)
-                statsPage.tag(2)
-                if let scene { scenePage(scene).tag(3) }
+                controlsOrPausePage.tag(0)
+                sessionPage.tag(1)
+                effortPage.tag(2)
+                if hasTimer { intervalPage.tag(3) }
+                coachPage.tag(4)
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            // En séance, tout l'écran pour Jeffrey : ni l'heure système ni les points de pagination.
-            .persistentSystemOverlays(.hidden)
+            .tabViewStyle(.page)
             .onAppear {
-                if let scene { showScene(scene) } else { page = 1 }
+                page = 1
+                if let scene { react(to: scene) }
                 #if DEBUG
                 if let p = ProcessInfo.processInfo.environment["WATCHCOACH_PAGE"], let i = Int(p) { page = i }
                 #endif
             }
-            // Jeffrey choisit l'écran : une scène qui apparaît prend la main, sa disparition ramène au direct.
+            // Jeffrey choisit la page : un chrono qui démarre, une cible, un message prennent la main quelques secondes.
             .onChange(of: scene?.id) { _, _ in
-                if let scene { showScene(scene) } else { sceneReturnTask?.cancel(); withAnimation { page = 1 } }
+                if let scene { react(to: scene) } else { sceneReturnTask?.cancel(); if page == 3 { withAnimation { page = 1 } } }
+            }
+            .onChange(of: mirror.state.paused) { _, paused in
+                if paused { withAnimation { page = 0 } } else if page == 0 { withAnimation { page = 1 } }
             }
             .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now in
-                // Dernières secondes d'un chrono : le décompte revient pour le 3-2-1, une fois par bloc.
+                // Dernières secondes d'un bloc : le décompte revient pour le 3-2-1, une fois par bloc.
                 guard let scene, scene.kind == .countdown || scene.kind == .interval, let end = scene.endsAt,
                       page != 3, finalCountdownShownFor != scene.id else { return }
                 let left = end.timeIntervalSince(now)
@@ -49,42 +59,98 @@ struct WatchContentView: View {
             }
             .onChange(of: mirror.state) { _, m in
                 SceneHaptics.shared.observe(m.scene, heartRate: workout.snapshot.heartRate ?? m.heartRate)
+                if m.phase != "idle", m.elapsed > 30 { summary = m; summaryEnergy = workout.snapshot.activeEnergy ?? m.energy }
             }
+        } else if let done = summary {
+            WatchSummaryPage(elapsed: done.elapsed, distance: workout.snapshot.distance ?? done.distance,
+                             averageHeartRate: done.averageHeartRate, usesDistance: done.kind.usesDistance,
+                             energy: summaryEnergy, onDismiss: { summary = nil })
         } else {
             startPage
         }
     }
 
-    /// Une scène prend l'écran. Un chrono ne le garde pas : un coup d'œil à son lancement, puis retour au direct
-    /// (FC, distance, allure, avec le chrono en carte), sinon on est coupé des mesures pendant tout un programme.
-    private func showScene(_ scene: WatchScene) {
+    /// Réaction à une scène : chrono → page Intervalles 8 s puis retour ; cible zone/allure → page Effort 8 s ;
+    /// message de Jeffrey → page Jeffrey le temps du message ; montée, fantôme, fête → bandeau sur la page Séance.
+    private func react(to scene: WatchScene) {
         sceneReturnTask?.cancel()
-        withAnimation { page = 3 }
-        guard scene.kind == .countdown || scene.kind == .interval else { return }
+        let target: Int
+        switch scene.kind {
+        case .countdown, .interval: target = 3
+        case .zone, .pace: target = 2
+        case .message: target = 4
+        case .celebration, .climb, .ghost: target = 1
+        }
+        withAnimation { page = target }
+        guard target != 1, scene.kind != .message else { return }
         let id = scene.id
         sceneReturnTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 8_000_000_000)
-            guard !Task.isCancelled, self.scene?.id == id, page == 3 else { return }
+            guard !Task.isCancelled, self.scene?.id == id, page == target else { return }
             withAnimation { page = 1 }
         }
     }
 
-    // MARK: Stats (zones, kcal, FC, vitesse moyenne)
-
-    private var statsPage: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            WatchStatsView(mirror: mirror.state, snapshot: workout.snapshot, elapsed: liveElapsed(mirror.state, at: ctx.date))
+    /// Ligne d'information sur la page Séance quand une scène ne mérite pas une page à elle.
+    private var banner: String? {
+        guard let scene else { return nil }
+        switch scene.kind {
+        case .celebration: return [scene.title, scene.subtitle].compactMap { $0 }.joined(separator: " · ")
+        case .climb, .ghost: return [scene.title, scene.subtitle].compactMap { $0 }.joined(separator: " · ")
+        default: return nil
         }
     }
 
-    // MARK: Scène pilotée par Jeffrey
+    // MARK: Pages de séance
 
-    private func scenePage(_ scene: WatchScene) -> some View {
+    private var sessionPage: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            WatchSceneView(scene: scene, heartRate: workout.snapshot.heartRate ?? mirror.state.heartRate, elapsed: liveElapsed(mirror.state, at: ctx.date))
+            WatchSessionPage(mirror: mirror.state, snapshot: workout.snapshot, elapsed: liveElapsed(mirror.state, at: ctx.date), banner: banner)
+        }
+    }
+
+    private var effortPage: some View {
+        WatchEffortPage(mirror: mirror.state, snapshot: workout.snapshot)
+    }
+
+    private var intervalPage: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            WatchIntervalPage(mirror: mirror.state, now: ctx.date)
                 .onChange(of: ctx.date) { _, now in
                     SceneHaptics.shared.observe(scene, heartRate: workout.snapshot.heartRate ?? mirror.state.heartRate, now: now)
                 }
+        }
+    }
+
+    private var coachPage: some View {
+        WatchCoachPage(mirror: mirror.state, phoneReachable: mirror.phoneReachable) { question in
+            WatchSender.shared.request(.ask, kind: mirror.state.kind, text: question) { refusal in
+                mirror.notice = refusal
+                WKInterfaceDevice.current().play(refusal == nil ? .click : .failure)
+            }
+        }
+    }
+
+    @ViewBuilder private var controlsOrPausePage: some View {
+        let m = mirror.state
+        if m.paused {
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                WatchPausePage(elapsed: liveElapsed(m, at: ctx.date),
+                               onResume: { WatchSender.shared.request(.requestResume, kind: m.kind) { _ in withAnimation { page = 1 } } },
+                               onEnd: endSession)
+            }
+        } else {
+            WatchControlsPage(phoneReachable: mirror.phoneReachable,
+                              onPause: { WatchSender.shared.request(.requestPause, kind: m.kind) { _ in } },
+                              onEnd: endSession)
+        }
+    }
+
+    private func endSession() {
+        let m = mirror.state
+        WatchSender.shared.request(.requestEnd, kind: m.kind) { refusal in
+            // iPhone injoignable, ou déjà à l'arrêt : on termine la capture ici.
+            if refusal != nil || m.phase == "idle" { workout.end() }
         }
     }
 
@@ -130,79 +196,6 @@ struct WatchContentView: View {
         }
     }
 
-    // MARK: Séance en direct (miroir de l'iPhone)
-
-    private var livePage: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { _ in livePageContent }
-    }
-
-    private var livePageContent: some View {
-        let m = mirror.state
-        let s = workout.snapshot
-        let hr = s.heartRate ?? m.heartRate
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                // En-tête sur la ligne de l'heure système (place réservée à droite pour l'heure).
-                HStack(spacing: 6) {
-                    JeffreyVoiceView(speaking: m.coachSpeaking, size: 20)
-                    Text(stateLabel(m)).font(.system(size: 12, weight: .heavy)).foregroundStyle(m.coachSpeaking || m.userSpeaking ? citron : sauge).lineLimit(1).minimumScaleFactor(0.7)
-                }
-                .frame(height: 24).padding(.trailing, 62).padding(.top, 10)
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(Formatters.elapsed(liveElapsed(m, at: context.date)))
-                        .font(.system(size: 40, weight: .black, design: .default).monospacedDigit())
-                        .foregroundStyle(m.paused ? sauge : creme)
-                }
-                if let g = m.goalLabel {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Text("Objectif · \(g)").font(.system(size: 12, weight: .bold)).foregroundStyle(creme)
-                            Spacer()
-                            Text(m.goalReached ? "Atteint ✓" : (m.remaining ?? "")).font(.system(size: 12, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(m.goalReached ? citron : sauge)
-                        }
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(creme.opacity(0.12))
-                                Capsule().fill(citron).frame(width: geo.size.width * min(1, m.progress))
-                            }
-                        }
-                        .frame(height: 5)
-                    }
-                }
-                HStack(spacing: 10) {
-                    metric("frequence-cardiaque", hr.map { "\(Int($0))" } ?? "--", "bpm")
-                    if m.kind.usesDistance {
-                        metric("distance", (s.distance ?? m.distance).map { String(format: "%.2f", $0 / 1000) } ?? "--", "km")
-                    }
-                    if let e = s.activeEnergy { metric("energie", "\(Int(e))", "kcal") }
-                }
-                if let tl = m.timerLabel, let te = m.timerEndsAt {
-                    HStack {
-                        Text(tl.capitalized).font(.system(size: 13, weight: .bold)).foregroundStyle(creme).lineLimit(1).minimumScaleFactor(0.8)
-                        Spacer()
-                        Text(Formatters.elapsed(max(0, te.timeIntervalSinceNow))).font(.system(size: 22, weight: .black, design: .default).monospacedDigit()).foregroundStyle(citron)
-                    }
-                    .padding(8).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(citron.opacity(0.15)))
-                }
-                if m.phase == "foreground" {
-                    Text("Ouvre Jeffrey sur l'iPhone pour lancer la voix").font(.system(size: 12, weight: .bold)).foregroundStyle(citron)
-                } else if let line = m.lastLine {
-                    Text(line).font(.system(size: 13, weight: .medium)).foregroundStyle(creme).lineLimit(4)
-                        .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(surface))
-                }
-                if workout.needsBackgroundExtension {
-                    Button("Prolonger l'arrière-plan") { workout.extendBackground() }.tint(citron).font(.system(size: 11, weight: .bold))
-                }
-                Text("← pause et fin · stats →").font(.system(size: 10)).foregroundStyle(sauge.opacity(0.7)).frame(maxWidth: .infinity)
-            }
-            .padding(.horizontal, 6)
-            .padding(.bottom, 6)
-        }
-        .ignoresSafeArea(edges: .top)
-    }
-
     /// Plus de nouvelles de l'iPhone depuis 2 min alors qu'il était en séance : l'app s'est arrêtée ou il est hors de portée.
     private func phoneLost(_ m: CoachMirror, at now: Date = Date()) -> Bool {
         m.phase != "idle" && now.timeIntervalSince(m.timestamp) > 120
@@ -215,64 +208,4 @@ struct WatchContentView: View {
         return workout.snapshot.elapsed
     }
 
-    private func stateLabel(_ m: CoachMirror) -> String {
-        if phoneLost(m) { return mirror.phoneReachable ? "JEFFREY NE RÉPOND PLUS" : "IPHONE PERDU" }
-        switch m.phase {
-        case "connecting": return "JEFFREY ARRIVE"
-        case "foreground": return "EN ATTENTE DE L'IPHONE"
-        case "ending": return "DÉBRIEF"
-        case "live": return m.coachSpeaking ? "JEFFREY TE PARLE" : (m.userSpeaking ? "JEFFREY T'ÉCOUTE" : "JEFFREY EST LÀ")
-        default: return workout.isActive ? "CAPTURE EN COURS" : "PRÊT"
-        }
-    }
-
-    private func metric(_ icon: String, _ value: String, _ unit: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            JIcon(icon, size: 12).foregroundStyle(sauge)
-            Text(value).font(.system(size: 24, weight: .black, design: .default).monospacedDigit()).foregroundStyle(creme)
-            Text(unit).font(.system(size: 11, weight: .bold)).foregroundStyle(sauge)
-        }
-    }
-
-    // MARK: Télécommande
-
-    private var controlsPage: some View {
-        let m = mirror.state
-        return VStack(spacing: 12) {
-            HStack(spacing: 18) {
-                controlButton("arreter", "Terminer", JeffreyPalette.alerte) {
-                    WatchSender.shared.request(.requestEnd, kind: m.kind) { refusal in
-                        // iPhone injoignable, ou déjà à l'arrêt : on termine la capture ici.
-                        if refusal != nil || m.phase == "idle" { workout.end() }
-                    }
-                }
-                if m.paused {
-                    controlButton("lecture", "Reprendre", citron) {
-                        WatchSender.shared.request(.requestResume, kind: m.kind) { _ in page = 1 }
-                    }
-                } else {
-                    controlButton("pause", "Pause", creme) {
-                        WatchSender.shared.request(.requestPause, kind: m.kind) { _ in }
-                    }
-                }
-            }
-            Text(mirror.phoneReachable ? "Commandes envoyées à l'iPhone" : "iPhone hors de portée")
-                .font(.system(size: 11, weight: .medium)).foregroundStyle(sauge).multilineTextAlignment(.center)
-        }
-        .padding(.horizontal, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func controlButton(_ icon: String, _ title: String, _ color: Color, action: @escaping () -> Void) -> some View {
-        VStack(spacing: 6) {
-            Button(action: action) {
-                JIcon(icon, size: 24).frame(width: 60, height: 60)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(color)
-            .background(Circle().fill(color.opacity(0.22)))
-            .clipShape(Circle())
-            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(creme)
-        }
-    }
 }
