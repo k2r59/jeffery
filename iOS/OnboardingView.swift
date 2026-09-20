@@ -66,7 +66,12 @@ struct OnboardingView: View {
     @State private var voiceSampled = false
     @AppStorage(Prefs.aiProvider) private var aiProvider: String = "jeffrey"
     /// Apple AI demande Apple Intelligence sur l'iPhone (modèle local ou cloud privé).
-    private var appleAIAvailable: Bool { AppleAnalyst.availableBackend(preferLocal: true) != nil }
+    private var appleAIAvailable: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["WATCHCOACH_FAKE_APPLE_AI"] == "1" { return true }
+        #endif
+        return AppleAnalyst.availableBackend(preferLocal: true) != nil
+    }
     @FocusState private var focused: Bool
 
     private var stepTransition: AnyTransition {
@@ -391,7 +396,16 @@ struct OnboardingView: View {
             analysisProvider = "apple"
             voiceSampled = false
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
+                // Logo de chaque intelligence : le symbole Jeffrey, ou la pomme.
+                Group {
+                    if id == "apple" {
+                        Image(systemName: "apple.logo").font(.system(size: 26, weight: .medium)).foregroundStyle(selected ? Theme.background : ink)
+                    } else {
+                        JeffreyMark(color: selected ? Theme.background : Theme.lime, size: 30)
+                    }
+                }
+                .frame(width: 36)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.system(size: 16, weight: .bold)).foregroundStyle(selected ? Theme.background : ink)
                     Text(available ? detail : "Connecte-toi (étape précédente) pour l'utiliser.").font(.system(size: 13, weight: .medium)).foregroundStyle(selected ? Theme.background.opacity(0.7) : Theme.muted)
