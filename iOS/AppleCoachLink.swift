@@ -85,7 +85,9 @@ final class AppleCoachLink: NSObject, CoachLink {
             return
         }
         backend = b
-        tools = makeTools()
+        // Administrateur : l'outil de journal figure dans la liste OpenAI ; on s'aligne dessus (rien d'autre à transmettre).
+        let admin = ((sessionConfig["tools"] as? [[String: Any]]) ?? []).contains { $0["name"] as? String == "get_session_log" }
+        tools = makeTools(admin: admin)
         session = makeSession(recap: nil)
         session?.prewarm()
         isConnected = true
@@ -308,11 +310,14 @@ final class AppleCoachLink: NSObject, CoachLink {
 
     // MARK: Outils (mêmes noms et arguments que côté OpenAI : `CoachSession.handleFunctionCall` ne change pas)
 
-    private func makeTools() -> [any Tool] {
+    private func makeTools(admin: Bool) -> [any Tool] {
         let bridge = Bridge { [weak self] name, args in await self?.callTool(name, args) ?? "{}" }
-        return [StartTimerTool(bridge: bridge), CancelTimerTool(bridge: bridge), GetTimeTool(bridge: bridge), SetGoalTool(bridge: bridge),
-                RemindMeTool(bridge: bridge), SaveNoteTool(bridge: bridge), ShowOnWatchTool(bridge: bridge),
-                SuggestWorkoutsTool(bridge: bridge), StartWorkoutTool(bridge: bridge)]
+        var list: [any Tool] = [StartTimerTool(bridge: bridge), CancelTimerTool(bridge: bridge), GetTimeTool(bridge: bridge), SetGoalTool(bridge: bridge),
+                                RemindMeTool(bridge: bridge), SaveNoteTool(bridge: bridge), ShowOnWatchTool(bridge: bridge),
+                                SuggestWorkoutsTool(bridge: bridge), StartWorkoutTool(bridge: bridge), EndSessionTool(bridge: bridge)]
+        // Journal de séance : uniquement pour l'administrateur, comme côté OpenAI.
+        if admin { list.append(GetSessionLogTool(bridge: bridge)) }
+        return list
     }
 
     private func callTool(_ name: String, _ args: [String: Any]) async -> String {
@@ -431,6 +436,33 @@ private struct SuggestWorkoutsTool: Tool {
         @Guide(description: "beginner, amateur ou confirmed", .anyOf(["beginner", "amateur", "confirmed"])) var level: String
     }
     func call(arguments a: Arguments) async throws -> String { await bridge.call(name, ["level": a.level]) }
+}
+
+private struct EndSessionTool: Tool {
+    let name = "end_session"
+    let description = "Terminer la séance quand le sportif l'a demandé ET confirmé à l'oral. confirmed=false si tu n'as pas encore sa confirmation : l'app te dira de la demander."
+    let bridge: AppleCoachLink.Bridge
+    @Generable struct Arguments {
+        @Guide(description: "true seulement après confirmation orale du sportif") var confirmed: Bool
+    }
+    func call(arguments a: Arguments) async throws -> String { await bridge.call(name, ["confirmed": a.confirmed]) }
+}
+
+private struct GetSessionLogTool: Tool {
+    let name = "get_session_log"
+    let description = "Lire ton propre journal de séance (l'utilisateur est administrateur). À appeler quand il demande de regarder les logs, ce qui s'est passé, pourquoi tu n'as pas répondu, ce qu'il a dit, l'état de la montre ou de la connexion. Renvoie un instantané de la séance et des lignes horodatées mm:ss."
+    let bridge: AppleCoachLink.Bridge
+    @Generable struct Arguments {
+        @Guide(description: "events (journal technique), errors, tools, watch, dialogue (ce qu'il a dit et ce que tu as dit) ou all", .anyOf(["events", "errors", "tools", "watch", "dialogue", "all"])) var scope: String
+        @Guide(description: "Mot-clé pour filtrer, vide sinon") var query: String
+        @Guide(description: "Ne garder que les N dernières minutes, 0 pour tout") var since_minutes: Int
+    }
+    func call(arguments a: Arguments) async throws -> String {
+        var args: [String: Any] = ["scope": a.scope, "count": 20]
+        if !a.query.isEmpty { args["query"] = a.query }
+        if a.since_minutes > 0 { args["since_minutes"] = Double(a.since_minutes) }
+        return await bridge.call(name, args)
+    }
 }
 
 private struct StartWorkoutTool: Tool {

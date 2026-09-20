@@ -160,6 +160,12 @@ final class CoachSession: ObservableObject {
     init() {
         Prefs.registerDefaults()
         connectivity.activate()
+        // Les vues n'observent que la séance : tout changement d'état montre (connectée/déconnectée, signe de vie)
+        // doit les redessiner, sinon le badge reste figé sur le premier rendu.
+        connectivity.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
         connectivity.onSnapshot = { [weak self] snap in self?.handle(snapshot: snap) }
         connectivity.onWatchRequest = { [weak self] payload in self?.handle(watchRequest: payload) }
         wireRealtime()
@@ -373,19 +379,22 @@ final class CoachSession: ObservableObject {
             try? await Task.sleep(nanoseconds: 25_000_000_000)
             guard let self, self.sessionToken == token, self.phase == .connecting, !self.waitingForForeground else { return }
             self.errorMessage = self.errorMessage ?? "Connexion au coach impossible (délai dépassé)."
-            self.stop()
+            self.stop(reason: "coach injoignable après 25 s (\(self.errorMessage ?? ""))")
         }
 
         // Côté montre : lancement de la séance pilotée, ou demande de suivi de l'app Exercice.
         switch mode {
         case .owned:
-            connectivity.launchWatchWorkout(kind: kind) { [weak self] error in
-                guard let self else { return }
-                if let error {
-                    self.log(.info, "Lancement montre : \(error.localizedDescription). Démarre la séance depuis la montre.")
-                } else {
-                    self.log(.info, "Séance lancée sur la montre.")
+            // App montre éveillée : on lui envoie la commande directement (startWatchApp échoue quand l'iPhone est en
+            // arrière-plan, cas d'un départ demandé depuis la montre). Sinon on réveille l'app montre.
+            if connectivity.isReachable {
+                connectivity.send(command: .start, kind: kind, mode: .owned) { [weak self] error in
+                    guard let self else { return }
+                    if error == nil { self.log(.info, "Séance lancée sur la montre (commande directe)."); return }
+                    self.launchWatchWorkoutLogged(kind: kind)
                 }
+            } else {
+                launchWatchWorkoutLogged(kind: kind)
             }
         case .companion:
             connectivity.send(command: .start, kind: kind, mode: .companion) { [weak self] error in
@@ -406,6 +415,17 @@ final class CoachSession: ObservableObject {
         }
     }
 
+    private func launchWatchWorkoutLogged(kind: WorkoutKind) {
+        connectivity.launchWatchWorkout(kind: kind) { [weak self] error in
+            guard let self else { return }
+            if let error {
+                self.log(.info, "Lancement montre : \(error.localizedDescription). Démarre la séance depuis la montre.")
+            } else {
+                self.log(.info, "Séance lancée sur la montre.")
+            }
+        }
+    }
+
     /// Télécommande montre : la montre ne décide de rien, elle demande à l'iPhone. Retourne la raison d'un refus.
     @discardableResult
     private func handle(watchRequest payload: WatchCommandPayload) -> String? {
@@ -415,7 +435,7 @@ final class CoachSession: ObservableObject {
             guard phase == .idle else { break }
             // Même porte que le bouton de l'iPhone : pas de « Montre connectée » à l'écran, pas de départ.
             guard watchReady else {
-                refusal = "L'iPhone ne voit pas la montre connectée. Garde Jeffrey ouvert sur la montre et réessaie."
+                refusal = "L'iPhone ne voit pas la montre connectée. Rapproche-le, garde Jeffrey ouvert sur la montre et réessaie."
                 errorMessage = "Départ refusé depuis la montre : " + connectivity.linkLabel.lowercased() + "."
                 log(.info, "Départ montre refusé : montre déconnectée côté iPhone")
                 break
@@ -432,7 +452,7 @@ final class CoachSession: ObservableObject {
                 // Rien en cours côté iPhone : la montre doit quand même arrêter sa capture.
                 connectivity.send(command: .end, kind: payload.kind, mode: .companion)
             } else {
-                stop()
+                stop(reason: "Terminer touché sur la montre")
             }
         default:
             break
@@ -627,8 +647,11 @@ final class CoachSession: ObservableObject {
         if force || Date().timeIntervalSince(lastCheckpointAt) > 15 { saveCheckpoint() }
     }
 
-    func stop() {
+    /// Arrête la séance. `reason` est journalisé : chaque chemin d'arrêt doit dire pourquoi (séance du 20/09 arrêtée
+    /// 15 s après le départ sans aucune trace de la cause).
+    func stop(reason: String? = nil) {
         guard phase == .connecting || phase == .live else { return }
+        log(.info, "Arrêt de la séance : \(reason ?? "demandé par l'utilisateur (Terminer)")")
         let wasLive = phase == .live
         connectTimeoutTask?.cancel(); connectTimeoutTask = nil
         reconnectTask?.cancel(); reconnectTask = nil
@@ -901,7 +924,7 @@ final class CoachSession: ObservableObject {
             try? await Task.sleep(nanoseconds: 25_000_000_000)
             guard let self, self.sessionToken == token, self.phase == .connecting, !self.waitingForForeground else { return }
             self.errorMessage = self.errorMessage ?? "Connexion au coach impossible (délai dépassé)."
-            self.stop()
+            self.stop(reason: "coach injoignable après 25 s (\(self.errorMessage ?? ""))")
         }
         sendMirror(force: true)
     }
@@ -909,18 +932,28 @@ final class CoachSession: ObservableObject {
     /// Journal complet de la séance (échanges + événements internes horodatés) dans Documents/derniere-seance.txt :
     /// lisible depuis Fichiers ou Xcode, c'est la trace de ce que Jeffrey a vu et dit.
     static let journalURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("derniere-seance.txt")
+    /// Un fichier par séance dans Documents/journaux (les 30 derniers), pour retrouver une séance précise après coup.
+    static let journalsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("journaux", isDirectory: true)
 
     private func writeSessionJournal() {
         guard let first = transcript.first else { return }
         let start = sessionStartedAt ?? latest?.sessionStart ?? first.at
-        var lines = ["Séance \(kind.coachLabel) · \(start.formatted(date: .abbreviated, time: .shortened)) · mode \(mode == .owned ? "piloté" : "compagnon")", ""]
+        var lines = ["Séance \(kind.coachLabel) · \(start.formatted(date: .abbreviated, time: .shortened)) · mode \(mode == .owned ? "piloté" : "compagnon") · \(config.usesAppleAI ? "Apple AI" : "Jeffrey AI (\(config.model))") · montre \(connectivity.diagnostic)", ""]
         for l in transcript {
             let t = Int(max(0, l.at.timeIntervalSince(start)))
             let who: String
             switch l.role { case .user: who = "Lui"; case .coach: who = "Jeffrey"; case .info: who = "·" }
             lines.append(String(format: "%02d:%02d  %@  %@", t / 60, t % 60, who, l.text))
         }
-        try? lines.joined(separator: "\n").write(to: Self.journalURL, atomically: true, encoding: .utf8)
+        let text = lines.joined(separator: "\n")
+        try? text.write(to: Self.journalURL, atomically: true, encoding: .utf8)
+        let fm = FileManager.default
+        try? fm.createDirectory(at: Self.journalsDirectory, withIntermediateDirectories: true)
+        let stamp = start.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false)).replacingOccurrences(of: ":", with: "-")
+        try? text.write(to: Self.journalsDirectory.appendingPathComponent("seance-\(stamp).txt"), atomically: true, encoding: .utf8)
+        if let files = try? fm.contentsOfDirectory(at: Self.journalsDirectory, includingPropertiesForKeys: nil) {
+            for url in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }).dropLast(30) { try? fm.removeItem(at: url) }
+        }
     }
 
     // MARK: - Realtime
@@ -955,15 +988,44 @@ final class CoachSession: ObservableObject {
                 guard self.sessionToken == token, self.phase == .connecting || self.phase == .live else { return }
                 self.errorMessage = error.localizedDescription
                 self.log(.info, "Accès OpenAI refusé : \(error.localizedDescription)")
-                self.stop()
+                self.stop(reason: "accès OpenAI refusé")
             }
         }
     }
 
+    /// Administrateur de l'app : Jeffrey a accès à son propre journal de séance et peut être interrogé dessus.
+    var isAdminUser: Bool { AccountStore.shared.user?.isAdmin == true }
+
+    /// Outil réservé à l'administrateur : lecture du journal de la séance en cours.
+    private var sessionLogTool: [String: Any] {
+        [
+            "type": "function",
+            "name": "get_session_log",
+            "description": "Lire ton propre journal de séance (l'utilisateur est administrateur de l'application). À appeler dès qu'il te demande de regarder les logs, ce qui s'est passé, pourquoi tu n'as pas répondu, ce qu'il a dit, quand un chrono a sonné, l'état de la montre ou de la connexion. Renvoie un instantané de la séance (connexion, montre, reconnexions, dernières métriques) et des lignes horodatées mm:ss depuis le départ. Réponds avec les faits et les horodatages, sans te justifier.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "scope": ["type": "string", "enum": ["events", "errors", "tools", "watch", "dialogue", "all"], "description": "events = journal technique (défaut) ; errors = erreurs, pertes de connexion, refus ; tools = tes appels d'outils ; watch = montre et métriques ; dialogue = ce qu'il a dit et ce que tu as dit ; all = tout"],
+                    "query": ["type": "string", "description": "Mot-clé pour filtrer les lignes (insensible à la casse)"],
+                    "since_minutes": ["type": "number", "description": "Ne garder que les N dernières minutes"],
+                    "count": ["type": "integer", "description": "Nombre maximal de lignes, 20 par défaut, 60 au plus"],
+                ],
+            ],
+        ]
+    }
+
     private func sessionConfig() -> [String: Any] {
+        var cfg = baseSessionConfig()
+        if isAdminUser {
+            cfg["tools"] = ((cfg["tools"] as? [[String: Any]]) ?? []) + [sessionLogTool]
+        }
+        return cfg
+    }
+
+    private func baseSessionConfig() -> [String: Any] {
         [
             "type": "realtime",
-            "instructions": config.instructions(kind: kind, mode: mode, sessionGoal: goal.coachLabel()),
+            "instructions": config.instructions(kind: kind, mode: mode, sessionGoal: goal.coachLabel(), admin: isAdminUser),
             "output_modalities": [useAppleVoice ? "text" : "audio"],
             "tools": [[
                 "type": "function",
@@ -1017,10 +1079,6 @@ final class CoachSession: ObservableObject {
                     "properties": ["confirmed": ["type": "boolean", "description": "true seulement après son oui explicite"]],
                     "required": ["confirmed"],
                 ],
-            ], [
-                "name": "get_session_log",
-                "description": "Réservé à l'administrateur de l'application : renvoie les derniers événements techniques de la séance (erreurs, reconnexions, chrono, détections). À appeler quand il te demande de regarder les logs ou ce qui s'est mal passé.",
-                "parameters": ["type": "object", "properties": ["count": ["type": "integer", "description": "Nombre de lignes, 15 par défaut"]]],
             ], [
                 "name": "save_note",
                 "description": "Enregistrer une note demandée par l'utilisateur : kind=memory pour un fait durable sur lui (blessure, objectif, préférence) que tu dois retenir aux prochaines séances ; kind=feedback pour une remarque ou un bug destinés au développeur de l'application. Confirme oralement en une phrase après l'appel.",
@@ -1231,19 +1289,15 @@ final class CoachSession: ObservableObject {
     private func handleFunctionCall(name: String, callId: String, arguments: String) {
         let json = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8)) as? [String: Any]) ?? [:]
         if name == "get_session_log" {
-            guard AccountStore.shared.user?.isAdmin == true else {
+            guard isAdminUser else {
                 realtime.sendFunctionOutput(callId: callId, output: ["error": "réservé à l'administrateur"])
                 return
             }
-            let count = min(40, max(5, (json["count"] as? Int) ?? 15))
-            let start = sessionStartedAt ?? Date()
-            let lines = transcript.filter { $0.role == .info }.suffix(count).map { l -> String in
-                let t = Int(max(0, l.at.timeIntervalSince(start)))
-                return String(format: "%02d:%02d %@", t / 60, t % 60, l.text)
-            }
-            realtime.sendFunctionOutput(callId: callId, output: ["lines": lines, "errors": lines.filter { $0.contains("Erreur") || $0.contains("perdue") || $0.contains("refusé") }])
+            realtime.sendFunctionOutput(callId: callId, output: sessionLogReport(json))
             return
         }
+        // Journal : chaque appel d'outil est tracé (l'administrateur peut interroger Jeffrey dessus).
+        if name != "get_time" { log(.info, "Outil \(name)" + (json.isEmpty ? "" : " " + Self.compactArguments(json))) }
         if name == "end_session" {
             let confirmed = (json["confirmed"] as? Bool) ?? false
             guard confirmed else {
@@ -1252,7 +1306,7 @@ final class CoachSession: ObservableObject {
             }
             log(.info, "Fin de séance demandée à l'oral et confirmée.")
             realtime.sendFunctionOutput(callId: callId, output: ["ended": true], thenRespond: false)
-            stop()
+            stop(reason: "fin demandée à l'oral (end_session)")
             return
         }
         if name == "get_time" {
@@ -1589,7 +1643,7 @@ final class CoachSession: ObservableObject {
                     try audio.start()
                 } catch {
                     errorMessage = "Audio : \(error.localizedDescription)"
-                    stop()
+                    stop(reason: "audio impossible à démarrer : \(error.localizedDescription)")
                     return
                 }
             }
@@ -1702,20 +1756,20 @@ final class CoachSession: ObservableObject {
         if config.usesAppleAI {
             // Rien à reconnecter : Apple AI s'arrête seulement s'il est indisponible.
             errorMessage = errorMessage ?? reason
-            stop()
+            stop(reason: "Apple AI déconnecté : \(reason)")
             return
         }
         // Clé refusée ou accès interdit : inutile de retenter.
         if let err = errorMessage?.lowercased(), err.contains("api key") || err.contains("invalid_api_key") || err.contains("unauthorized") {
             errorMessage = "Clé API refusée par OpenAI : vérifie-la dans les réglages (elle commence par sk-)."
-            stop()
+            stop(reason: "clé API refusée")
             return
         }
         reconnectAttempts += 1
         log(.info, "Connexion coach perdue (\(reason)), reconnexion \(reconnectAttempts)/5…")
         guard reconnectAttempts <= 5 else {
             errorMessage = "Connexion perdue : \(reason)"
-            stop()
+            stop(reason: "5 reconnexions échouées (\(reason))")
             return
         }
         status = "Reconnexion (\(reconnectAttempts)/5)…"
@@ -1796,13 +1850,12 @@ final class CoachSession: ObservableObject {
         }
         evaluateGoal()
         if phase == .connecting, snap.state == .ended, Date().timeIntervalSince(watchdogFrom) > 5 {
-            log(.info, "La montre a terminé avant le début : séance annulée.")
-            stop()
+            stop(reason: "la montre a envoyé « terminé » avant le début (état \(snap.state), instantané de \(Int(Date().timeIntervalSince(snap.timestamp))) s)")
             return
         }
         if phase == .live, snap.state == .ended {
             log(.info, mode == .owned ? "La montre a terminé la séance." : "La séance de l'app Exercice est terminée.")
-            stop()
+            stop(reason: mode == .owned ? "la montre a terminé la séance" : "la séance de l'app Exercice est terminée")
         }
     }
 
@@ -1954,8 +2007,7 @@ final class CoachSession: ObservableObject {
         let stale = latest.map { Date().timeIntervalSince($0.timestamp) > 120 } ?? (Date().timeIntervalSince(watchdogFrom) > 120)
         if stale, !connectivity.isReachable {
             errorMessage = "Montre perdue : séance arrêtée."
-            log(.info, "Montre injoignable depuis plus de 2 minutes, arrêt de la séance.")
-            stop()
+            stop(reason: "montre injoignable depuis plus de 2 minutes")
         }
     }
 
@@ -2065,7 +2117,7 @@ final class CoachSession: ObservableObject {
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: 14_000_000_000)
                     guard let self, self.sessionToken == token, self.phase == .live else { return }
-                    self.stop()
+                    self.stop(reason: "fin du tour d'essai")
                 }
             } else if let planTitle {
                 // Programme en cours : on félicite sans proposer d'arrêter, sinon Jeffrey dit « on s'arrête ? » puis
@@ -2172,6 +2224,73 @@ final class CoachSession: ObservableObject {
         partialCoachLine = nil
         lastCoachSpokeAt = Date()
         sendMirror(force: true)
+    }
+
+    // MARK: - Journal de séance pour l'administrateur
+
+    /// Ce que Jeffrey lit quand l'administrateur l'interroge sur ses logs : instantané + lignes horodatées filtrées.
+    func sessionLogReport(_ args: [String: Any]) -> [String: Any] {
+        let scope = (args["scope"] as? String) ?? "events"
+        let query = ((args["query"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let count = min(60, max(5, (args["count"] as? Int) ?? 20))
+        let start = sessionStartedAt ?? Date()
+        let since: Date? = (args["since_minutes"] as? Double).map { Date().addingTimeInterval(-$0 * 60) }
+        let errorWords = ["erreur", "perdue", "refusé", "injoignable", "indisponible", "annulée", "interrompue", "bruit ignoré", "arrêt de la séance"]
+        let watchWords = ["montre", "métrique", "exercice", "cœur", "bpm", "gps"]
+        func matches(_ l: TranscriptLine) -> Bool {
+            if let since, l.at < since { return false }
+            let text = l.text.lowercased()
+            if !query.isEmpty, !text.contains(query) { return false }
+            switch scope {
+            case "all": return true
+            case "dialogue": return l.role != .info
+            case "errors": return l.role == .info && errorWords.contains { text.contains($0) }
+            case "tools": return l.role == .info && (text.hasPrefix("outil ") || text.hasPrefix("chrono") || text.hasPrefix("programme") || text.hasPrefix("rappel") || text.hasPrefix("nouvel objectif") || text.hasPrefix("note ") || text.hasPrefix("séances proposées"))
+            case "watch": return l.role == .info && watchWords.contains { text.contains($0) }
+            default: return l.role == .info
+            }
+        }
+        func stamp(_ l: TranscriptLine) -> String {
+            let t = Int(max(0, l.at.timeIntervalSince(start)))
+            let who: String
+            switch l.role { case .user: who = "LUI "; case .coach: who = "TOI "; case .info: who = "" }
+            return String(format: "%02d:%02d %@%@", t / 60, t % 60, who, l.text)
+        }
+        let selected = transcript.filter(matches)
+        let lines = selected.suffix(count).map(stamp)
+        let errors = transcript.filter { l in l.role == .info && errorWords.contains { l.text.lowercased().contains($0) } }.suffix(10).map(stamp)
+        let elapsed = Int(max(0, Date().timeIntervalSince(start)))
+        var snapshot: [String: Any] = [
+            "phase": String(describing: phase),
+            "elapsed": String(format: "%02d:%02d", elapsed / 60, elapsed % 60),
+            "started_at": DateFormatter.localizedString(from: start, dateStyle: .none, timeStyle: .short),
+            "sport": kind.coachLabel, "capture": mode.label,
+            "coach_link": config.usesAppleAI ? "Apple AI sur l'iPhone" : "Jeffrey AI (\(config.model))",
+            "coach_connected": realtime.isConnected,
+            "reconnections": reconnectAttempts,
+            "watch": connectivity.linkLabel,
+            "paused": isPaused,
+            "goal": goal.label,
+            "transcript_lines": transcript.count,
+            "truncated": selected.count > lines.count,
+        ]
+        if let snap = latest {
+            snapshot["last_metrics_age_s"] = Int(Date().timeIntervalSince(snap.timestamp))
+            if let hr = snap.heartRate { snapshot["heart_rate"] = Int(hr) }
+        } else {
+            snapshot["last_metrics_age_s"] = "aucune métrique reçue"
+        }
+        if let planTitle { snapshot["program"] = planTitle }
+        if let label = timerLabel, let end = timerEndsAt { snapshot["timer"] = "\(label) · reste \(Int(max(0, end.timeIntervalSinceNow))) s" }
+        return ["session": snapshot, "lines": lines, "errors": errors]
+    }
+
+    static func compactArguments(_ json: [String: Any]) -> String {
+        json.keys.sorted().map { key in
+            let v = json[key]
+            let text = (v as? String) ?? (v as? NSNumber).map { "\($0)" } ?? "…"
+            return "\(key)=\(text.count > 60 ? String(text.prefix(57)) + "…" : text)"
+        }.joined(separator: " ")
     }
 
     private func log(_ role: TranscriptLine.Role, _ text: String) {

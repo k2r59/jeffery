@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import os
 import HealthKit
 
 /// Côté iPhone : réception des métriques de la montre, envoi de commandes, lancement de l'app montre.
@@ -11,13 +12,35 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     /// Dernier signe de vie de l'app montre (ping quand elle est ouverte, ou instantané de séance).
     @Published private(set) var lastWatchSeenAt: Date = .distantPast
 
-    /// Source de vérité unique « montre connectée » : joignable au sens d'Apple (app montre au premier plan) ou signe de vie
-    /// (ping, instantané) depuis moins de 20 s — dès que le poignet baisse l'app montre s'endort. Recalculée par minuterie
-    /// pour que l'état retombe à « déconnectée » de lui-même, sans attendre un événement. Tant que l'iPhone n'affiche pas
+    /// Source de vérité unique « montre connectée » : l'app montre tourne et parle à l'iPhone (joignable au sens d'Apple,
+    /// ou ping/instantané depuis moins de 20 s). Écran éteint, l'app montre reste éveillée grâce à sa veille active ;
+    /// sinon elle est suspendue et l'état retombe à « déconnectée » de lui-même (minuterie). Une sonde transferUserInfo
+    /// dit en plus si la montre est à portée Bluetooth (livraison confirmée dès que le paquet l'atteint, app ouverte ou
+    /// non) : ça ne rend pas « connectée », ça précise seulement le conseil affiché. Tant que l'iPhone n'affiche pas
     /// « Montre connectée », ni lui ni la montre ne peuvent démarrer une séance.
     @Published private(set) var watchConnected = false
     private static let heartbeatGrace: TimeInterval = 20
+    private static let rangeGrace: TimeInterval = 45
+    private static let probeInterval: TimeInterval = 15
     private var connectionTimer: Timer?
+    /// Dernière livraison confirmée d'une sonde (montre à portée).
+    @Published private(set) var lastInRangeAt: Date = .distantPast
+    private var probe: WCSessionUserInfoTransfer?
+    private var lastProbeAt: Date = .distantPast
+    private var probesConfirmed = 0
+    private let logger = Logger(subsystem: "dev.promo.watchcoach", category: "watch")
+    @Published private(set) var activationState = "non activée"
+    @Published private(set) var pingsReceived = 0
+    /// Bat toutes les 2 s pour que « signe de vie il y a N s » se rafraîchisse à l'écran.
+    @Published private(set) var heartbeatTick = 0
+
+    /// Ligne de diagnostic (administrateur) : les drapeaux bruts derrière « Montre connectée ».
+    var diagnostic: String {
+        func ago(_ d: Date) -> String { d == .distantPast ? "jamais" : "il y a \(Int(Date().timeIntervalSince(d))) s" }
+        return "session \(activationState) · jumelée \(isPaired ? "✓" : "✗") · app \(isWatchAppInstalled ? "✓" : "✗") · joignable \(isReachable ? "✓" : "✗") · signe de vie \(ago(lastWatchSeenAt)) · pings \(pingsReceived) · à portée \(ago(lastInRangeAt)) · sondes \(probesConfirmed)\(probe?.isTransferring == true ? " (une en vol)" : "")"
+    }
+    /// L'app montre est éveillée (elle répondra tout de suite) ; sinon, à portée mais endormie, l'iPhone la réveille.
+    var watchAppAwake: Bool { isReachable || Date().timeIntervalSince(lastWatchSeenAt) < Self.heartbeatGrace }
 
     enum LinkState { case connected, paired, unpaired }
     var linkState: LinkState {
@@ -29,7 +52,8 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     var disconnectedHint: String {
         if !isPaired { return "Aucune Apple Watch jumelée à cet iPhone." }
         if !isWatchAppInstalled { return "Installe Jeffrey sur ta montre pour démarrer." }
-        return "Ouvre Jeffrey sur ta montre pour démarrer."
+        if watchInRange { return "Ouvre Jeffrey sur ta montre pour démarrer." }
+        return "Montre hors de portée : rapproche-la et ouvre Jeffrey dessus."
     }
 
     var onSnapshot: ((MetricsSnapshot) -> Void)?
@@ -37,19 +61,43 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     /// Retourne la raison du refus, ou nil si la demande est acceptée ; la montre l'affiche.
     var onWatchRequest: ((WatchCommandPayload) -> String?)?
 
-    private func markSeen() {
+    private func markSeen(ping: Bool = false) {
         lastWatchSeenAt = Date()
+        if ping { pingsReceived += 1 }
         refreshConnected()
     }
 
+    /// Montre à portée Bluetooth (sonde livrée récemment), que l'app y soit ouverte ou non.
+    var watchInRange: Bool { watchAppAwake || Date().timeIntervalSince(lastInRangeAt) < Self.rangeGrace }
+
     private func refreshConnected() {
-        let now = isReachable || Date().timeIntervalSince(lastWatchSeenAt) < Self.heartbeatGrace
-        if now != watchConnected { watchConnected = now }
+        // Strict : connectée = les deux apps ouvertes en même temps (l'app montre tourne et parle à l'iPhone).
+        let now = watchAppAwake
+        if now != watchConnected {
+            watchConnected = now
+            logger.notice("montre \(now ? "connectée" : "déconnectée", privacy: .public) — \(self.diagnostic, privacy: .public)")
+        }
     }
 
     private func startConnectionTimer() {
         guard connectionTimer == nil else { return }
-        connectionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refreshConnected() }
+        connectionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            self?.probeRangeIfNeeded()
+            self?.refreshConnected()
+            self?.heartbeatTick &+= 1
+        }
+    }
+
+    /// Sonde de portée : seulement quand l'app montre ne donne pas signe de vie, une à la fois, toutes les 15 s.
+    /// Une sonde en attente reste valable : si la montre revient à portée, sa livraison le signalera.
+    private func probeRangeIfNeeded() {
+        guard isPaired, isWatchAppInstalled, !watchAppAwake else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        if let probe, probe.isTransferring { return }
+        guard Date().timeIntervalSince(lastProbeAt) >= Self.probeInterval else { return }
+        lastProbeAt = Date()
+        probe = session.transferUserInfo([WCKeys.probe: Date().timeIntervalSince1970])
     }
     /// Les instantanés antérieurs à cette date sont ignorés (reliquats d'une séance précédente).
     var acceptSnapshotsSince: Date = .distantPast
@@ -190,13 +238,36 @@ final class PhoneConnectivity: NSObject, ObservableObject {
             self.isReachable = session.isReachable
             self.isPaired = session.isPaired
             self.isWatchAppInstalled = session.isWatchAppInstalled
+            switch session.activationState {
+            case .activated: self.activationState = "activée"
+            case .inactive: self.activationState = "inactive"
+            case .notActivated: self.activationState = "non activée"
+            @unknown default: self.activationState = "?"
+            }
+            self.logger.notice("drapeaux : \(self.diagnostic, privacy: .public)")
             self.refreshConnected()
         }
     }
 }
 
 extension PhoneConnectivity: WCSessionDelegate {
+    /// Livraison d'une sonde confirmée : la montre est à portée (l'app montre n'a pas besoin d'être ouverte).
+    func session(_ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer, error: Error?) {
+        guard userInfoTransfer.userInfo[WCKeys.probe] != nil else { return }
+        DispatchQueue.main.async {
+            if let error {
+                self.logger.notice("sonde : \(error.localizedDescription, privacy: .public)")
+            } else {
+                self.lastInRangeAt = Date()
+                self.probesConfirmed += 1
+                self.refreshConnected()
+            }
+            if self.probe === userInfoTransfer { self.probe = nil }
+        }
+    }
+
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        if let error { logger.error("activation : \(error.localizedDescription, privacy: .public)") }
         refreshFlags(session)
         // Le contexte reçu au lancement est un reliquat : on ne le prend que s'il est frais.
         if let data = session.receivedApplicationContext[WCKeys.metrics] as? Data,
@@ -221,12 +292,12 @@ extension PhoneConnectivity: WCSessionDelegate {
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.markSeen() }; return }
+        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.markSeen(ping: true) }; return }
         ingest(message)
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.markSeen() }; replyHandler(["ok": true]); return }
+        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.markSeen(ping: true) }; replyHandler(["ok": true]); return }
         ingest(message) { refusal in
             if let refusal { replyHandler(["ok": false, "reason": refusal]) } else { replyHandler(["ok": true]) }
         }

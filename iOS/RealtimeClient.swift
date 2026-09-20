@@ -305,7 +305,7 @@ extension RealtimeClient: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
         guard webSocketTask === task else { return } // callback d'une ancienne connexion
-        let text = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "code \(closeCode.rawValue)"
+        let text = reason.flatMap { String(data: $0, encoding: .utf8) }.map { "\($0) (code \(closeCode.rawValue))" } ?? "fermeture serveur, code \(closeCode.rawValue)"
         reportDisconnect(text)
     }
 

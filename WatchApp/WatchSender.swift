@@ -1,6 +1,7 @@
 import Foundation
 import WatchConnectivity
 import Combine
+import os
 
 /// État de la séance iPhone tel que reçu par la montre.
 @MainActor
@@ -9,6 +10,8 @@ final class WatchMirror: ObservableObject {
     @Published var state: CoachMirror = .idle
     @Published var phoneReachable = false
     @Published var notice: String?
+    /// Dernier ping vers l'iPhone (diagnostic) : « ok », ou la raison de l'échec.
+    @Published var lastPing = "aucun"
 }
 
 /// Canal montre → iPhone (métriques) et iPhone → montre (commandes).
@@ -28,6 +31,7 @@ final class WatchSender: NSObject, WCSessionDelegate {
     }
 
     private var pingTimer: Timer?
+    private let logger = Logger(subsystem: "dev.promo.watchcoach", category: "watch")
 
     /// App montre ouverte : signe de vie toutes les 5 s, pour que l'iPhone affiche « connectée » (sa notion de
     /// joignabilité ne tient qu'au premier plan de l'app montre).
@@ -44,8 +48,15 @@ final class WatchSender: NSObject, WCSessionDelegate {
     private func ping() {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
-        guard session.activationState == .activated, session.isReachable else { return }
-        session.sendMessage([WCKeys.ping: 1], replyHandler: nil, errorHandler: { _ in })
+        guard session.activationState == .activated else { note("session non activée"); return }
+        guard session.isReachable else { note("iPhone injoignable"); return }
+        session.sendMessage([WCKeys.ping: 1], replyHandler: { [weak self] _ in self?.note("ok") },
+                            errorHandler: { [weak self] error in self?.note("échec : \(error.localizedDescription)") })
+    }
+
+    private func note(_ result: String) {
+        logger.notice("ping : \(result, privacy: .public)")
+        Task { @MainActor in WatchMirror.shared.lastPing = result }
     }
 
     func send(_ snapshot: MetricsSnapshot) {
@@ -120,6 +131,13 @@ final class WatchSender: NSObject, WCSessionDelegate {
 
     func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in WatchMirror.shared.phoneReachable = session.isReachable }
+    }
+
+    /// Sondes de portée de l'iPhone : rien à faire, la livraison seule compte (confirmée côté iPhone).
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        if userInfo[WCKeys.probe] != nil { return }
+        ingestMirror(userInfo)
+        handleCommand(in: userInfo)
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {

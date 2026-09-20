@@ -121,6 +121,7 @@ struct WatchContentView: View {
                     Circle().fill(mirror.phoneReachable ? citron : sauge).frame(width: 6, height: 6)
                     Text(mirror.phoneReachable ? "iPhone connecté" : "iPhone hors de portée").font(.system(size: 11, weight: .semibold)).foregroundStyle(sauge)
                 }
+                Text("ping \(mirror.lastPing)\(workout.standbyActive ? " · veille active" : "")").font(.system(size: 9, weight: .medium)).foregroundStyle(sauge.opacity(0.7))
                 if let n = mirror.notice ?? (workout.statusMessage.isEmpty ? nil : workout.statusMessage) {
                     Text(n).font(.system(size: 10, weight: .medium)).foregroundStyle(sauge).multilineTextAlignment(.center)
                 }

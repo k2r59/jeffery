@@ -185,6 +185,7 @@ enum WCKeys {
     static let commandAt = "commandAt" // horodatage (secondes) de la commande déposée dans le contexte
     static let coachState = "coachState" // Data JSON de CoachMirror (iPhone → montre)
     static let ping = "ping"             // signal de présence de l'app montre ouverte (montre → iPhone)
+    static let probe = "probe"           // sonde de portée (iPhone → montre, transferUserInfo) : livrée = montre à portée
 }
 
 enum WCCodec {

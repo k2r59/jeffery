@@ -79,6 +79,9 @@ struct JeffreyView: View {
                                 Spacer()
                                 Circle().fill(coach.connectivity.watchConnected ? Theme.lime : Theme.alerte).frame(width: 8, height: 8)
                             }
+                            if account.user?.isAdmin == true {
+                                Text(coach.connectivity.diagnostic).font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.muted)
+                            }
                             HStack(spacing: 4) {
                                 segment("Avec l'app Exercice", selected: modeRaw == CaptureMode.companion.rawValue) { modeRaw = CaptureMode.companion.rawValue }
                                 segment("Par Jeffrey", selected: modeRaw == CaptureMode.owned.rawValue) { modeRaw = CaptureMode.owned.rawValue }

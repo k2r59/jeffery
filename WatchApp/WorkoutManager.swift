@@ -43,6 +43,45 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     var isActive: Bool { snapshot.state == .running || snapshot.state == .paused }
 
+    // MARK: - Veille active (app ouverte, écran éteint)
+
+    /// Écran éteint, watchOS suspend l'app : plus de ping, iPhone « montre déconnectée ». Une session HealthKit
+    /// simplement *préparée* (mode session, sans enregistrement) garde l'app éveillée : elle continue de pinger et de
+    /// répondre à l'iPhone. Coupée après 15 min sans départ pour ménager la batterie ; relancée à chaque réveil de l'app.
+    private var standbySession: HKWorkoutSession?
+    private var standbyTimer: Timer?
+    private static let standbyDuration: TimeInterval = 15 * 60
+    @Published private(set) var standbyActive = false
+
+    func armStandby() {
+        guard !isActive else { return }
+        scheduleStandbyTimeout()
+        guard standbySession == nil else { return }
+        let config = HKWorkoutConfiguration()
+        config.activityType = selectedKind.activityType
+        config.locationType = selectedKind.locationType
+        guard let session = try? HKWorkoutSession(healthStore: healthStore, configuration: config) else { return }
+        session.delegate = self
+        standbySession = session
+        session.prepare()
+        standbyActive = true
+    }
+
+    func endStandby() {
+        standbyTimer?.invalidate(); standbyTimer = nil
+        standbyActive = false
+        guard let session = standbySession else { return }
+        standbySession = nil
+        session.end()
+    }
+
+    private func scheduleStandbyTimeout() {
+        standbyTimer?.invalidate()
+        standbyTimer = Timer.scheduledTimer(withTimeInterval: Self.standbyDuration, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.endStandby() }
+        }
+    }
+
     // MARK: - Autorisation
 
     func requestAuthorization() {
@@ -97,6 +136,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func startOwned(kind: WorkoutKind) {
         guard !isActive else { return }
+        endStandby()
         let config = HKWorkoutConfiguration()
         config.activityType = kind.activityType
         config.locationType = kind.locationType
@@ -128,6 +168,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func startCompanion(kind: WorkoutKind) {
         guard !isActive else { return }
+        endStandby()
         companionGeneration += 1
         let generation = companionGeneration
         statusMessage = "Recherche de la séance en cours…"
@@ -322,6 +363,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         startDate = nil
         session = nil
         builder = nil
+        // Séance finie, l'app reste sous les yeux : on la garde éveillée pour la suivante.
+        armStandby()
     }
 
     private func markPaused() {
@@ -366,6 +409,8 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState,
                                     from fromState: HKWorkoutSessionState, date: Date) {
         Task { @MainActor in
+            // Seule la session de la séance compte : celle de veille (préparée puis terminée) ne pilote rien.
+            guard workoutSession === self.session else { return }
             switch toState {
             case .running:
                 if self.snapshot.state == .paused { self.markResumed() }
@@ -397,6 +442,12 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         Task { @MainActor in
+            if workoutSession === self.standbySession {
+                self.standbySession = nil
+                self.standbyActive = false
+                return
+            }
+            guard workoutSession === self.session else { return }
             self.statusMessage = "Séance : \(error.localizedDescription)"
             self.finishTracking()
         }
@@ -498,6 +549,7 @@ extension WorkoutManager: WKExtendedRuntimeSessionDelegate {
     /// Au retour au premier plan : si la session étendue est tombée, on la relance sans rien demander.
     func appBecameActive() {
         if needsBackgroundExtension { extendBackground() }
+        armStandby()
     }
 
     /// Relance la session d'exécution étendue (l'app doit être au premier plan).
