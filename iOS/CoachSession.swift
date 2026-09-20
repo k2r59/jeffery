@@ -1721,7 +1721,8 @@ final class CoachSession: ObservableObject {
             return
         }
         let goalPart = goal.kind == .free ? "" : " Rappelle l'objectif en quelques mots."
-        realtime.requestResponse(instructions: "Présente-toi comme Jeffrey en une phrase chaleureuse.\(name)\(goalPart) Puis pose une seule question courte : il fait sa séance à sa façon, ou tu lui proposes un exercice adapté ? S'il veut une proposition, suis la règle 10 (suggest_workouts). S'il préfère sa façon, lance la séance sans insister.")
+        // Il sait qui parle : un « Salut Hervé » suffit, jamais « c'est Jeffrey » (retour du 20/09).
+        realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name)\(goalPart) Puis pose une seule question courte : il fait sa séance à sa façon, ou tu lui proposes un exercice adapté ? S'il veut une proposition, suis la règle 10 (suggest_workouts). S'il préfère sa façon, lance la séance sans insister.")
     }
 
     /// Si aucune parole de Jeffrey n'arrive dans la seconde qui suit la fin de la tienne, on joue « Je regarde. ».
