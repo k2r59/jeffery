@@ -73,9 +73,25 @@ final class AccountStore: NSObject, ObservableObject {
     override init() {
         super.init()
         if let data = UserDefaults.standard.data(forKey: Self.userKey) { user = try? JSONDecoder().decode(JeffreyBackend.User.self, from: data) }
+        #if DEBUG
+        // Banc d'essai (simulateur) : un compte administrateur factice, sans backend.
+        if Self.fakeEnabled {
+            user = JeffreyBackend.User(id: "fake-admin", email: "test@example.com", name: "Test", role: "admin", createdAt: nil, lastSeenAt: nil, sessions: 0)
+            quota = JeffreyBackend.Quota(used: 0, limit: 4, unlimited: true)
+        }
+        #endif
     }
 
-    var token: String? { KeychainStore.read(Self.tokenAccount) }
+    #if DEBUG
+    static let fakeEnabled = ProcessInfo.processInfo.environment["WATCHCOACH_FAKE_ACCOUNT"] == "1"
+    #endif
+
+    var token: String? {
+        #if DEBUG
+        if Self.fakeEnabled { return "fake-token" }
+        #endif
+        return KeychainStore.read(Self.tokenAccount)
+    }
     var isSignedIn: Bool { token != nil && user != nil }
 
     /// Connexion avec Apple, puis échange du jeton d'identité contre un jeton Jeffrey.

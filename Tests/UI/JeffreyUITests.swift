@@ -21,30 +21,49 @@ final class JeffreyUITests: XCTestCase {
     func testOnboardingThenTabs() {
         app.launchEnvironment["WATCHCOACH_RESET"] = "1"
         app.launch()
-        XCTAssertTrue(app.staticTexts["Moi, c'est Jeffrey."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Ton rythme. Ton coach."].waitForExistence(timeout: 5))
         screenshot("01-onboarding")
         app.buttons["Me remettre au sport"].tap()
-        app.buttons["On fait connaissance"].tap()
-        let name = app.textFields["Ton prénom"]
+        app.buttons["Faire connaissance"].tap()
+        let name = app.textFields["Prénom"]
         XCTAssertTrue(name.waitForExistence(timeout: 3))
         name.tap(); name.typeText("Test")
         app.buttons["Continuer"].tap()
         // Montre (fausse montre : prête), micro, dehors : on passe sans autorisations sur le simulateur.
-        XCTAssertTrue(app.staticTexts["Ta montre."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Ton cœur donne le tempo."].waitForExistence(timeout: 3))
         screenshot("02-onboarding-montre")
         app.buttons["Continuer"].tap()
-        XCTAssertTrue(app.staticTexts["Ta voix."].waitForExistence(timeout: 3))
-        app.buttons["Passer"].tap()
-        XCTAssertTrue(app.staticTexts["Dehors."].waitForExistence(timeout: 3))
-        app.buttons["Passer"].tap()
-        XCTAssertTrue(app.buttons["Plus tard"].waitForExistence(timeout: 3))
-        screenshot("03-onboarding-cle")
-        app.buttons["Plus tard"].tap()
-        XCTAssertTrue(app.staticTexts["Son intelligence."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Parle.\nJeffrey t'écoute."].waitForExistence(timeout: 3))
+        // Plus de « Passer » ici : on autorise le micro (alerte système acceptée) avant de continuer.
+        let monitor = addUIInterruptionMonitor(withDescription: "Micro") { alert in
+            for label in ["Allow", "Autoriser", "OK"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
+            return false
+        }
+        if app.buttons["Autoriser"].waitForExistence(timeout: 2) { app.buttons["Autoriser"].tap(); app.tap() }
+        let continuer = app.buttons["Continuer"]
+        XCTAssertTrue(continuer.waitForExistence(timeout: 5))
+        continuer.tap()
+        removeUIInterruptionMonitor(monitor)
+        XCTAssertTrue(app.staticTexts["Chaque sortie compte."].waitForExistence(timeout: 5))
+        // Position et mouvement : autorisations acceptées via les alertes système.
+        let monitor2 = addUIInterruptionMonitor(withDescription: "Autorisations") { alert in
+            for label in ["Allow While Using App", "Allow", "Autoriser lorsque l'app est active", "Autoriser", "OK"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
+            return false
+        }
+        for _ in 0..<2 where app.buttons["Autoriser"].waitForExistence(timeout: 2) { app.buttons["Autoriser"].firstMatch.tap(); app.tap(); sleep(1) }
+        XCTAssertTrue(app.buttons["Continuer"].waitForExistence(timeout: 5))
         app.buttons["Continuer"].tap()
-        XCTAssertTrue(app.staticTexts["Presque prêt."].waitForExistence(timeout: 3))
-        screenshot("04-onboarding-recap")
-        app.buttons["Commencer"].tap()
+        removeUIInterruptionMonitor(monitor2)
+        // Compte Apple obligatoire : sans connexion (impossible sur simulateur), le parcours s'arrête ici.
+        XCTAssertTrue(app.staticTexts["Ton coach, à toi."].waitForExistence(timeout: 3))
+        screenshot("03-onboarding-compte")
+        XCTAssertFalse(app.buttons["Continuer"].isEnabled)
+        XCTAssertFalse(app.buttons["Plus tard"].exists)
+        // Suite des onglets : app déjà configurée.
+        app.terminate()
+        app.launchEnvironment["WATCHCOACH_RESET"] = "0"
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2", "-pref.userName", "Test"]
+        app.launch()
         XCTAssertTrue(app.staticTexts["On bouge ?"].waitForExistence(timeout: 5))
         screenshot("05-aujourdhui")
 

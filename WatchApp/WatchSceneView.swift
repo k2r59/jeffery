@@ -346,17 +346,17 @@ struct WatchStatsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                // En-tête sur la ligne de l'heure système.
+            VStack(alignment: .leading, spacing: 5) {
+                // En-tête sur la ligne de l'heure système (marge à gauche pour l'arrondi de l'écran).
                 HStack(spacing: 8) {
                     Text("STATS").font(.system(size: 12, weight: .heavy)).foregroundStyle(sauge).tracking(1.2)
                     Text(Formatters.elapsed(elapsed)).font(.system(size: 13, weight: .bold).monospacedDigit()).foregroundStyle(creme)
                 }
-                .frame(height: 24).padding(.trailing, 62).padding(.top, 10)
+                .frame(height: 24).padding(.leading, 8).padding(.trailing, 62).padding(.top, 10)
                 if let z = mirror.zoneSeconds, z.reduce(0, +) > 0 { zones(z) }
                 statGrid
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 4)
             .padding(.bottom, 6)
         }
         .ignoresSafeArea(edges: .top)
@@ -364,8 +364,7 @@ struct WatchStatsView: View {
 
     private func zones(_ z: [Int]) -> some View {
         let total = max(1, z.reduce(0, +))
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("Zones cardiaques").font(.system(size: 10, weight: .bold)).foregroundStyle(creme)
+        return VStack(alignment: .leading, spacing: 3) {
             GeometryReader { geo in
                 HStack(spacing: 2) {
                     ForEach(0..<5, id: \.self) { i in
@@ -376,10 +375,10 @@ struct WatchStatsView: View {
                     }
                 }
             }
-            .frame(height: 10)
+            .frame(height: 9)
             HStack(spacing: 0) {
                 ForEach(0..<5, id: \.self) { i in
-                    VStack(spacing: 1) {
+                    VStack(spacing: 0) {
                         Text("Z\(i + 1)").font(.system(size: 8, weight: .heavy)).foregroundStyle(z[i] > 0 ? zoneColors[i] : sauge.opacity(0.4))
                         Text(z[i] > 0 ? (z[i] < 60 ? "\(z[i]) s" : Formatters.humanDuration(TimeInterval(z[i]))) : "–").font(.system(size: 8, weight: .semibold).monospacedDigit()).foregroundStyle(sauge)
                     }
@@ -387,7 +386,7 @@ struct WatchStatsView: View {
                 }
             }
         }
-        .padding(8)
+        .padding(.horizontal, 8).padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(surface))
     }
 
@@ -400,12 +399,12 @@ struct WatchStatsView: View {
             if let d = distance, d > 20, elapsed > 30 { return d / elapsed }
             return mirror.averageSpeed
         }()
-        return VStack(spacing: 6) {
-            HStack(spacing: 6) {
+        return VStack(spacing: 5) {
+            HStack(spacing: 5) {
                 stat("frequence-cardiaque", hr.map { "\(Int($0))" } ?? "--", "bpm")
                 stat("frequence-cardiaque", mirror.averageHeartRate.map { "\(Int($0))" } ?? "--", "moy.")
             }
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 stat("energie", energy.map { "\(Int($0))" } ?? "--", "kcal")
                 if kind == .cycling {
                     stat("allure", avgSpeed.map { String(format: "%.1f", $0 * 3.6) } ?? "--", "km/h moy.")
@@ -416,7 +415,7 @@ struct WatchStatsView: View {
                 }
             }
             if kind.usesDistance {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     stat("distance", distance.map { String(format: "%.2f", $0 / 1000) } ?? "--", "km")
                     stat("allure", mirror.paceSecPerKm.flatMap { kind == .cycling ? String(format: "%.1f", 3600 / $0) : pace(1000 / $0) } ?? "--", kind == .cycling ? "km/h" : "/km")
                 }
@@ -431,13 +430,16 @@ struct WatchStatsView: View {
     }
 
     private func stat(_ icon: String, _ value: String, _ unit: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            JIcon(icon, size: 11).foregroundStyle(sauge)
-            Text(value).font(.system(size: 19, weight: .heavy).monospacedDigit()).foregroundStyle(creme).lineLimit(1).minimumScaleFactor(0.7)
-            Text(unit).font(.system(size: 9, weight: .bold)).foregroundStyle(sauge)
+        // Centré : les coins arrondis de l'écran ne rognent plus les chiffres des tuiles du bas.
+        VStack(alignment: .center, spacing: 0) {
+            HStack(spacing: 4) {
+                JIcon(icon, size: 10).foregroundStyle(sauge)
+                Text(unit).font(.system(size: 9, weight: .bold)).foregroundStyle(sauge).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            Text(value).font(.system(size: 16, weight: .heavy).monospacedDigit()).foregroundStyle(creme).lineLimit(1).minimumScaleFactor(0.7)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(surface))
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(surface))
     }
 }

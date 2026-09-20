@@ -1,0 +1,71 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jeffrey — Le coureur</title><style>html,body{margin:0;height:100%;background:#0b100d;overflow:hidden}body{display:grid;place-items:center}#jeffrey-ricochets{width:100%;height:100%;display:grid;place-items:center}.btn{min-height:44px;padding:12px 20px;border:1px solid #c4cabd;border-radius:999px;background:transparent;color:#192115;font:500 14px system-ui;cursor:pointer}.btn:disabled{opacity:.5}.btn:focus-visible{outline:3px solid #809344;outline-offset:3px}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}</style></head><body><div id="jeffrey-ricochets">
+  <style>
+    #jeffrey-ricochets .jp-stage{width:100%;height:100%;background:#0b100d;display:grid;place-items:center}
+    #jeffrey-ricochets canvas{display:block;width:min(100vw,calc(100vh * 400 / 560));height:auto;aspect-ratio:400/560}
+    #jeffrey-ricochets .jp-controls{display:none}
+  </style>
+  <div class="jp-stage"><canvas width="1000" height="1400" role="img" aria-label="Le J vert arrive sans son point. effrey le rejoint en blanc. Le point tombe, rebondit sur le J et se place. Ton rythme. Ton coach. apparaît sur des ondes concentriques qui se propagent en ricochets."></canvas></div>
+  <div class="jp-controls"><button type="button" class="btn" data-replay>Rejouer</button><button type="button" class="btn" data-pause>Pause</button></div>
+  <script>
+  (()=>{
+    const root=document.getElementById('jeffrey-ricochets'),c=root.querySelector('canvas'),g=c.getContext('2d'),pause=root.querySelector('[data-pause]');
+    const reduce=matchMedia('(prefers-reduced-motion: reduce)'),D=7.4,green='#D4FF4F';
+    const clamp=x=>Math.max(0,Math.min(1,x)),p=(t,a,b)=>clamp((t-a)/(b-a));
+    const s=x=>x*x*x*(x*(x*6-15)+10),lerp=(a,b,x)=>a+(b-a)*x;
+    let raf=0,start=0,elapsed=0,playing=false;
+    const hook=new Path2D('M36 27H52C45 58 31 74 4 77L7 62C21 63 30 52 36 27Z');
+    function dotY(t){
+      const rest=223.8,hit=231.85;
+      if(t<2.65)return -20;
+      if(t<3.38)return lerp(-20,hit,p(t,2.65,3.38)**2);
+      if(t<4.02){const u=p(t,3.38,4.02);return hit-4*49*u*(1-u);}
+      if(t<4.38){const u=p(t,4.02,4.38);return hit-4*14*u*(1-u);}
+      return lerp(hit,rest,s(p(t,4.38,4.68)));
+    }
+    function draw(t){
+      g.setTransform(2.5,0,0,2.5,0,0);g.fillStyle='#0b100d';g.fillRect(0,0,400,560);
+      const halo=g.createRadialGradient(200,260,10,200,260,240);halo.addColorStop(0,'rgba(105,138,41,.055)');halo.addColorStop(1,'rgba(11,16,13,0)');g.fillStyle=halo;g.fillRect(0,0,400,560);
+      // Each impact sends a new ripple; quiet echoes continue behind the signature.
+      const launches=[3.38,4.02,4.38];
+      for(let at=5.8;at<=t;at+=1.65)if(t-at<4.2)launches.push(at);
+      for(const at of launches){
+        const age=t-at;if(age<0||age>4.2)continue;
+        const progress=age/4.2,radius=12+progress*275;
+        const opacity=Math.sin(Math.PI*Math.min(1,age/.23)/2)*Math.pow(1-progress,1.6);
+        for(let echo=0;echo<3;echo++){
+          const r=radius-echo*10;if(r<2)continue;
+          g.beginPath();g.ellipse(136.025,242,r,r*.83,0,0,Math.PI*2);
+          g.strokeStyle=`rgba(167,203,99,${opacity*(echo===0?.27:.095)})`;
+          g.lineWidth=echo===0?1.15:.65;g.stroke();
+        }
+      }
+      const arrival=s(p(t,.2,1.48)),jx=lerp(-70,86,arrival),jy=210;
+      const impact=Math.exp(-Math.pow((t-3.4)/.075,2))*.018+Math.exp(-Math.pow((t-4.04)/.055,2))*.007;
+      g.save();g.translate(jx,jy+impact*70);g.scale(1.15,1.15*(1-impact));g.fillStyle=green;g.fill(hook);g.restore();
+      // The entire word glides in as one unit, preserving its natural kerning.
+      const name=s(p(t,1.48,2.48));
+      g.save();g.beginPath();g.rect(150,190,250,125);g.clip();g.globalAlpha=s(p(t,1.48,1.95));g.fillStyle='#F7F9F4';g.font='600 58px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';g.textBaseline='alphabetic';g.fillText('effrey',150+95*(1-name),283);g.restore();
+      if(t>=2.65){
+        const y=dotY(t),squash=Math.exp(-Math.pow((t-3.395)/.035,2))*.13+Math.exp(-Math.pow((t-4.035)/.025,2))*.055;
+        g.save();g.translate(136.025,y);g.scale(1+squash,1-squash);g.fillStyle=green;g.beginPath();g.arc(0,0,9.2,0,Math.PI*2);g.fill();g.restore();
+      }
+      const slogan=s(p(t,4.95,5.95));g.save();g.globalAlpha=slogan;g.fillStyle='#ABB4A4';g.font='400 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';g.textAlign='center';g.fillText('Ton rythme. Ton coach.',200,316+6*(1-slogan));g.restore();
+    }
+    let announced=false;
+    function tick(now){if(!playing)return;elapsed=(now-start)/1000;draw(elapsed);if(elapsed>=D&&!announced){announced=true;root.dispatchEvent(new CustomEvent('jeffrey:splash-complete',{bubbles:true}));}raf=requestAnimationFrame(tick);}
+    function play(){cancelAnimationFrame(raf);elapsed=0;announced=false;if(reduce.matches){playing=false;draw(D);pause.disabled=true;return;}playing=true;pause.disabled=false;pause.textContent='Pause';start=performance.now();raf=requestAnimationFrame(tick);}
+    root.querySelector('[data-replay]').onclick=play;
+    pause.onclick=()=>{if(playing){playing=false;cancelAnimationFrame(raf);pause.textContent='Reprendre';}else{playing=true;start=performance.now()-elapsed*1000;pause.textContent='Pause';raf=requestAnimationFrame(tick);}};
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing){playing=false;cancelAnimationFrame(raf);pause.textContent='Reprendre';}});
+    reduce.addEventListener('change',()=>{if(reduce.matches){cancelAnimationFrame(raf);playing=false;draw(D);pause.disabled=true;}});
+    root.previewAt=t=>{cancelAnimationFrame(raf);playing=false;draw(t);};
+    root.addEventListener('jeffrey:splash-complete',()=>{try{window.webkit.messageHandlers.splash.postMessage('done')}catch(e){}});
+    if(reduce.matches){setTimeout(()=>{try{window.webkit.messageHandlers.splash.postMessage('done')}catch(e){}},1200);}
+    draw(reduce.matches?D:0);
+    // Dans l'app : on prévient qu'on est prêt et on joue tout de suite (pas d'attente de visibilité).
+    try{window.webkit.messageHandlers.splash.postMessage('ready')}catch(e){}
+    if(!reduce.matches){play();}
+  })();
+  </script>
+</div>
+</body></html>
