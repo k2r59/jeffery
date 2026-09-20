@@ -184,3 +184,15 @@ final class SessionCheckpointTests: XCTestCase {
         XCTAssertFalse(sample(savedAt: Date().addingTimeInterval(-45 * 60)).isResumable)
     }
 }
+
+final class SpeechFilterTests: XCTestCase {
+    @MainActor func testNoiseIsIgnoredAndSpeechKept() {
+        XCTAssertTrue(CoachSession.looksLikeSpeech("OK, c'est parti."))
+        XCTAssertTrue(CoachSession.looksLikeSpeech("oui"))
+        XCTAssertTrue(CoachSession.looksLikeSpeech("Stop"))
+        XCTAssertFalse(CoachSession.looksLikeSpeech("Schock!"))
+        XCTAssertFalse(CoachSession.looksLikeSpeech("Lemmonement"))
+        XCTAssertFalse(CoachSession.looksLikeSpeech("Пое"))
+        XCTAssertFalse(CoachSession.looksLikeSpeech("T"))
+    }
+}

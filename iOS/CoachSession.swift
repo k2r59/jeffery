@@ -222,7 +222,15 @@ final class CoachSession: ObservableObject {
                 } else {
                     reason = "il vient de passer de la course à la marche (pause marchée ou fatigue ?) : accompagne sans juger, propose de repartir quand il veut"
                 }
-            case (.walking, .running): reason = "il vient de repasser à la course : encourage la reprise"
+            case (.walking, .running):
+                // Pas de « c'est bien, garde ça » quatre secondes après le départ : on attend que les données bougent.
+                let token = sessionToken
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 25_000_000_000)
+                    guard let self, self.sessionToken == token, self.phase == .live, self.activity.activity == .running else { return }
+                    self.cue(reason: "il court depuis 25 s après une reprise : un mot sur ce que disent les données maintenant (FC, allure), pas de bravo réflexe")
+                }
+                return
             case (_, .stationary): return // annoncé seulement si l'arrêt dure
             case (.stationary, .running), (.stationary, .walking): reason = "il repart après un arrêt"
             default: reason = "activité détectée : \(to.label) (avant : \(from.label))"
@@ -991,6 +999,18 @@ final class CoachSession: ObservableObject {
                 "parameters": ["type": "object", "properties": [:]],
             ], [
                 "type": "function",
+                "name": "end_session",
+                "description": "Terminer la séance pour de bon (l'app arrête tout : montre, chrono, bilan). Toi seul déclenches la fin, et uniquement après confirmation orale : à « stop », « on arrête », « termine », demande d'abord « Je termine la séance ? » ; à son oui, appelle avec confirmed=true. Ne dis jamais que la séance est terminée sans cet appel.",
+                "parameters": [
+                    "type": "object",
+                    "properties": ["confirmed": ["type": "boolean", "description": "true seulement après son oui explicite"]],
+                    "required": ["confirmed"],
+                ],
+            ], [
+                "name": "get_session_log",
+                "description": "Réservé à l'administrateur de l'application : renvoie les derniers événements techniques de la séance (erreurs, reconnexions, chrono, détections). À appeler quand il te demande de regarder les logs ou ce qui s'est mal passé.",
+                "parameters": ["type": "object", "properties": ["count": ["type": "integer", "description": "Nombre de lignes, 15 par défaut"]]],
+            ], [
                 "name": "save_note",
                 "description": "Enregistrer une note demandée par l'utilisateur : kind=memory pour un fait durable sur lui (blessure, objectif, préférence) que tu dois retenir aux prochaines séances ; kind=feedback pour une remarque ou un bug destinés au développeur de l'application. Confirme oralement en une phrase après l'appel.",
                 "parameters": [
@@ -1048,12 +1068,12 @@ final class CoachSession: ObservableObject {
             "audio": [
                 "input": [
                     "format": ["type": "audio/pcm", "rate": 24_000],
+                    // Fin de phrase détectée au sens (il finit son idée avant qu'on réponde) ; la réponse est demandée
+                    // par l'app une fois le texte reçu, pour ignorer le souffle, le vent et les mots isolés.
                     "turn_detection": [
-                        "type": "server_vad",
-                        "threshold": NSDecimalNumber(string: config.micSensitivity.vadThreshold),
-                        "prefix_padding_ms": 300,
-                        "silence_duration_ms": config.micSensitivity.silenceMs,
-                        "create_response": true,
+                        "type": "semantic_vad",
+                        "eagerness": "low",
+                        "create_response": false,
                         "interrupt_response": false,
                     ],
                     "transcription": ["model": "gpt-4o-mini-transcribe", "language": "fr"],
@@ -1090,7 +1110,7 @@ final class CoachSession: ObservableObject {
             Task { @MainActor in self?.finishCoachLine(full) }
         }
         realtime.callbacks.onUserTranscript = { [weak self] text in
-            Task { @MainActor in self?.log(.user, text) }
+            Task { @MainActor in self?.handleUserTranscript(text) }
         }
         realtime.callbacks.onSpeechStarted = { [weak self] in
             // Pas d'interruption : Jeffrey finit sa phrase, la réponse à ce que tu dis arrive ensuite.
@@ -1146,6 +1166,8 @@ final class CoachSession: ObservableObject {
         realtime.callbacks.onError = { [weak self] message in
             Task { @MainActor in
                 guard let self else { return }
+                // Ligne [MÉTRIQUES] déjà purgée côté serveur : sans conséquence.
+                if message.contains("Error deleting item") { return }
                 self.errorMessage = message
                 self.log(.info, "Erreur : \(message)")
                 if self.capturingAck {
@@ -1197,6 +1219,31 @@ final class CoachSession: ObservableObject {
 
     private func handleFunctionCall(name: String, callId: String, arguments: String) {
         let json = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8)) as? [String: Any]) ?? [:]
+        if name == "get_session_log" {
+            guard AccountStore.shared.user?.isAdmin == true else {
+                realtime.sendFunctionOutput(callId: callId, output: ["error": "réservé à l'administrateur"])
+                return
+            }
+            let count = min(40, max(5, (json["count"] as? Int) ?? 15))
+            let start = sessionStartedAt ?? Date()
+            let lines = transcript.filter { $0.role == .info }.suffix(count).map { l -> String in
+                let t = Int(max(0, l.at.timeIntervalSince(start)))
+                return String(format: "%02d:%02d %@", t / 60, t % 60, l.text)
+            }
+            realtime.sendFunctionOutput(callId: callId, output: ["lines": lines, "errors": lines.filter { $0.contains("Erreur") || $0.contains("perdue") || $0.contains("refusé") }])
+            return
+        }
+        if name == "end_session" {
+            let confirmed = (json["confirmed"] as? Bool) ?? false
+            guard confirmed else {
+                realtime.sendFunctionOutput(callId: callId, output: ["ended": false, "hint": "demande-lui de confirmer en une question, puis rappelle avec confirmed=true"])
+                return
+            }
+            log(.info, "Fin de séance demandée à l'oral et confirmée.")
+            realtime.sendFunctionOutput(callId: callId, output: ["ended": true], thenRespond: false)
+            stop()
+            return
+        }
         if name == "get_time" {
             realtime.sendFunctionOutput(callId: callId, output: timeStatus())
             return
@@ -1654,6 +1701,7 @@ final class CoachSession: ObservableObject {
             return
         }
         reconnectAttempts += 1
+        log(.info, "Connexion coach perdue (\(reason)), reconnexion \(reconnectAttempts)/5…")
         guard reconnectAttempts <= 5 else {
             errorMessage = "Connexion perdue : \(reason)"
             stop()
@@ -1828,7 +1876,7 @@ final class CoachSession: ObservableObject {
         if !act.isEmpty { parts.append("corps/terrain : \(act)") }
         if goal.kind != .free {
             let p = goal.progress(elapsed: elapsedNow, distance: displayDistance)
-            parts.append("objectif \(goal.coachLabel()) : \(Int(p.fraction * 100)) %\(p.remaining.map { ", \($0)" } ?? "")\(goalReached ? " · ATTEINT" : "")")
+            parts.append("objectif \(goal.coachLabel()) : \(Int(p.fraction * 100)) %\(p.remaining.map { ", \($0)" } ?? "")\(goalReached ? " · atteint, déjà annoncé, n'en reparle pas" : "")")
         }
         if let r = reference, let name = referenceName {
             if r.offRoute {
@@ -2014,7 +2062,7 @@ final class CoachSession: ObservableObject {
                 let left = planQueue.count + (timerLabel != nil ? 1 : 0)
                 cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite en une phrase, mais le programme « \(planTitle) » continue (encore \(left) bloc\(left > 1 ? "s" : "")) : ne propose pas d'arrêter, on le finit")
             } else {
-                cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite et propose la suite (continuer tranquille ou terminer)")
+                cue(reason: "objectif atteint : \(goal.coachLabel()). Félicite en une phrase ; la séance continue tant qu'il ne dit pas stop, ne parle pas de terminer")
             }
         } else if !halfwayAnnounced, p.fraction >= 0.5, config.goalCues, !goal.isTrial {
             if cue(reason: "mi-parcours de l'objectif (\(goal.coachLabel()))") { halfwayAnnounced = true }
@@ -2064,6 +2112,31 @@ final class CoachSession: ObservableObject {
         realtime.injectMetrics(metricsLine(prefix: "[MÉTRIQUES]"))
         realtime.requestResponse(instructions: "Intervention coach (\(reason)) : 1 à 2 phrases orales, utiles, sans répéter la précédente.")
         return true
+    }
+
+    /// Ce qu'il a dit, transcrit. Avec OpenAI, c'est l'app qui déclenche la réponse : le souffle, le vent et les mots
+    /// isolés sans sens (« Schock », « Lemmonement ») sont ignorés au lieu de provoquer un « bravo » réflexe.
+    private func handleUserTranscript(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let appleAI = realtime is AppleCoachLink
+        if !appleAI, !Self.looksLikeSpeech(trimmed) {
+            log(.info, "Bruit ignoré : « \(trimmed) »")
+            return
+        }
+        log(.user, trimmed)
+        lastUserSpokeAt = Date()
+        if !appleAI { realtime.requestResponse() }
+    }
+
+    /// Deux mots au moins, ou un mot court attendu (oui, non, ok, stop…), en alphabet latin.
+    static func looksLikeSpeech(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        if lowered.unicodeScalars.contains(where: { $0.value > 0x24F && !CharacterSet.punctuationCharacters.contains($0) && !CharacterSet.symbols.contains($0) }) { return false }
+        let words = lowered.split { !$0.isLetter && $0 != "'" }.map(String.init)
+        if words.count >= 2 { return true }
+        let short: Set<String> = ["oui", "non", "ok", "okay", "stop", "go", "merci", "d'accord", "vas-y", "pause", "reprends", "termine", "continue", "attends", "ouais", "nan", "encore"]
+        return words.first.map { short.contains($0) } ?? false
     }
 
     // MARK: - Transcript

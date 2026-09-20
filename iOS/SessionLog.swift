@@ -84,8 +84,11 @@ struct SessionSummary: Codable, Identifiable {
     }
 
     /// Phrase pour le prompt : la dernière séance et son ressenti.
+    /// Une séance « de référence » dure au moins 20 min : les tours d'essai et les départs ratés ne comptent pas.
+    static let referenceMinimumSeconds: TimeInterval = 20 * 60
+
     static func recapForCoach() -> String? {
-        guard let last = loadAll().first else { return nil }
+        guard let last = loadAll().first(where: { $0.elapsed >= referenceMinimumSeconds }) ?? loadAll().first else { return nil }
         let days = Calendar.current.dateComponents([.day], from: last.date, to: Date()).day ?? 0
         var parts = ["\(last.kind.coachLabel) il y a \(days) jour\(days > 1 ? "s" : "")", Formatters.elapsed(last.elapsed)]
         if let d = last.distance { parts.append(Formatters.distance(d)) }
