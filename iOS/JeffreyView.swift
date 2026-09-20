@@ -74,7 +74,7 @@ struct JeffreyView: View {
                              : "Jeffrey enregistre lui-même la séance dans Santé (données plus fréquentes).") {
                             HStack {
                                 JIcon("montre", size: 18).foregroundStyle(Theme.creme)
-                                Text(coach.watchReady ? "Connectée" : (coach.connectivity.isWatchAppInstalled ? "Ouvre Jeffrey sur la montre" : "App montre non installée"))
+                                Text(coach.connectivity.linkLabel)
                                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
                                 Spacer()
                                 Circle().fill(coach.watchReady ? Theme.lime : Theme.alerte).frame(width: 8, height: 8)

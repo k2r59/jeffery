@@ -44,6 +44,8 @@
 	<string>Jeffrey t'écoute pour dialoguer avec toi pendant la séance.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Jeffrey détecte si tu marches, cours ou t'arrêtes, ta cadence et le relief, pour réagir au bon moment.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>En mode Apple AI, Jeffrey comprend ce que tu dis directement sur l'iPhone, sans envoyer ta voix à un serveur.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

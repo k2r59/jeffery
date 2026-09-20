@@ -194,7 +194,10 @@ final class SetupState: NSObject, ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    var allReady: Bool { [health, watch, microphone, location, motion, access].allSatisfy { $0 == .ok } }
+    var allReady: Bool {
+        let appleAI = UserDefaults.standard.string(forKey: Prefs.aiProvider) == "apple"
+        return [health, watch, microphone, location, motion].allSatisfy { $0 == .ok } && (appleAI || access == .ok)
+    }
 }
 
 extension SetupState: CLLocationManagerDelegate {

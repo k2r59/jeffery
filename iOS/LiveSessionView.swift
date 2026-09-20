@@ -64,8 +64,8 @@ struct LiveSessionView: View {
             }
             Spacer()
             HStack(spacing: 6) {
-                Circle().fill(coach.connectivity.isReachable ? accent : danger).frame(width: 8, height: 8)
-                Text(coach.connectivity.isReachable ? "Apple Watch connectée" : "Montre non joignable")
+                Circle().fill(coach.connectivity.linkState == .connected ? accent : (coach.connectivity.linkState == .paired ? muted : danger)).frame(width: 8, height: 8)
+                Text(coach.connectivity.linkState == .connected ? "Apple Watch connectée" : (coach.connectivity.linkState == .paired ? "Apple Watch en veille" : "Montre non jumelée"))
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(muted)
             }
         }

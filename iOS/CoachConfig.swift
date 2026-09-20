@@ -29,6 +29,7 @@ enum Prefs {
     static let analysisModel = "pref.analysisModel"
     static let analysisProvider = "pref.analysisProvider"   // apple | openai
     static let voiceEngine = "pref.voiceEngine"             // openai | apple (voix de sortie uniquement)
+    static let aiProvider = "pref.aiProvider"               // jeffrey (OpenAI via le compte) | apple (tout sur l'iPhone)
     static let micSource = "pref.micSource"                 // headset | iphone
     static let level = "pref.level"
     static let athleteNotes = "pref.athleteNotes"
@@ -73,6 +74,7 @@ enum Prefs {
             analysisModel: "gpt-5-mini",
             analysisProvider: "apple",
             voiceEngine: "openai",
+            aiProvider: "jeffrey",
             micSource: "headset",
             level: AthleteLevel.amateur.rawValue,
             athleteNotes: "",
@@ -139,6 +141,9 @@ enum MicSensitivity: String, CaseIterable, Identifiable {
 struct CoachConfig {
     var apiKey: String
     var voiceEngine: String
+    var aiProvider: String
+    /// Apple AI : cerveau, écoute et voix sur l'iPhone, sans OpenAI.
+    var usesAppleAI: Bool { aiProvider == "apple" }
     var micSensitivity: MicSensitivity
     var presence: String
     var goalCues: Bool
@@ -182,6 +187,7 @@ struct CoachConfig {
         return CoachConfig(
             apiKey: KeychainStore.read(KeychainStore.apiKeyAccount) ?? "",
             voiceEngine: d.string(forKey: Prefs.voiceEngine) ?? "openai",
+            aiProvider: d.string(forKey: Prefs.aiProvider) ?? "jeffrey",
             micSensitivity: MicSensitivity(rawValue: d.string(forKey: Prefs.micSensitivity) ?? "") ?? .medium,
             presence: d.string(forKey: Prefs.presence) ?? "present",
             goalCues: d.object(forKey: Prefs.goalCues) as? Bool ?? true,

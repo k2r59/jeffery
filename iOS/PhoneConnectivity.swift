@@ -8,6 +8,23 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     @Published private(set) var isReachable = false
     @Published private(set) var isPaired = false
     @Published private(set) var isWatchAppInstalled = false
+    /// Dernier signe de vie de l'app montre (ping quand elle est ouverte, ou instantané de séance).
+    @Published private(set) var lastWatchSeenAt: Date = .distantPast
+
+    enum LinkState { case connected, paired, unpaired }
+    /// État tel que l'utilisateur le comprend : « joignable » au sens d'Apple veut dire app montre au premier plan ;
+    /// dès que le poignet baisse elle s'endort. On garde « connectée » 20 s après le dernier signe de vie.
+    var linkState: LinkState {
+        if isReachable || Date().timeIntervalSince(lastWatchSeenAt) < 20 { return .connected }
+        return isPaired && isWatchAppInstalled ? .paired : .unpaired
+    }
+    var linkLabel: String {
+        switch linkState {
+        case .connected: return "Connectée"
+        case .paired: return "Jumelée · app montre en veille"
+        case .unpaired: return isPaired ? "App montre non installée" : "Non jumelée"
+        }
+    }
 
     var onSnapshot: ((MetricsSnapshot) -> Void)?
     /// Demandes venant de la montre (démarrer, pause, reprendre, terminer la séance iPhone).
@@ -133,6 +150,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
             // ou antérieur au début de la séance en cours.
             if snap.timestamp < self.acceptSnapshotsSince { return }
             if let last = self.latest, last.timestamp > snap.timestamp { return }
+            self.lastWatchSeenAt = Date()
             self.latest = snap
             self.onSnapshot?(snap)
         }
@@ -173,10 +191,12 @@ extension PhoneConnectivity: WCSessionDelegate {
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.lastWatchSeenAt = Date() }; return }
         ingest(message)
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.lastWatchSeenAt = Date() }; replyHandler(["ok": true]); return }
         ingest(message)
         replyHandler(["ok": true])
     }

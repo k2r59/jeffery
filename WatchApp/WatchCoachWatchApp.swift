@@ -37,7 +37,12 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
     }
 
     func applicationDidBecomeActive() {
+        WatchSender.shared.startPinging()
         Task { @MainActor in WorkoutManager.shared.appBecameActive() }
+    }
+
+    func applicationWillResignActive() {
+        WatchSender.shared.stopPinging()
     }
 
     /// Lancement à distance : la commande déposée par l'iPhone dit s'il faut suivre l'app Exercice ou piloter la séance.

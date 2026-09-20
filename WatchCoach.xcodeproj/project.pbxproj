@@ -40,6 +40,7 @@
 		66AA65F7EF3F6CFBCE483782 /* LiveSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D0C65692CE31DF56C8BF4B /* LiveSessionView.swift */; };
 		747CD7A43CBEF09FFCF9FA69 /* LogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6CC93125F229C76E8D0C5C5 /* LogicTests.swift */; };
 		75A0EB54E5503D86B74B134C /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B771AF7CF4644315101BFB4F /* HistoryView.swift */; };
+		772ACAD98DE635F44F081D8D /* AppleCoachLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD390DE15D3D8C358A758E7 /* AppleCoachLink.swift */; };
 		778C71A2F0A70BD00B2A85FB /* JeffreyAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C37A5613D449E4AAFC56744 /* JeffreyAccount.swift */; };
 		7E00FDA4D53A37441BE3CBF0 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEA482D9F644EE21C7810B1F /* TodayView.swift */; };
 		827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */; };
@@ -187,6 +188,7 @@
 		A433BC192FA6379ABE91035B /* ObjectiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveView.swift; sourceTree = "<group>"; };
 		A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatchCoachWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8D0C65692CE31DF56C8BF4B /* LiveSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSessionView.swift; sourceTree = "<group>"; };
+		ABD390DE15D3D8C358A758E7 /* AppleCoachLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCoachLink.swift; sourceTree = "<group>"; };
 		AF56474F2C0ABC7AB029C9FC /* JeffreyPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyPalette.swift; sourceTree = "<group>"; };
 		B771AF7CF4644315101BFB4F /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		BEB09EA1F70DBBB21EAAAE95 /* PhoneConnectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneConnectivity.swift; sourceTree = "<group>"; };
@@ -275,6 +277,7 @@
 				EF5170B00B8B8A486571F309 /* AccessView.swift */,
 				5679A20688F985B95732882B /* ActivityMonitor.swift */,
 				2F9EC583F66EEBE0A4F6A881 /* AppleAnalyst.swift */,
+				ABD390DE15D3D8C358A758E7 /* AppleCoachLink.swift */,
 				E062557903F7829899F6BCFE /* AppleVoice.swift */,
 				3E1F94AF9504750D0AC84335 /* Assets.xcassets */,
 				D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */,
@@ -610,6 +613,7 @@
 				ED81313ABC4345D83BA104B6 /* AccessView.swift in Sources */,
 				C7908D583D26CC144A48A6B9 /* ActivityMonitor.swift in Sources */,
 				2ACB625130B2D0D66AD0772C /* AppleAnalyst.swift in Sources */,
+				772ACAD98DE635F44F081D8D /* AppleCoachLink.swift in Sources */,
 				386E28887225C03332FE61BB /* AppleVoice.swift in Sources */,
 				509C76BD84E7D18BBD014B3F /* AudioPipeline.swift in Sources */,
 				D3E9191F7BC99494DF29BA20 /* BeepPlayer.swift in Sources */,

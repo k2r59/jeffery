@@ -100,11 +100,12 @@ struct TodayView: View {
     }
 
     private var watchBadge: some View {
-        let connected = coach.connectivity.isReachable
+        let state = coach.connectivity.linkState
+        let connected = state == .connected
         return HStack(spacing: 8) {
             JIcon("montre", size: 17).foregroundStyle(connected ? Theme.creme : Theme.muted)
-            Circle().fill(connected ? Theme.citron : Theme.muted).frame(width: 7, height: 7)
-            Text(connected ? "Connectée" : "Hors ligne")
+            Circle().fill(connected ? Theme.citron : (state == .paired ? Theme.sauge : Theme.alerte)).frame(width: 7, height: 7)
+            Text(state == .connected ? "Connectée" : (state == .paired ? "Jumelée" : "Non jumelée"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(connected ? Theme.creme : Theme.muted)
         }

@@ -27,6 +27,27 @@ final class WatchSender: NSObject, WCSessionDelegate {
         session.activate()
     }
 
+    private var pingTimer: Timer?
+
+    /// App montre ouverte : signe de vie toutes les 5 s, pour que l'iPhone affiche « connectée » (sa notion de
+    /// joignabilité ne tient qu'au premier plan de l'app montre).
+    func startPinging() {
+        pingTimer?.invalidate()
+        ping()
+        pingTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.ping() }
+    }
+
+    func stopPinging() {
+        pingTimer?.invalidate(); pingTimer = nil
+    }
+
+    private func ping() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable else { return }
+        session.sendMessage([WCKeys.ping: 1], replyHandler: nil, errorHandler: { _ in })
+    }
+
     func send(_ snapshot: MetricsSnapshot) {
         guard WCSession.isSupported(), let data = try? WCCodec.encoder.encode(snapshot) else { return }
         let session = WCSession.default

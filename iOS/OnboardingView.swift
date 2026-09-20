@@ -64,6 +64,9 @@ struct OnboardingView: View {
     @State private var step: Step = .welcome
     @State private var apiKey = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
     @State private var voiceSampled = false
+    @AppStorage(Prefs.aiProvider) private var aiProvider: String = "jeffrey"
+    /// Apple AI demande Apple Intelligence sur l'iPhone (modèle local ou cloud privé).
+    private var appleAIAvailable: Bool { AppleAnalyst.availableBackend(preferLocal: true) != nil }
     @FocusState private var focused: Bool
 
     private var stepTransition: AnyTransition {
@@ -246,7 +249,7 @@ struct OnboardingView: View {
     // MARK: 6. Compte
 
     private var accountStep: some View {
-        page(title: "Ton compte.", subtitle: "Connecte-toi avec Apple : un bouton, rien à saisir. Ton profil, ta mémoire et tes séances restent sur l'iPhone — Jeffrey est à toi, personne d'autre ne partage ce qu'il sait de toi.") {
+        page(title: "Ton compte.", subtitle: "Connecte-toi avec Apple : un bouton, rien à saisir. Ton profil, ta mémoire et tes séances restent sur l'iPhone — Jeffrey est à toi, personne d'autre ne partage ce qu'il sait de toi. (Inutile si tu choisis Apple AI à l'étape suivante.)") {
             if let u = account.user, account.isSignedIn {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
@@ -349,9 +352,9 @@ struct OnboardingView: View {
     // MARK: 7. Intelligence
 
     private var voiceStep: some View {
-        page(title: "Son intelligence.", subtitle: "Qui fait parler Jeffrey ? Tu pourras en changer dans l'onglet Jeffrey.") {
-            voiceChoice(id: "openai", title: "OpenAI — Jeffrey complet", detail: "Recommandé. Voix naturelle, conversation fluide en séance, bilan détaillé.", available: setup.access == .ok)
-            voiceChoice(id: "apple", title: "Apple — moins performant", detail: "Voix Apple et bilan sur l'iPhone (Apple Intelligence). La conversation en séance passe encore par OpenAI.", available: true)
+        page(title: "Son intelligence.", subtitle: "Qui fait réfléchir et parler Jeffrey ? Tu pourras en changer dans l'onglet Jeffrey.") {
+            voiceChoice(id: "openai", title: "Jeffrey AI", detail: "Recommandé. Voix naturelle, conversation fluide en séance, bilan détaillé. Passe par ton compte Jeffrey.", available: setup.access == .ok)
+            voiceChoice(id: "apple", title: "Apple AI", detail: "Tout sur l'iPhone, sans compte ni réseau : moins performant, voix plus mécanique, mais rien ne sort du téléphone.", available: appleAIAvailable)
             Button {
                 if voiceEngine == "apple" {
                     appleVoice.refresh()
@@ -383,7 +386,8 @@ struct OnboardingView: View {
         let selected = voiceEngine == id
         return Button {
             voiceEngine = id
-            // Choix Apple : bilan et mémoire restent sur l'iPhone ; choix OpenAI : Apple Intelligence d'abord, OpenAI en secours (défaut).
+            // Apple AI : cerveau, écoute, voix et bilan sur l'iPhone. Jeffrey AI : OpenAI en séance, bilan Apple d'abord.
+            aiProvider = id == "apple" ? "apple" : "jeffrey"
             analysisProvider = "apple"
             voiceSampled = false
         } label: {
@@ -413,10 +417,10 @@ struct OnboardingView: View {
                 recapRow("Micro", setup.microphone, .mic)
                 recapRow("Position", setup.location, .outdoors)
                 recapRow("Mouvement", setup.motion, .outdoors)
-                recapRow("Compte Jeffrey", setup.access, .account)
+                if aiProvider != "apple" { recapRow("Compte Jeffrey", setup.access, .account) }
             }
         } footer: {
-            let canTrial = setup.watch == .ok && setup.microphone == .ok && setup.access == .ok
+            let canTrial = setup.watch == .ok && setup.microphone == .ok && (setup.access == .ok || aiProvider == "apple")
             primaryButton("Faire un tour d'essai (2 min)") {
                 onboarded = true
                 setupVersion = Prefs.currentSetupVersion

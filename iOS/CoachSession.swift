@@ -29,7 +29,7 @@ final class CoachSession: ObservableObject {
     @Published private(set) var status: String = "Prêt"
     @Published private(set) var errorMessage: String?
     @Published private(set) var coachSpeaking = false {
-        didSet { if coachSpeaking != oldValue { audio.setDucking(coachSpeaking); sendMirror(force: true) } }
+        didSet { if coachSpeaking != oldValue { audio.setDucking(coachSpeaking); realtime.setCoachSpeaking(coachSpeaking); sendMirror(force: true) } }
     }
     @Published private(set) var userSpeaking = false
     @Published private(set) var currentZone: HeartRateZone?
@@ -106,7 +106,8 @@ final class CoachSession: ObservableObject {
     private var lastKmAt: (km: Int, at: Date)?
     private var routineTopic = 0
     private let audio = AudioPipeline()
-    private let realtime = RealtimeClient()
+    /// Cerveau de Jeffrey : OpenAI Realtime (compte Jeffrey) ou Apple AI, choisi au départ de chaque séance.
+    private var realtime: any CoachLink = RealtimeClient()
 
     private var config = CoachConfig.load()
     private var kind: WorkoutKind = .running
@@ -279,10 +280,11 @@ final class CoachSession: ObservableObject {
         goalReached = false
         halfwayAnnounced = false
         lastCoachLine = nil
-        guard OpenAIAccess.isConfigured || !config.apiKey.isEmpty else {
+        guard config.usesAppleAI || OpenAIAccess.isConfigured || !config.apiKey.isEmpty else {
             errorMessage = "Connecte-toi avec Apple (onglet Jeffrey) pour lancer une séance."
             return
         }
+        selectLink()
         self.kind = kind
         self.mode = mode
         errorMessage = nil
@@ -319,7 +321,7 @@ final class CoachSession: ObservableObject {
         audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
         audio.noiseGate = config.micSensitivity.noiseGate
         audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
-        useAppleVoice = config.voiceEngine == "apple"
+        useAppleVoice = config.voiceEngine == "apple" || config.usesAppleAI
         audio.useHeadsetMic = (UserDefaults.standard.string(forKey: Prefs.micSource) ?? "headset") == "headset"
         appleVoice.refresh()
         sentenceBuffer = ""; textResponseBuffer = ""
@@ -785,12 +787,13 @@ final class CoachSession: ObservableObject {
         #if DEBUG
         if FakeRealtimeBackend.enabled, config.apiKey.isEmpty { config.apiKey = "fake" }
         #endif
-        guard OpenAIAccess.isConfigured || !config.apiKey.isEmpty else {
+        guard config.usesAppleAI || OpenAIAccess.isConfigured || !config.apiKey.isEmpty else {
             errorMessage = "Connecte-toi avec Apple (onglet Jeffrey) pour reprendre la séance."
             SessionCheckpoint.clear()
             sessionStartedAt = nil
             return
         }
+        selectLink()
         resuming = true
         pendingPlanAdvance = false
         errorMessage = nil
@@ -813,7 +816,7 @@ final class CoachSession: ObservableObject {
         audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
         audio.noiseGate = config.micSensitivity.noiseGate
         audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
-        useAppleVoice = config.voiceEngine == "apple"
+        useAppleVoice = config.voiceEngine == "apple" || config.usesAppleAI
         audio.useHeadsetMic = (UserDefaults.standard.string(forKey: Prefs.micSource) ?? "headset") == "headset"
         appleVoice.refresh()
         sentenceBuffer = ""; textResponseBuffer = ""
@@ -905,7 +908,20 @@ final class CoachSession: ObservableObject {
 
     /// Ouvre le WebSocket Realtime avec le justificatif du moment : jeton éphémère du compte Jeffrey (demandé au
     /// backend, quelques centaines de ms) ou clé perso. Un refus (accès en attente, quota) arrête la séance avec le motif.
+    /// Le cerveau du jour : Apple AI (sur l'iPhone) ou OpenAI ; les callbacks sont rebranchés sur le nouveau lien.
+    private func selectLink() {
+        let wantsApple = config.usesAppleAI
+        let isApple = realtime is AppleCoachLink
+        if wantsApple != isApple {
+            realtime.disconnect()
+            realtime = wantsApple ? AppleCoachLink() : RealtimeClient()
+            wireRealtime()
+            audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
+        }
+    }
+
     private func connectRealtime() {
+        if config.usesAppleAI { realtime.connect(apiKey: "", model: "apple", sessionConfig: sessionConfig()); return }
         #if DEBUG
         if FakeRealtimeBackend.enabled { realtime.connect(apiKey: config.apiKey, model: config.model, sessionConfig: sessionConfig()); return }
         #endif
@@ -1521,7 +1537,7 @@ final class CoachSession: ObservableObject {
             }
             phase = .live
             status = "Coach en ligne"
-            log(.info, "Coach connecté (\(config.model), voix \(config.voice)).")
+            log(.info, config.usesAppleAI ? "Coach connecté (Apple AI sur l'iPhone)." : "Coach connecté (\(config.model), voix \(config.voice)).")
             startTimers()
             sendMirror(force: true)
             if resuming {
@@ -1625,6 +1641,12 @@ final class CoachSession: ObservableObject {
         audio.stopPlayback()
         if phase == .ending { finishTeardown(); return }
         guard phase == .live || phase == .connecting else { return }
+        if config.usesAppleAI {
+            // Rien à reconnecter : Apple AI s'arrête seulement s'il est indisponible.
+            errorMessage = errorMessage ?? reason
+            stop()
+            return
+        }
         // Clé refusée ou accès interdit : inutile de retenter.
         if let err = errorMessage?.lowercased(), err.contains("api key") || err.contains("invalid_api_key") || err.contains("unauthorized") {
             errorMessage = "Clé API refusée par OpenAI : vérifie-la dans les réglages (elle commence par sk-)."
