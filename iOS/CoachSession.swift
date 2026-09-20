@@ -1101,6 +1101,7 @@ final class CoachSession: ObservableObject {
                     "required": ["confirmed"],
                 ],
             ], [
+                "type": "function",
                 "name": "save_note",
                 "description": "Enregistrer une note demandée par l'utilisateur : kind=memory pour un fait durable sur lui (blessure, objectif, préférence) que tu dois retenir aux prochaines séances ; kind=feedback pour une remarque ou un bug destinés au développeur de l'application. Confirme oralement en une phrase après l'appel.",
                 "parameters": [
@@ -1260,6 +1261,12 @@ final class CoachSession: ObservableObject {
                 if message.contains("Error deleting item") { return }
                 self.errorMessage = message
                 self.log(.info, "Erreur : \(message)")
+                // Configuration de session refusée (paramètre inconnu ou manquant) : rien ne marchera, inutile
+                // d'attendre le délai de 25 s en « Connexion en cours… ».
+                if self.phase == .connecting, message.contains("parameter") {
+                    self.stop(reason: "configuration de session refusée par OpenAI")
+                    return
+                }
                 if self.capturingAck {
                     self.capturingAck = false
                     self.ackCaptureBuffer = Data()
