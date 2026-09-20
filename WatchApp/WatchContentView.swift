@@ -102,9 +102,9 @@ struct WatchContentView: View {
                 Button {
                     guard !sending else { return }
                     sending = true
-                    WatchSender.shared.request(.requestStart, kind: workout.selectedKind) { ok in
+                    WatchSender.shared.request(.requestStart, kind: workout.selectedKind) { refusal in
                         sending = false
-                        mirror.notice = ok ? nil : "iPhone injoignable : ouvre Jeffrey sur l'iPhone"
+                        mirror.notice = refusal
                     }
                 } label: {
                     HStack(spacing: 6) {
@@ -240,9 +240,9 @@ struct WatchContentView: View {
         return VStack(spacing: 12) {
             HStack(spacing: 18) {
                 controlButton("arreter", "Terminer", JeffreyPalette.alerte) {
-                    WatchSender.shared.request(.requestEnd, kind: m.kind) { ok in
+                    WatchSender.shared.request(.requestEnd, kind: m.kind) { refusal in
                         // iPhone injoignable, ou déjà à l'arrêt : on termine la capture ici.
-                        if !ok || m.phase == "idle" { workout.end() }
+                        if refusal != nil || m.phase == "idle" { workout.end() }
                     }
                 }
                 if m.paused {

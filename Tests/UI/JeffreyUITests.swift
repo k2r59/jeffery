@@ -100,8 +100,8 @@ final class JeffreyUITests: XCTestCase {
         app.launchEnvironment["WATCHCOACH_FAKE_WATCH"] = "0"
         app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Installe Jeffrey sur ta montre pour démarrer"].waitForExistence(timeout: 5)
-                      || app.staticTexts["Ouvre Jeffrey sur ta montre pour démarrer"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Montre déconnectée"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Montre déconnectée : ni l'iPhone ni la montre ne peuvent démarrer."].exists)
         XCTAssertFalse(app.buttons["Démarrer avec Jeffrey"].exists)
         screenshot("09-sans-montre")
     }

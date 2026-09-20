@@ -77,7 +77,7 @@ struct JeffreyView: View {
                                 Text(coach.connectivity.linkLabel)
                                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
                                 Spacer()
-                                Circle().fill(coach.watchReady ? Theme.lime : Theme.alerte).frame(width: 8, height: 8)
+                                Circle().fill(coach.connectivity.watchConnected ? Theme.lime : Theme.alerte).frame(width: 8, height: 8)
                             }
                             HStack(spacing: 4) {
                                 segment("Avec l'app Exercice", selected: modeRaw == CaptureMode.companion.rawValue) { modeRaw = CaptureMode.companion.rawValue }

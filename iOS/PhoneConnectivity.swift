@@ -11,24 +11,46 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     /// Dernier signe de vie de l'app montre (ping quand elle est ouverte, ou instantané de séance).
     @Published private(set) var lastWatchSeenAt: Date = .distantPast
 
+    /// Source de vérité unique « montre connectée » : joignable au sens d'Apple (app montre au premier plan) ou signe de vie
+    /// (ping, instantané) depuis moins de 20 s — dès que le poignet baisse l'app montre s'endort. Recalculée par minuterie
+    /// pour que l'état retombe à « déconnectée » de lui-même, sans attendre un événement. Tant que l'iPhone n'affiche pas
+    /// « Montre connectée », ni lui ni la montre ne peuvent démarrer une séance.
+    @Published private(set) var watchConnected = false
+    private static let heartbeatGrace: TimeInterval = 20
+    private var connectionTimer: Timer?
+
     enum LinkState { case connected, paired, unpaired }
-    /// État tel que l'utilisateur le comprend : « joignable » au sens d'Apple veut dire app montre au premier plan ;
-    /// dès que le poignet baisse elle s'endort. On garde « connectée » 20 s après le dernier signe de vie.
     var linkState: LinkState {
-        if isReachable || Date().timeIntervalSince(lastWatchSeenAt) < 20 { return .connected }
+        if watchConnected { return .connected }
         return isPaired && isWatchAppInstalled ? .paired : .unpaired
     }
-    var linkLabel: String {
-        switch linkState {
-        case .connected: return "Connectée"
-        case .paired: return "Jumelée · app montre en veille"
-        case .unpaired: return isPaired ? "App montre non installée" : "Non jumelée"
-        }
+    var linkLabel: String { watchConnected ? "Montre connectée" : "Montre déconnectée" }
+    /// Ce qu'il faut faire pour que la montre passe « connectée ».
+    var disconnectedHint: String {
+        if !isPaired { return "Aucune Apple Watch jumelée à cet iPhone." }
+        if !isWatchAppInstalled { return "Installe Jeffrey sur ta montre pour démarrer." }
+        return "Ouvre Jeffrey sur ta montre pour démarrer."
     }
 
     var onSnapshot: ((MetricsSnapshot) -> Void)?
     /// Demandes venant de la montre (démarrer, pause, reprendre, terminer la séance iPhone).
-    var onWatchRequest: ((WatchCommandPayload) -> Void)?
+    /// Retourne la raison du refus, ou nil si la demande est acceptée ; la montre l'affiche.
+    var onWatchRequest: ((WatchCommandPayload) -> String?)?
+
+    private func markSeen() {
+        lastWatchSeenAt = Date()
+        refreshConnected()
+    }
+
+    private func refreshConnected() {
+        let now = isReachable || Date().timeIntervalSince(lastWatchSeenAt) < Self.heartbeatGrace
+        if now != watchConnected { watchConnected = now }
+    }
+
+    private func startConnectionTimer() {
+        guard connectionTimer == nil else { return }
+        connectionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refreshConnected() }
+    }
     /// Les instantanés antérieurs à cette date sont ignorés (reliquats d'une séance précédente).
     var acceptSnapshotsSince: Date = .distantPast
 
@@ -59,7 +81,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         #if DEBUG
         if FakeWatch.enabled {
             fakeWatch = FakeWatch(connectivity: self)
-            isPaired = true; isWatchAppInstalled = true; isReachable = true
+            isPaired = true; isWatchAppInstalled = true; isReachable = true; watchConnected = true
             return
         }
         #endif
@@ -67,6 +89,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         let session = WCSession.default
         session.delegate = self
         session.activate()
+        startConnectionTimer()
     }
 
     func requestHealthAuthorization() {
@@ -137,12 +160,18 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         }
     }
 
-    private func ingest(_ dict: [String: Any]) {
+    /// `reply` reçoit la raison d'un refus (nil = accepté) ; il est appelé sur le fil principal, après traitement.
+    private func ingest(_ dict: [String: Any], reply: ((String?) -> Void)? = nil) {
         if let data = dict[WCKeys.command] as? Data,
            let payload = try? WCCodec.decoder.decode(WatchCommandPayload.self, from: data) {
-            DispatchQueue.main.async { self.onWatchRequest?(payload) }
+            DispatchQueue.main.async {
+                self.markSeen()
+                let refusal = self.onWatchRequest?(payload)
+                reply?(refusal)
+            }
             return
         }
+        reply?(nil)
         guard let data = dict[WCKeys.metrics] as? Data,
               let snap = try? WCCodec.decoder.decode(MetricsSnapshot.self, from: data) else { return }
         DispatchQueue.main.async {
@@ -150,7 +179,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
             // ou antérieur au début de la séance en cours.
             if snap.timestamp < self.acceptSnapshotsSince { return }
             if let last = self.latest, last.timestamp > snap.timestamp { return }
-            self.lastWatchSeenAt = Date()
+            self.markSeen()
             self.latest = snap
             self.onSnapshot?(snap)
         }
@@ -161,6 +190,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
             self.isReachable = session.isReachable
             self.isPaired = session.isPaired
             self.isWatchAppInstalled = session.isWatchAppInstalled
+            self.refreshConnected()
         }
     }
 }
@@ -191,14 +221,15 @@ extension PhoneConnectivity: WCSessionDelegate {
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.lastWatchSeenAt = Date() }; return }
+        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.markSeen() }; return }
         ingest(message)
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.lastWatchSeenAt = Date() }; replyHandler(["ok": true]); return }
-        ingest(message)
-        replyHandler(["ok": true])
+        if message[WCKeys.ping] != nil { DispatchQueue.main.async { self.markSeen() }; replyHandler(["ok": true]); return }
+        ingest(message) { refusal in
+            if let refusal { replyHandler(["ok": false, "reason": refusal]) } else { replyHandler(["ok": true]) }
+        }
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {

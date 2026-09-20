@@ -261,8 +261,9 @@ final class CoachSession: ObservableObject {
 
     // MARK: - Démarrage / arrêt
 
-    /// La montre est le capteur : sans elle, pas de séance.
-    var watchReady: Bool { connectivity.isPaired && connectivity.isWatchAppInstalled && connectivity.isReachable }
+    /// La montre est le capteur : sans elle, pas de séance. Même vérité que le badge « Montre connectée » de l'iPhone,
+    /// et même règle pour un départ demandé depuis la montre.
+    var watchReady: Bool { connectivity.isPaired && connectivity.isWatchAppInstalled && connectivity.watchConnected }
 
     func start(kind: WorkoutKind, mode: CaptureMode, goal: SessionGoal = .free) {
         guard phase == .idle else { return }
@@ -279,9 +280,7 @@ final class CoachSession: ObservableObject {
         if FakeRealtimeBackend.enabled, config.apiKey.isEmpty { config.apiKey = "fake" }
         #endif
         guard watchReady else {
-            errorMessage = connectivity.isWatchAppInstalled
-                ? "Montre introuvable : ouvre Jeffrey sur la montre, puis réessaie."
-                : "L'app Jeffrey n'est pas installée sur la montre."
+            errorMessage = "Montre déconnectée : " + connectivity.disconnectedHint.prefix(1).lowercased() + connectivity.disconnectedHint.dropFirst()
             return
         }
         self.goal = goal
@@ -407,14 +406,25 @@ final class CoachSession: ObservableObject {
         }
     }
 
-    /// Télécommande montre : la montre ne décide de rien, elle demande à l'iPhone.
-    private func handle(watchRequest payload: WatchCommandPayload) {
+    /// Télécommande montre : la montre ne décide de rien, elle demande à l'iPhone. Retourne la raison d'un refus.
+    @discardableResult
+    private func handle(watchRequest payload: WatchCommandPayload) -> String? {
+        var refusal: String?
         switch payload.command {
         case .requestStart:
-            guard phase == .idle else { return }
+            guard phase == .idle else { break }
+            // Même porte que le bouton de l'iPhone : pas de « Montre connectée » à l'écran, pas de départ.
+            guard watchReady else {
+                refusal = "L'iPhone ne voit pas la montre connectée. Garde Jeffrey ouvert sur la montre et réessaie."
+                errorMessage = "Départ refusé depuis la montre : " + connectivity.linkLabel.lowercased() + "."
+                log(.info, "Départ montre refusé : montre déconnectée côté iPhone")
+                break
+            }
             let mode = CaptureMode(rawValue: UserDefaults.standard.string(forKey: Prefs.mode) ?? "") ?? .companion
             UserDefaults.standard.set(payload.kind.rawValue, forKey: Prefs.kind)
             start(kind: payload.kind, mode: mode, goal: .free)
+            // Toujours à l'arrêt avec un message : start() a refusé (micro, compte…) ; la montre doit le savoir.
+            if phase == .idle, let message = errorMessage { refusal = message }
         case .requestPause, .requestResume:
             togglePause()
         case .requestEnd:
@@ -428,6 +438,7 @@ final class CoachSession: ObservableObject {
             break
         }
         sendMirror(force: true)
+        return refusal
     }
 
     /// Reprise quand l'app revient au premier plan (audio impossible à démarrer en arrière-plan).

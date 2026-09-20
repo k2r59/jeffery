@@ -77,15 +77,20 @@ final class WatchSender: NSObject, WCSessionDelegate {
     // MARK: WCSessionDelegate
 
     /// Demande à l'iPhone de démarrer / mettre en pause / reprendre / terminer la séance Jeffrey.
-    func request(_ command: WatchCommand, kind: WorkoutKind, completion: @escaping (Bool) -> Void) {
+    /// Demande à l'iPhone ; `completion` reçoit nil si accepté, sinon la raison à afficher (iPhone injoignable ou refus
+    /// explicite de l'iPhone, par exemple quand il n'affiche pas « Montre connectée »).
+    func request(_ command: WatchCommand, kind: WorkoutKind, completion: @escaping (String?) -> Void) {
+        let unreachable = "iPhone injoignable : ouvre Jeffrey sur l'iPhone"
         let payload = WatchCommandPayload(command: command, kind: kind, mode: .companion)
-        guard WCSession.isSupported(), let data = try? WCCodec.encoder.encode(payload) else { completion(false); return }
+        guard WCSession.isSupported(), let data = try? WCCodec.encoder.encode(payload) else { completion(unreachable); return }
         let session = WCSession.default
-        guard session.activationState == .activated, session.isReachable else { completion(false); return }
-        session.sendMessage([WCKeys.command: data], replyHandler: { _ in
-            Task { @MainActor in completion(true) }
+        guard session.activationState == .activated, session.isReachable else { completion(unreachable); return }
+        session.sendMessage([WCKeys.command: data], replyHandler: { reply in
+            let ok = reply["ok"] as? Bool ?? true
+            let reason = ok ? nil : (reply["reason"] as? String ?? "L'iPhone a refusé le départ.")
+            Task { @MainActor in completion(reason) }
         }, errorHandler: { _ in
-            Task { @MainActor in completion(false) }
+            Task { @MainActor in completion(unreachable) }
         })
     }
 

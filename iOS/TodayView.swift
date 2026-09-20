@@ -99,16 +99,17 @@ struct TodayView: View {
         }
     }
 
+    /// Deux états seulement, lisibles d'un coup d'œil : tant que « Montre connectée » n'est pas affiché, pas de départ.
     private var watchBadge: some View {
-        let state = coach.connectivity.linkState
-        let connected = state == .connected
+        let connected = coach.connectivity.watchConnected
         return HStack(spacing: 8) {
             JIcon("montre", size: 17).foregroundStyle(connected ? Theme.creme : Theme.muted)
-            Circle().fill(connected ? Theme.citron : (state == .paired ? Theme.sauge : Theme.alerte)).frame(width: 7, height: 7)
-            Text(state == .connected ? "Connectée" : (state == .paired ? "Jumelée" : "Non jumelée"))
+            Circle().fill(connected ? Theme.citron : Theme.alerte).frame(width: 7, height: 7)
+            Text(connected ? "Montre connectée" : "Montre déconnectée")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(connected ? Theme.creme : Theme.muted)
         }
+        .accessibilityIdentifier("watchBadge")
         .padding(.horizontal, 13)
         .frame(height: 33)
         .background(Capsule().fill(Theme.surfaceRaised))
@@ -191,10 +192,10 @@ struct TodayView: View {
             VStack(spacing: 4) {
                 HStack(spacing: 8) {
                     JIcon("montre", size: 16).foregroundStyle(Theme.alerte)
-                    Text(coach.connectivity.isWatchAppInstalled ? "Ouvre Jeffrey sur ta montre pour démarrer" : "Installe Jeffrey sur ta montre pour démarrer")
+                    Text(coach.connectivity.disconnectedHint)
                         .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.creme)
                 }
-                Text("La montre mesure ton cœur : sans elle, pas de séance.").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+                Text("Montre déconnectée : ni l'iPhone ni la montre ne peuvent démarrer.").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
             }
             .frame(maxWidth: .infinity).frame(height: 56)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surfaceRaised.opacity(0.8)))
