@@ -78,8 +78,7 @@ struct WatchContentView: View {
     private func react(to scene: WatchScene) {
         switch scene.kind {
         case .countdown, .interval, .zone, .pace: withAnimation { page = 3 }
-        case .message: withAnimation { page = 2 }
-        case .celebration, .climb, .ghost: withAnimation { page = 1 }
+        case .message, .celebration, .climb, .ghost: withAnimation { page = 1 }
         }
     }
 

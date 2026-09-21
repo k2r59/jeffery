@@ -314,11 +314,8 @@ struct WatchCoachPage: View {
         .modifier(WatchUI.Chrome())
     }
 
-    /// Message affiché par Jeffrey (show_on_watch message) : il remplace l'état.
-    private var message: String? {
-        guard mirror.phase == "live", let scene = mirror.scene, scene.kind == .message else { return nil }
-        return scene.subtitle ?? scene.title
-    }
+    /// La montre n'affiche pas les phrases de Jeffrey (choix du 21/09) : il les dit, la montre montre son état.
+    private var message: String? { nil }
 
     private var state: String {
         if !phoneReachable { return "iPhone hors de portée" }

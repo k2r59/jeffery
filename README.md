@@ -25,8 +25,8 @@ Projet personnel, installé hors App Store en signature de développement.
   vitesse ou allure moyenne selon le sport). Et des scènes plein écran qui prennent la main d'elles-mêmes : anneau de
   compte à rebours (« dans 30 secondes tu marches »), fractionné effort/récup avec la répétition en cours, montée
   (profil, pente, D+ restant), fantôme sur un parcours refait, fête à l'objectif atteint. Jeffrey en pilote d'autres à
-  la voix (outil `show_on_watch`) : zone cardiaque à tenir avec ta FC en curseur, allure cible avec l'écart, sa phrase
-  en grand. Vibrations à 3-2-1, à la fin d'un bloc, en sortie de zone, et à la fête.
+  la voix (outil `show_on_watch`) : zone cardiaque à tenir avec ta FC en curseur, allure cible avec l'écart. La montre
+  n'affiche jamais ses phrases : il les dit. Vibrations à 3-2-1, à la fin d'un bloc, en sortie de zone, et à la fête.
 - Jeffrey parle : le J citron se transforme en sept barres vocales tant que la voix joue, puis reprend sa forme
   (pack d'animation porté en natif dans `Shared/JeffreyVoiceView.swift`, sans bibliothèque ; iPhone et montre).
 - Écran de lancement : symbole Jeffrey puis logo et signature, fondu vers l'app.

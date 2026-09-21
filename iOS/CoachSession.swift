@@ -583,17 +583,14 @@ final class CoachSession: ObservableObject {
                                         title: "Allure cible \(text)", subtitle: "min/km", low: target - tol, high: target + tol, value: currentPaceSecPerKm)
             log(.info, "Montre : allure cible \(text) ±\(Int(tol)) s")
         case "message":
-            let text = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { realtime.sendFunctionOutput(callId: callId, output: ["error": "texte vide"]); return }
-            let seconds = min(30, max(3, (json["seconds"] as? Double) ?? 8))
-            requestedScene = WatchScene(kind: .message, id: "msg-\(Int(Date().timeIntervalSince1970))", title: "Jeffrey", subtitle: String(text.prefix(90)),
-                                        until: Date().addingTimeInterval(seconds))
-            log(.info, "Montre : « \(text) »")
+            // Retiré (21/09) : la montre n'affiche pas les phrases de Jeffrey, il les dit.
+            realtime.sendFunctionOutput(callId: callId, output: ["error": "la montre n'affiche pas de message : dis-le à l'oral"])
+            return
         case "clear":
             requestedScene = nil
             log(.info, "Montre : retour à l'écran normal")
         default:
-            realtime.sendFunctionOutput(callId: callId, output: ["error": "what doit valoir zone, pace, message ou clear"])
+            realtime.sendFunctionOutput(callId: callId, output: ["error": "what doit valoir zone, pace ou clear"])
             return
         }
         sendMirror(force: true)
@@ -1145,16 +1142,14 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "show_on_watch",
-                "description": "Ce que la montre affiche en grand. what=zone + zone 1-5 : jauge cardiaque avec la zone à tenir (« reste en zone 2 »). what=pace + pace « 5:30 » : allure cible et écart en direct. what=message + text : ta phrase en grand quelques secondes (consigne importante). what=clear : retour à l'écran normal quand la consigne ne tient plus. Chrono, montées, objectif atteint et parcours s'affichent tout seuls.",
+                "description": "Ce que la montre affiche en grand. what=zone + zone 1-5 : jauge cardiaque avec la zone à tenir (« reste en zone 2 »). what=pace + pace « 5:30 » : allure cible et écart en direct. what=clear : retour à l'écran normal quand la consigne ne tient plus. Chrono, montées, objectif atteint et parcours s'affichent tout seuls. La montre n'affiche jamais tes phrases : ce que tu dis, tu le dis à l'oral.",
                 "parameters": [
                     "type": "object",
                     "properties": [
-                        "what": ["type": "string", "enum": ["zone", "pace", "message", "clear"]],
+                        "what": ["type": "string", "enum": ["zone", "pace", "clear"]],
                         "zone": ["type": "integer", "description": "1 à 5, pour what=zone"],
                         "pace": ["type": "string", "description": "m:ss par km, pour what=pace"],
                         "tolerance_seconds": ["type": "number", "description": "Marge autour de l'allure cible, 10 par défaut"],
-                        "text": ["type": "string", "description": "Pour what=message, 90 caractères max"],
-                        "seconds": ["type": "number", "description": "Durée d'affichage du message, 8 par défaut"],
                     ],
                     "required": ["what"],
                 ],
