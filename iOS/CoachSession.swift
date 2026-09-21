@@ -1078,7 +1078,7 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "suggest_workouts",
-                "description": "Dès qu'il demande un exercice, un fractionné, une idée de séance ou un programme (« propose-moi », « un fractionné pour débutant ») : appelle CET outil, ne compose jamais un programme de tête. Il renvoie deux séances types du catalogue pour le sport en cours, au niveau de son profil (level seulement s'il a dit « plus dur » ou « plus doux »). Présente les deux à l'oral en une phrase chacune, il choisit (« la première », « la deux »), puis start_workout avec l'id.",
+                "description": "Dès qu'il demande un exercice, un fractionné, une idée de séance ou un programme (« propose-moi », « un fractionné pour débutant ») : appelle CET outil, ne compose jamais un programme de tête. Il renvoie deux séances types du catalogue pour le sport en cours, au niveau de son profil (level seulement s'il a dit « plus dur » ou « plus doux »). Présente les deux à l'oral, une phrase chacune, numérotées. Quand il choisit (« la première », « la deux », « celle de 20 minutes »), reformule son choix en une phrase et demande « c'est bien ça ? » ; à son oui, start_workout avec confirmed=true.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1088,11 +1088,15 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "start_workout",
-                "description": "Lancer la séance type qu'il a choisie (id de suggest_workouts). L'app déroule les blocs au chronomètre, affiche chaque bloc sur la montre et te relance à chaque changement ; tu annonces chaque bloc avec sa consigne, et « vas-y, cours » au moment exact. Un programme en cours ne se remplace qu'après son accord (replace=true).",
+                "description": "Lancer la séance type qu'il a choisie (id de suggest_workouts), UNIQUEMENT après avoir reformulé son choix et obtenu son oui (confirmed=true). L'app déroule les blocs au chronomètre, affiche chaque bloc sur la montre et te relance à chaque changement ; tu annonces chaque bloc avec sa consigne, et « vas-y, cours » au moment exact. Un programme en cours ne se remplace qu'après son accord explicite pour l'abandonner (replace=true).",
                 "parameters": [
                     "type": "object",
-                    "properties": ["id": ["type": "string"], "replace": ["type": "boolean", "description": "true seulement après son accord pour abandonner l'enchaînement en cours"]],
-                    "required": ["id"],
+                    "properties": [
+                        "id": ["type": "string"],
+                        "confirmed": ["type": "boolean", "description": "true seulement après qu'il a confirmé ton récapitulatif du choix (« c'est bien ça ? » → oui)"],
+                        "replace": ["type": "boolean", "description": "true seulement après son accord pour abandonner l'enchaînement en cours"],
+                    ],
+                    "required": ["id", "confirmed"],
                 ],
             ], [
                 "type": "function",
@@ -1429,6 +1433,10 @@ final class CoachSession: ObservableObject {
         if name == "start_workout" {
             guard let id = json["id"] as? String, let w = WorkoutLibrary.workout(id: id) else {
                 realtime.sendFunctionOutput(callId: callId, output: ["error": "séance inconnue, rappelle suggest_workouts"])
+                return
+            }
+            if json["confirmed"] as? Bool != true {
+                realtime.sendFunctionOutput(callId: callId, output: ["error": "pas encore confirmé : reformule « \(w.title) (\(w.summary)), c'est bien ça ? », et rappelle avec confirmed=true après son oui"])
                 return
             }
             if let running = runningProgramLabel, json["replace"] as? Bool != true {
@@ -1816,7 +1824,7 @@ final class CoachSession: ObservableObject {
         }
         if goal.kind == .free {
             // Rien de fixé sur le téléphone : une seule question, Jeffrey applique ce qu'il entend (set_goal ou suggest_workouts).
-            realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name) Puis une seule question courte : « Tu veux quoi aujourd'hui ? » Il peut répondre un temps (« 30 minutes tranquille »), une distance (« 5 km »), « à ma façon » ou « propose-moi un truc ». Temps ou distance : set_goal tout de suite, sans redemander. À sa façon : set_goal free et tu accompagnes. Proposition, exercice, fractionné, programme : suggest_workouts (jamais un programme de tête), deux options en une phrase chacune, il choisit, start_workout. Une seule question, ensuite on part.")
+            realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name) Puis une seule question courte : « Tu veux quoi aujourd'hui ? » Il peut répondre un temps (« 30 minutes tranquille »), une distance (« 5 km »), « à ma façon » ou « propose-moi un truc ». Temps ou distance : set_goal tout de suite, sans redemander. À sa façon : set_goal free et tu accompagnes. Proposition, exercice, fractionné, programme : suggest_workouts (jamais un programme de tête), deux options numérotées en une phrase chacune ; il choisit, tu reformules son choix et demandes « c'est bien ça ? », puis start_workout(confirmed=true) à son oui. Une seule question au départ, ensuite on part.")
         } else {
             // Objectif déjà fixé sur le téléphone : on ne redemande rien.
             realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name) Rappelle l'objectif en quelques mots (\(goal.coachLabel())) et lance la séance. Pas d'autre question.")

@@ -10,12 +10,19 @@ struct WorkoutBlock: Codable, Equatable {
 
     var totalSeconds: Int { seconds * repeats + restSeconds * max(0, repeats - 1) }
 
+    /// « 30 s », « 1 min », « 1 min 30 », « 5 min ».
+    static func short(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds) s" }
+        let m = seconds / 60, r = seconds % 60
+        return r == 0 ? "\(m) min" : "\(m) min \(r)"
+    }
+
     var summary: String {
-        let d = Formatters.humanDuration(TimeInterval(seconds))
+        let d = Self.short(seconds)
         if repeats > 1 {
-            return restSeconds > 0 ? "\(repeats) × (\(label) \(d) / récup \(Formatters.humanDuration(TimeInterval(restSeconds))))" : "\(repeats) × \(label) \(d)"
+            return restSeconds > 0 ? "\(repeats) × (\(label) \(d) / récup \(Self.short(restSeconds)))" : "\(repeats) × \(label) \(d)"
         }
-        return "\(label) \(d)"
+        return restSeconds > 0 ? "\(label) \(d) puis récup \(Self.short(restSeconds))" : "\(label) \(d)"
     }
 }
 

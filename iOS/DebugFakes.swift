@@ -121,7 +121,7 @@ final class FakeRealtimeBackend {
         }
         if let id = pendingWorkoutId {
             pendingWorkoutId = nil
-            emit(["type": "response.function_call_arguments.done", "name": "start_workout", "call_id": "call_\(n)", "arguments": "{\"id\": \"\(id)\"}"], after: 0.6)
+            emit(["type": "response.function_call_arguments.done", "name": "start_workout", "call_id": "call_\(n)", "arguments": "{\"id\": \"\(id)\", \"confirmed\": true}"], after: 0.6)
             emit(["type": "response.done", "response": ["id": "resp_\(n)", "status": "completed"]], after: 0.9)
             return
         }

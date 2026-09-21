@@ -140,7 +140,7 @@ final class WorkoutLibraryTests: XCTestCase {
     func testIntervalBlockSummaryAndTotal() {
         let b = WorkoutBlock(label: "vite", seconds: 30, repeats: 8, restSeconds: 30)
         XCTAssertEqual(b.totalSeconds, 30 * 8 + 30 * 7)
-        XCTAssertTrue(b.summary.hasPrefix("8 × (vite"))
+        XCTAssertEqual(b.summary, "8 × (vite 30 s / récup 30 s)")
         let w = WorkoutLibrary.workout(id: "run-a2")!
         XCTAssertEqual(w.toolPayload["minutes"] as? Int, Int((Double(w.totalSeconds) / 60).rounded()))
     }
