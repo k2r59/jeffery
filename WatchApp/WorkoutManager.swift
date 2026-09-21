@@ -34,6 +34,10 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     private var startDate: Date?
     private var companionGeneration = 0
+    /// Séance pilotée choisie par la décision automatique (bascule possible vers compagnon si l'app Exercice prend la main).
+    private var autoDecided = false
+    /// Fin demandée par l'utilisateur ou l'iPhone (par opposition à une session coupée par watchOS).
+    private var endRequested = false
     private var pausedAccumulated: TimeInterval = 0
     private var pauseStartedAt: Date?
     private var tickTimer: Timer?
@@ -123,7 +127,11 @@ final class WorkoutManager: NSObject, ObservableObject {
                 stopCompanion()
             }
             selectedKind = payload.kind
-            payload.mode == .owned ? startOwned(kind: payload.kind) : startCompanion(kind: payload.kind)
+            switch payload.mode {
+            case .owned: startOwned(kind: payload.kind)
+            case .companion: startCompanion(kind: payload.kind)
+            case .auto: startAuto(kind: payload.kind)
+            }
         case .pause: pause()
         case .resume: resume()
         case .end: end()
@@ -161,6 +169,51 @@ final class WorkoutManager: NSObject, ObservableObject {
             statusMessage = "Séance WatchCoach en cours"
         } catch {
             statusMessage = "Impossible de démarrer : \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Décision automatique (compagnon si une séance native tourne, pilotée sinon)
+
+    /// L'utilisateur n'a rien à choisir : si l'app Exercice écrit déjà le cœur à haute cadence, on la suit ;
+    /// sinon la montre pilote la séance elle-même. Si l'app Exercice démarre ensuite et coupe notre session,
+    /// on bascule en compagnon sans arrêter la séance (voir `recoverAfterUnexpectedEnd`).
+    func startAuto(kind: WorkoutKind) {
+        guard !isActive else { return }
+        endStandby()
+        companionGeneration += 1
+        let generation = companionGeneration
+        statusMessage = "Recherche d'une séance en cours…"
+        Task {
+            let inferred = await inferNativeWorkoutStart()
+            await MainActor.run {
+                guard generation == self.companionGeneration, !self.isActive else { return }
+                if let inferred {
+                    self.beginCompanion(kind: kind, start: inferred, inferred: true)
+                } else {
+                    self.autoDecided = true
+                    self.startOwned(kind: kind)
+                }
+            }
+        }
+    }
+
+    /// Fin non demandée d'une séance pilotée (typiquement : l'app Exercice vient de démarrer et watchOS a coupé notre
+    /// session). Si une séance native tourne, on continue en compagnon ; sinon la séance est vraiment finie.
+    private func recoverAfterUnexpectedEnd(kind: WorkoutKind, elapsedSoFar: TimeInterval) {
+        statusMessage = "Séance reprise par l'app Exercice ?"
+        Task {
+            try? await Task.sleep(nanoseconds: 12_000_000_000)
+            let inferred = await inferNativeWorkoutStart()
+            await MainActor.run {
+                guard !self.isActive else { return }
+                if inferred != nil {
+                    // On garde le temps déjà couru : le départ est reculé d'autant.
+                    self.beginCompanion(kind: kind, start: Date().addingTimeInterval(-elapsedSoFar), inferred: true)
+                    self.statusMessage = "L'app Exercice a pris la main, Jeffrey continue"
+                } else {
+                    self.publishEnded()
+                }
+            }
         }
     }
 
@@ -306,6 +359,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         companionGeneration += 1
         guard isActive else { return }
         if snapshot.mode == .owned {
+            endRequested = true
             session?.end()
         } else {
             stopCompanion()
@@ -355,14 +409,31 @@ final class WorkoutManager: NSObject, ObservableObject {
         stopRouteRecording()
         tickTimer?.invalidate()
         tickTimer = nil
-        var snap = snapshot
-        snap.state = .ended
-        snap.elapsed = currentElapsed()
-        snapshot = snap
-        publish(snap, force: true)
+        let wasOwned = snapshot.mode == .owned
+        let kind = snapshot.kind
+        let elapsed = currentElapsed()
         startDate = nil
         session = nil
         builder = nil
+        let unexpected = wasOwned && !endRequested && autoDecided
+        endRequested = false
+        autoDecided = false
+        if unexpected, elapsed > 20 {
+            var snap = snapshot
+            snap.state = .paused
+            snapshot = snap
+            recoverAfterUnexpectedEnd(kind: kind, elapsedSoFar: elapsed)
+            return
+        }
+        publishEnded(elapsed: elapsed)
+    }
+
+    private func publishEnded(elapsed: TimeInterval? = nil) {
+        var snap = snapshot
+        snap.state = .ended
+        snap.elapsed = elapsed ?? currentElapsed()
+        snapshot = snap
+        publish(snap, force: true)
         // Séance finie, l'app reste sous les yeux : on la garde éveillée pour la suivante.
         armStandby()
     }
@@ -393,7 +464,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private func publish(_ snap: MetricsSnapshot, force: Bool = false) {
         var s = snap
         s.timestamp = Date()
-        s.elapsed = currentElapsed()
+        if startDate != nil { s.elapsed = currentElapsed() }
         s.sessionStart = startDate
         snapshot = s
         let now = Date()

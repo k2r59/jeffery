@@ -47,7 +47,7 @@ struct RootView: View {
             if ProcessInfo.processInfo.environment["WATCHCOACH_AUTOSTART"] == "1", coach.phase == .idle {
                 let minutes = Double(ProcessInfo.processInfo.environment["WATCHCOACH_GOAL_MIN"] ?? "2") ?? 2
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    coach.start(kind: .running, mode: .companion, goal: SessionGoal(kind: .duration, target: minutes * 60, note: "banc d'essai"))
+                    coach.start(kind: .running, goal: SessionGoal(kind: .duration, target: minutes * 60, note: "banc d'essai"))
                 }
             }
             // Arrêt programmé, aussi pour une séance reprise après une mort de l'app (banc de test de la reprise).

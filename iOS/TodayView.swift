@@ -78,7 +78,7 @@ struct TodayView: View {
             // Démarrage après la fermeture de la feuille : pas deux présentations en même temps.
             if let goal = pendingGoal {
                 pendingGoal = nil
-                coach.start(kind: kind, mode: CaptureMode(rawValue: UserDefaults.standard.string(forKey: Prefs.mode) ?? "") ?? .companion, goal: goal)
+                coach.start(kind: kind, goal: goal)
             }
         }) {
             ObjectiveView(kind: kind) { goal in
@@ -145,11 +145,25 @@ struct TodayView: View {
             kindRow
                 .padding(.bottom, 13)
             startButton
-                .padding(.bottom, 12)
+                .padding(.bottom, 10)
 
-            Text("Avec Jeffrey, à ton rythme.")
-                .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity)
+            // Une seule décision : on part, Jeffrey demande « tu veux quoi aujourd'hui ? ». L'objectif tapé reste possible.
+            if coach.watchReady {
+                Button { showObjective = true } label: {
+                    HStack(spacing: 6) {
+                        JIcon("objectif", size: 13)
+                        Text("Fixer un objectif avant de partir")
+                    }
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity).frame(height: 28)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("Fixer un objectif")
+            } else {
+                Text("Avec Jeffrey, à ton rythme.")
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(.horizontal, Metrics.cardPadding)
         .padding(.vertical, 15)
@@ -203,7 +217,7 @@ struct TodayView: View {
     }
 
     private var startCapsule: some View {
-        Button { showObjective = true } label: {
+        Button { coach.start(kind: kind) } label: {
             ZStack {
                 Text(selected.cta).font(.display(15, weight: .black))
                 HStack {

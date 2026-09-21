@@ -46,7 +46,7 @@ final class FakeWatch {
         let e = elapsed()
         // Profil : échauffement 0-60 s (110→140), effort 60-150 s (150→172, zone 5 vers 120 s), récup ensuite.
         let hr: Double = e < 60 ? 110 + e * 0.5 : (e < 150 ? 150 + (e - 60) * 0.25 : max(120, 172 - (e - 150) * 0.6))
-        var s = MetricsSnapshot.idle(kind: kind, mode: .companion)
+        var s = MetricsSnapshot.idle(kind: kind, mode: .owned) // la montre factice « décide » : pas de séance native, elle pilote
         s.state = paused ? .paused : .running
         s.elapsed = e
         s.heartRate = hr
@@ -105,7 +105,7 @@ final class FakeRealtimeBackend {
         let consigne = lastConsigne.lowercased()
         emit(["type": "response.created", "response": ["id": "resp_\(n)"]], after: 0.2)
         // Simulation d'un appel de fonction : la consigne de salut déclenche start_timer une fois (bloc 20 s).
-        if consigne.contains("présente-toi"), !pendingTimerCall {
+        if consigne.contains("présente-toi") || consigne.contains("tu veux quoi"), !pendingTimerCall {
             pendingTimerCall = true
             let args = "{\"seconds\": 20, \"label\": \"test\"}"
             emit(["type": "response.function_call_arguments.done", "name": "start_timer", "call_id": "call_\(n)", "arguments": args], after: 0.6)

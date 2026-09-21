@@ -196,3 +196,17 @@ final class SpeechFilterTests: XCTestCase {
         XCTAssertFalse(CoachSession.looksLikeSpeech("T"))
     }
 }
+
+@MainActor final class EchoFilterTests: XCTestCase {
+    func testEchoOfCoachLineIsDetected() {
+        let coach = ["Allez Hervé, t'es parti, trouve ton allure douce, et pense à relâcher les épaules."]
+        XCTAssertTrue(CoachSession.looksLikeEcho("À allure douce, pense à relâcher les épaules.", of: coach))
+        XCTAssertTrue(CoachSession.looksLikeEcho("trouve ton allure douce relâcher les épaules", of: coach))
+    }
+    func testRealSpeechIsKept() {
+        let coach = ["Allez Hervé, t'es parti, trouve ton allure douce, et pense à relâcher les épaules."]
+        XCTAssertFalse(CoachSession.looksLikeEcho("J'ai mal au genou droit depuis hier", of: coach))
+        XCTAssertFalse(CoachSession.looksLikeEcho("oui", of: coach))
+        XCTAssertFalse(CoachSession.looksLikeEcho("on passe à 25 minutes ?", of: coach))
+    }
+}

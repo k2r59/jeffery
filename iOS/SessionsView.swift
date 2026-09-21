@@ -88,7 +88,6 @@ struct RedoRouteView: View {
     @Environment(\.dismiss) private var dismiss
     let workout: HKWorkout
     @ObservedObject var history: WorkoutHistory
-    @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @State private var locations: [CLLocation] = []
     @State private var loaded = false
     @State private var style = 0   // 0 tranquillement, 1 viser un temps, 2 libre
@@ -160,7 +159,7 @@ struct RedoRouteView: View {
             if let goal = pendingGoal {
                 pendingGoal = nil
                 dismiss()
-                coach.start(kind: WorkoutKind(activityType: workout.workoutActivityType), mode: CaptureMode(rawValue: modeRaw) ?? .companion, goal: goal)
+                coach.start(kind: WorkoutKind(activityType: workout.workoutActivityType), goal: goal)
             }
         }) {
             ObjectiveView(kind: WorkoutKind(activityType: workout.workoutActivityType), initial: initialGoal) { goal in

@@ -89,7 +89,7 @@ final class JeffreyUITests: XCTestCase {
         app.launch()
         let start = app.buttons["Démarrer avec Jeffrey"]
         XCTAssertTrue(start.waitForExistence(timeout: 5), "la montre simulée doit rendre le départ possible")
-        start.tap()
+        app.buttons["Fixer un objectif"].tap()
         XCTAssertTrue(app.staticTexts["On vise quoi\naujourd'hui ?"].waitForExistence(timeout: 3) || app.buttons["C'est parti"].waitForExistence(timeout: 3))
         app.buttons["Distance"].tap()
         screenshot("08-objectif")

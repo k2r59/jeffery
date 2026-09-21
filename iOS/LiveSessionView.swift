@@ -6,7 +6,7 @@ struct LiveSessionView: View {
     @EnvironmentObject private var coach: CoachSession
     @StateObject private var music = MusicController()
     @State private var showTalk = false
-    @State private var showActivityDetail = false
+    @State private var showMore = false
     @State private var showMusicApps = false
 
     // Tokens de la maquette (styles/tokens.json)
@@ -31,12 +31,25 @@ struct LiveSessionView: View {
                 header
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
+                        // L'essentiel, lisible en trois secondes : temps et objectif, chiffres, ce que Jeffrey vient de dire.
                         timerCard
-                        metricsCard
                         if let label = coach.timerLabel, let end = coach.timerEndsAt { programCard(label, end) }
+                        metricsCard
                         jeffreyCard
-                        if let r = coach.reference { referenceCard(r) }
-                        musicCard
+                        // Le reste, replié : relief et cadence, parcours de référence, musique.
+                        Button { withAnimation(.snappy) { showMore.toggle() } } label: {
+                            HStack(spacing: 8) {
+                                Text(showMore ? "Moins" : "Relief, parcours, musique").font(.system(size: 13, weight: .semibold)).foregroundStyle(muted)
+                                JIcon("suivant", size: 12).foregroundStyle(muted).rotationEffect(.degrees(showMore ? -90 : 90))
+                            }
+                            .frame(maxWidth: .infinity).frame(height: 32)
+                        }
+                        .buttonStyle(.plain)
+                        if showMore {
+                            activityCard
+                            if let r = coach.reference { referenceCard(r) }
+                            musicCard
+                        }
                         if let err = coach.errorMessage {
                             Text(err).font(.system(size: 13, weight: .medium)).foregroundStyle(danger).frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -140,33 +153,34 @@ struct LiveSessionView: View {
                 metric("frequence-cardiaque", s?.heartRate.map { "\(Int($0))" } ?? "--", zone.map { "bpm · \($0.label)" } ?? "bpm", iconColor: danger)
             }
             .padding(.vertical, 14)
-            Rectangle().fill(border).frame(height: 1).padding(.horizontal, 16)
-            Button { withAnimation(.snappy) { showActivityDetail.toggle() } } label: {
-                HStack(spacing: 10) {
-                    JIcon("randonnee", size: 18).foregroundStyle(muted)
-                    caption(terrainCaption(a))
-                    Spacer()
-                    Text("D+ \(Int(a.ascent)) m").font(.system(size: 17, weight: .semibold).monospacedDigit()).foregroundStyle(text)
-                    JIcon("suivant", size: 14).foregroundStyle(muted).rotationEffect(.degrees(showActivityDetail ? 90 : 0))
-                }
-                .padding(.horizontal, 16).frame(height: 48)
+        }
+        .background(cardShape(surface))
+    }
+
+    /// Relief, activité et cadence (section repliée).
+    private var activityCard: some View {
+        let a = coach.activity
+        return VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                JIcon("randonnee", size: 18).foregroundStyle(muted)
+                caption(terrainCaption(a))
+                Spacer()
+                Text("D+ \(Int(a.ascent)) m").font(.system(size: 17, weight: .semibold).monospacedDigit()).foregroundStyle(text)
             }
-            .buttonStyle(.plain)
-            if showActivityDetail {
-                HStack(spacing: 14) {
-                    if a.activity != .unknown {
-                        HStack(spacing: 6) {
-                            JIcon(a.activity == .running ? "course" : (a.activity == .walking ? "marche" : (a.activity == .cycling ? "velo" : "pause")), size: 14)
-                            Text(a.activity.label.capitalized)
-                            if let c = a.cadence, c > 0 { Text("· \(Int(c)) pas/min").foregroundStyle(muted) }
-                        }
+            .padding(.horizontal, 16).frame(height: 48)
+            HStack(spacing: 14) {
+                if a.activity != .unknown {
+                    HStack(spacing: 6) {
+                        JIcon(a.activity == .running ? "course" : (a.activity == .walking ? "marche" : (a.activity == .cycling ? "velo" : "pause")), size: 14)
+                        Text(a.activity.label.capitalized)
+                        if let c = a.cadence, c > 0 { Text("· \(Int(c)) pas/min").foregroundStyle(muted) }
                     }
-                    Spacer()
-                    Text("D− \(Int(a.descent)) m").foregroundStyle(muted)
                 }
-                .font(.system(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(text)
-                .padding(.horizontal, 16).padding(.bottom, 14)
+                Spacer()
+                Text("D− \(Int(a.descent)) m").foregroundStyle(muted)
             }
+            .font(.system(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(text)
+            .padding(.horizontal, 16).padding(.bottom, 14)
         }
         .background(cardShape(surface))
     }

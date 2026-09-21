@@ -7,7 +7,6 @@ struct WatchContentView: View {
     @ObservedObject private var mirror = WatchMirror.shared
     @State private var page = 1
     @State private var sending = false
-    @State private var sceneReturnTask: Task<Void, Never>?
     /// Identifiant du chrono pour lequel le décompte final a déjà repris l'écran.
     @State private var finalCountdownShownFor: String?
 
@@ -19,33 +18,37 @@ struct WatchContentView: View {
     private var live: Bool { mirror.state.phase != "idle" || workout.isActive }
 
     private var scene: WatchScene? { mirror.state.scene }
-    private var hasTimer: Bool { mirror.state.timerEndsAt != nil || scene?.kind == .countdown || scene?.kind == .interval }
+    /// Scène qui mérite sa propre page : chrono et fractionné, cible de zone ou d'allure. Les autres (montée, fantôme,
+    /// fête) sont un bandeau sur la page Séance ; le message de Jeffrey s'affiche sur sa page.
+    private var scenePageKind: WatchScene.Kind? {
+        guard let k = scene?.kind else { return nil }
+        return [.countdown, .interval, .zone, .pace].contains(k) ? k : nil
+    }
 
     /// Bilan affiché après la séance jusqu'à « Voir sur iPhone ».
     @State private var summary: CoachMirror?
     @State private var summaryEnergy: Double?
 
-    // Pages : 0 contrôles (ou pause) · 1 séance · 2 effort · 3 intervalles (si chrono) · 4 Jeffrey
+    // Trois pages : 0 contrôles (ou pause) · 1 séance · 2 Jeffrey. Une scène (chrono, cible) ajoute la page 3 et prend
+    // la main tant qu'elle dure ; elle disparaît avec la scène.
     var body: some View {
         if live {
             TabView(selection: $page) {
                 controlsOrPausePage.tag(0)
                 sessionPage.tag(1)
-                effortPage.tag(2)
-                if hasTimer { intervalPage.tag(3) }
-                coachPage.tag(4)
+                coachPage.tag(2)
+                if let kind = scenePageKind { scenePage(kind).tag(3) }
             }
             .tabViewStyle(.page)
             .onAppear {
-                page = 1
+                page = scenePageKind == nil ? 1 : 3
                 if let scene { react(to: scene) }
                 #if DEBUG
                 if let p = ProcessInfo.processInfo.environment["WATCHCOACH_PAGE"], let i = Int(p) { page = i }
                 #endif
             }
-            // Jeffrey choisit la page : un chrono qui démarre, une cible, un message prennent la main quelques secondes.
             .onChange(of: scene?.id) { _, _ in
-                if let scene { react(to: scene) } else { sceneReturnTask?.cancel(); if page == 3 { withAnimation { page = 1 } } }
+                if let scene { react(to: scene) } else if page == 3 { withAnimation { page = 1 } }
             }
             .onChange(of: mirror.state.paused) { _, paused in
                 if paused { withAnimation { page = 0 } } else if page == 0 { withAnimation { page = 1 } }
@@ -70,24 +73,13 @@ struct WatchContentView: View {
         }
     }
 
-    /// Réaction à une scène : chrono → page Intervalles 8 s puis retour ; cible zone/allure → page Effort 8 s ;
-    /// message de Jeffrey → page Jeffrey le temps du message ; montée, fantôme, fête → bandeau sur la page Séance.
+    /// Réaction à une scène : chrono et cibles prennent la page 3 tant qu'elles durent ; le message de Jeffrey va sur
+    /// sa page ; montée, fantôme et fête restent un bandeau sur la page Séance.
     private func react(to scene: WatchScene) {
-        sceneReturnTask?.cancel()
-        let target: Int
         switch scene.kind {
-        case .countdown, .interval: target = 3
-        case .zone, .pace: target = 2
-        case .message: target = 4
-        case .celebration, .climb, .ghost: target = 1
-        }
-        withAnimation { page = target }
-        guard target != 1, scene.kind != .message else { return }
-        let id = scene.id
-        sceneReturnTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
-            guard !Task.isCancelled, self.scene?.id == id, page == target else { return }
-            withAnimation { page = 1 }
+        case .countdown, .interval, .zone, .pace: withAnimation { page = 3 }
+        case .message: withAnimation { page = 2 }
+        case .celebration, .climb, .ghost: withAnimation { page = 1 }
         }
     }
 
@@ -109,16 +101,26 @@ struct WatchContentView: View {
         }
     }
 
-    private var effortPage: some View {
-        WatchEffortPage(mirror: mirror.state, snapshot: workout.snapshot)
-    }
-
-    private var intervalPage: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            WatchIntervalPage(mirror: mirror.state, now: ctx.date)
-                .onChange(of: ctx.date) { _, now in
-                    SceneHaptics.shared.observe(scene, heartRate: workout.snapshot.heartRate ?? mirror.state.heartRate, now: now)
+    /// Page 3 : la scène en cours. Chrono et fractionné sur la page Intervalles de la maquette, la zone cible sur la
+    /// page Effort (jauge avec la cible), l'allure cible sur son écran dédié.
+    @ViewBuilder private func scenePage(_ kind: WatchScene.Kind) -> some View {
+        switch kind {
+        case .countdown, .interval:
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                WatchIntervalPage(mirror: mirror.state, now: ctx.date)
+                    .onChange(of: ctx.date) { _, now in
+                        SceneHaptics.shared.observe(scene, heartRate: workout.snapshot.heartRate ?? mirror.state.heartRate, now: now)
+                    }
+            }
+        case .zone:
+            WatchEffortPage(mirror: mirror.state, snapshot: workout.snapshot)
+        default:
+            if let scene {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    WatchSceneView(scene: scene, heartRate: workout.snapshot.heartRate ?? mirror.state.heartRate,
+                                   elapsed: liveElapsed(mirror.state, at: ctx.date))
                 }
+            }
         }
     }
 

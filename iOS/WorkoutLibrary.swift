@@ -44,6 +44,12 @@ enum WorkoutLibrary {
         // Course à pied
         Workout(id: "run-b1", kind: .running, level: .beginner, title: "Marche-course 20 min",
                 blocks: [b("marche", m(5)), b("course", 60, x: 6, rest: 60), b("marche", m(3))]),
+        Workout(id: "run-b3", kind: .running, level: .beginner, title: "1 min / 1 min",
+                blocks: [b("marche", m(3)), b("course", 60, x: 8, rest: 60), b("marche", m(2))]),
+        Workout(id: "run-b4", kind: .running, level: .beginner, title: "30 s / 1 min, tout doux",
+                blocks: [b("marche", m(3)), b("course", 30, x: 8, rest: 60), b("marche", m(2))]),
+        Workout(id: "run-b5", kind: .running, level: .beginner, title: "2 min / 1 min",
+                blocks: [b("marche", m(3)), b("course", m(2), x: 6, rest: 60), b("marche", m(3))]),
         Workout(id: "run-b2", kind: .running, level: .beginner, title: "Footing tout doux",
                 blocks: [b("marche", m(3)), b("course facile", m(12)), b("marche", m(3))]),
         Workout(id: "run-a1", kind: .running, level: .amateur, title: "Footing 35 min",

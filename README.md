@@ -78,14 +78,13 @@ Apple Watch (WatchCoachWatch)                    iPhone (WatchCoach)            
                                                        └─────────────────────────────┘             └──────────────────┘
 ```
 
-### Deux modes de capture (réglage iPhone, onglet Jeffrey)
+### Capture : la montre décide seule
 
-| Mode | Qui possède la séance | Fraîcheur | Notes |
-|---|---|---|---|
-| **Suivre l'app Exercice** (défaut) | l'app Exercice native | quelques secondes à ~1 min | la montre se cale sur le vrai début de la séance native (série dense de mesures cardiaques) et détecte sa fin ; session d'arrière-plan d'environ 1 h, à prolonger depuis la montre si elle vibre |
-| **Séance par Jeffrey** | l'app Jeffrey (enregistrée dans Santé avec tracé GPS) | ~1 s | on n'utilise pas l'app Exercice pendant la séance |
-
-watchOS n'autorise qu'une seule séance HealthKit active à la fois : c'est la raison du mode compagnon.
+Rien à régler. Au départ, la montre regarde si l'app Exercice écrit déjà le cœur à haute cadence : si oui, elle suit cette
+séance (mode compagnon : lecture des échantillons HealthKit, arrêt automatique quand la séance native est enregistrée) ;
+sinon elle pilote elle-même une HKWorkoutSession (données à la seconde, GPS, séance enregistrée dans Santé). Si l'app
+Exercice démarre ensuite et coupe la session pilotée, la montre bascule en compagnon sans arrêter Jeffrey. L'iPhone
+affiche « la montre suit l'app Exercice » ou « la montre pilote la séance » dans le journal.
 
 ### Intelligence
 
@@ -145,9 +144,17 @@ Prérequis : Xcode 27, iPhone sous iOS 27 avec Apple Watch, compte développeur 
 
 ## Utilisation
 
+Le principe : une seule décision au départ, tout le reste à la voix. Sur l'iPhone, on choisit le sport et on appuie ;
+Jeffrey salue et pose une seule question, « tu veux quoi aujourd'hui ? » (un temps, une distance, « à ma façon »,
+« propose-moi un truc »). Ceux qui préfèrent taper ont « Fixer un objectif avant de partir » sous le bouton : Jeffrey ne
+redemande alors rien. Présence (discret / présent) : un réglage durable dans l'onglet Jeffrey, ou à la voix (« sois plus
+discret »). Sur la montre, trois pages : contrôles, séance, Jeffrey ; une scène (chrono, cible) ajoute la sienne le temps
+qu'elle dure.
+
 1. Écouteurs Bluetooth conseillés.
-2. Sur la montre, « Démarrer avec Jeffrey » (ou sur l'iPhone, « Démarrer avec Jeffrey » puis l'objectif).
-   En mode compagnon, lancer aussi la séance dans l'app Exercice, avant ou après.
+2. Sur la montre, « Démarrer avec Jeffrey » (ou sur l'iPhone, le sport puis « Démarrer ma course »). Jeffrey demande
+   « tu veux quoi aujourd'hui ? » et on lui répond. L'app Exercice peut tourner en parallèle : lancée avant, la montre
+   la suit ; lancée après, la montre bascule toute seule.
 3. Parler à Jeffrey quand on veut. Pause et Terminer depuis la montre ou l'iPhone. Terminer la séance dans l'app
    Exercice déclenche le débrief tout seul.
 4. Bilan, ressenti, puis « Terminer le bilan ».

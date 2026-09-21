@@ -23,7 +23,7 @@ xcrun simctl launch $UDID $BID -pref.onboarded YES -pref.setupVersion 2 -pref.us
 sleep 30; xcrun simctl io $UDID screenshot "$OUT/live-30s.png" >/dev/null 2>&1
 sleep 60; xcrun simctl io $UDID screenshot "$OUT/live-90s.png" >/dev/null 2>&1
 sleep 60; xcrun simctl io $UDID screenshot "$OUT/live-150s.png" >/dev/null 2>&1
-sleep 40; xcrun simctl io $UDID screenshot "$OUT/end.png" >/dev/null 2>&1
+sleep 55; xcrun simctl io $UDID screenshot "$OUT/end.png" >/dev/null 2>&1
 echo "=== JOURNAL ==="; cat "$CONT/Documents/derniere-seance.txt" 2>/dev/null || echo "(pas de journal)"
 echo; echo "=== SESSIONS ==="; python3 -c "
 import json,sys

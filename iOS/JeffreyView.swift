@@ -7,7 +7,6 @@ struct JeffreyView: View {
     @AppStorage(Prefs.voice) private var voice: String = "marin"
     @AppStorage(Prefs.duckMusic) private var duckMusic: Bool = true
     @AppStorage(Prefs.micSource) private var micSource: String = "headset"
-    @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var showAdvanced = false
     @State private var showAccess = false
@@ -69,9 +68,7 @@ struct JeffreyView: View {
                             .padding(4).background(Capsule().fill(Theme.surfaceRaised))
                         }
 
-                        card("Ta montre", modeRaw == CaptureMode.companion.rawValue
-                             ? "Tu lances ta séance dans l'app Exercice, Jeffrey suit à côté."
-                             : "Jeffrey enregistre lui-même la séance dans Santé (données plus fréquentes).") {
+                        card("Ta montre", "Lance ta séance dans l\'app Exercice si tu veux, Jeffrey la suit ; sinon la montre s\'en charge toute seule.") {
                             HStack {
                                 JIcon("montre", size: 18).foregroundStyle(Theme.creme)
                                 Text(coach.connectivity.linkLabel)
@@ -82,11 +79,6 @@ struct JeffreyView: View {
                             if account.user?.isAdmin == true {
                                 Text(coach.connectivity.diagnostic).font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.muted)
                             }
-                            HStack(spacing: 4) {
-                                segment("Avec l'app Exercice", selected: modeRaw == CaptureMode.companion.rawValue) { modeRaw = CaptureMode.companion.rawValue }
-                                segment("Par Jeffrey", selected: modeRaw == CaptureMode.owned.rawValue) { modeRaw = CaptureMode.owned.rawValue }
-                            }
-                            .padding(4).background(Capsule().fill(Theme.surfaceRaised))
                         }
 
                         Button { showAccess = true } label: {

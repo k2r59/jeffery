@@ -60,7 +60,6 @@ struct OnboardingView: View {
     @AppStorage(Prefs.voiceEngine) private var voiceEngine: String = "openai"
     @AppStorage(Prefs.analysisProvider) private var analysisProvider: String = "apple"
     @AppStorage(Prefs.voice) private var voice: String = "marin"
-    @AppStorage(Prefs.mode) private var modeRaw: String = CaptureMode.companion.rawValue
     @State private var step: Step = .welcome
     @State private var apiKey = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
     @State private var voiceSampled = false

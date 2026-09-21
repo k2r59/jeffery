@@ -51,16 +51,20 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
     func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
         let kind = WorkoutKind(activityType: workoutConfiguration.activityType)
         let context = WCSession.default.receivedApplicationContext
-        var companion = false
+        var mode: CaptureMode = .auto
         if let data = context[WCKeys.command] as? Data,
            let payload = try? WCCodec.decoder.decode(WatchCommandPayload.self, from: data),
            let at = context[WCKeys.commandAt] as? Double,
            Date().timeIntervalSince1970 - at < 180,
-           payload.command == .start, payload.mode == .companion {
-            companion = true
+           payload.command == .start {
+            mode = payload.mode
         }
         Task { @MainActor in
-            companion ? WorkoutManager.shared.startCompanion(kind: kind) : WorkoutManager.shared.startOwned(kind: kind)
+            switch mode {
+            case .companion: WorkoutManager.shared.startCompanion(kind: kind)
+            case .owned: WorkoutManager.shared.startOwned(kind: kind)
+            case .auto: WorkoutManager.shared.startAuto(kind: kind)
+            }
         }
     }
 }

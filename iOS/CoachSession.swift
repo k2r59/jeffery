@@ -29,7 +29,26 @@ final class CoachSession: ObservableObject {
     @Published private(set) var status: String = "Prêt"
     @Published private(set) var errorMessage: String?
     @Published private(set) var coachSpeaking = false {
-        didSet { if coachSpeaking != oldValue { audio.setDucking(coachSpeaking); realtime.setCoachSpeaking(coachSpeaking); sendMirror(force: true) } }
+        didSet {
+            if coachSpeaking != oldValue {
+                audio.setDucking(coachSpeaking); realtime.setCoachSpeaking(coachSpeaking); sendMirror(force: true)
+                if !coachSpeaking { micMutedUntil = Date().addingTimeInterval(0.8) }
+            }
+        }
+    }
+    /// Micro coupé (silence envoyé) tant que Jeffrey parle et 0,8 s après : sinon sa voix, reprise par le micro de
+    /// l'iPhone sans écouteurs, est transcrite comme si c'était lui et il se répond à lui-même sans fin (séance du 20/09).
+    private var micMutedUntil: Date = .distantPast
+    private var micMuted: Bool { coachSpeaking || Date() < micMutedUntil }
+    private var echoIgnoredCount = 0
+
+    /// Capture micro → coach, avec la garde anti-écho.
+    private func forwardCapture(_ data: Data) {
+        if micMuted {
+            realtime.appendAudio(Data(count: data.count))
+        } else {
+            realtime.appendAudio(data)
+        }
     }
     @Published private(set) var userSpeaking = false
     @Published private(set) var currentZone: HeartRateZone?
@@ -111,7 +130,8 @@ final class CoachSession: ObservableObject {
 
     private var config = CoachConfig.load()
     private var kind: WorkoutKind = .running
-    private var mode: CaptureMode = .companion
+    /// Mode effectif rapporté par la montre (compagnon ou piloté) ; `.auto` tant qu'elle n'a pas décidé.
+    private var mode: CaptureMode = .auto
     private var responseInProgress = false
     private var partialCoachLine: TranscriptLine?
     private var metricsTimer: Timer?
@@ -169,7 +189,7 @@ final class CoachSession: ObservableObject {
         connectivity.onSnapshot = { [weak self] snap in self?.handle(snapshot: snap) }
         connectivity.onWatchRequest = { [weak self] payload in self?.handle(watchRequest: payload) }
         wireRealtime()
-        audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
+        audio.onCapturedPCM16 = { [weak self] data in self?.forwardCapture(data) }
         audio.onRouteChanged = { [weak self] name in
             Task { @MainActor in self?.status = "Audio : \(name)" }
         }
@@ -271,7 +291,7 @@ final class CoachSession: ObservableObject {
     /// et même règle pour un départ demandé depuis la montre.
     var watchReady: Bool { connectivity.isPaired && connectivity.isWatchAppInstalled && connectivity.watchConnected }
 
-    func start(kind: WorkoutKind, mode: CaptureMode, goal: SessionGoal = .free) {
+    func start(kind: WorkoutKind, mode: CaptureMode = .auto, goal: SessionGoal = .free) {
         guard phase == .idle else { return }
         if AVAudioApplication.shared.recordPermission != .granted {
             Task { [weak self] in
@@ -382,36 +402,18 @@ final class CoachSession: ObservableObject {
             self.stop(reason: "coach injoignable après 25 s (\(self.errorMessage ?? ""))")
         }
 
-        // Côté montre : lancement de la séance pilotée, ou demande de suivi de l'app Exercice.
-        switch mode {
-        case .owned:
-            // App montre éveillée : on lui envoie la commande directement (startWatchApp échoue quand l'iPhone est en
-            // arrière-plan, cas d'un départ demandé depuis la montre). Sinon on réveille l'app montre.
-            if connectivity.isReachable {
-                connectivity.send(command: .start, kind: kind, mode: .owned) { [weak self] error in
-                    guard let self else { return }
-                    if error == nil { self.log(.info, "Séance lancée sur la montre (commande directe)."); return }
-                    self.launchWatchWorkoutLogged(kind: kind)
-                }
-            } else {
-                launchWatchWorkoutLogged(kind: kind)
-            }
-        case .companion:
-            connectivity.send(command: .start, kind: kind, mode: .companion) { [weak self] error in
+        // Côté montre : elle décide seule (séance native en cours → elle la suit, sinon elle pilote).
+        // App montre éveillée : commande directe (startWatchApp échoue quand l'iPhone est en arrière-plan, cas d'un
+        // départ demandé depuis la montre). Sinon on réveille l'app montre, qui lit la commande déposée.
+        let launchMode: CaptureMode = mode == .auto ? .auto : mode
+        if connectivity.isReachable {
+            connectivity.send(command: .start, kind: kind, mode: launchMode) { [weak self] error in
                 guard let self else { return }
-                if error == nil {
-                    self.log(.info, "La montre suit l'app Exercice. Lance ta séance dans l'app Exercice si ce n'est pas fait.")
-                    return
-                }
-                // Montre non joignable : on réveille l'app montre, qui lit la commande déposée et passe en mode compagnon.
-                self.connectivity.launchWatchWorkout(kind: kind) { error in
-                    if let error {
-                        self.log(.info, "Montre : \(error.localizedDescription). Ouvre Jeffrey sur la montre et touche « Suivre l'app Exercice ».")
-                    } else {
-                        self.log(.info, "Jeffrey réveillé sur la montre, il suit l'app Exercice.")
-                    }
-                }
+                if error == nil { self.log(.info, "Départ envoyé à la montre."); return }
+                self.launchWatchWorkoutLogged(kind: kind)
             }
+        } else {
+            launchWatchWorkoutLogged(kind: kind)
         }
     }
 
@@ -440,7 +442,7 @@ final class CoachSession: ObservableObject {
                 log(.info, "Départ montre refusé : montre déconnectée côté iPhone")
                 break
             }
-            let mode = CaptureMode(rawValue: UserDefaults.standard.string(forKey: Prefs.mode) ?? "") ?? .companion
+            let mode: CaptureMode = .auto
             UserDefaults.standard.set(payload.kind.rawValue, forKey: Prefs.kind)
             start(kind: payload.kind, mode: mode, goal: .free)
             // Toujours à l'arrêt avec un message : start() a refusé (micro, compte…) ; la montre doit le savoir.
@@ -457,7 +459,7 @@ final class CoachSession: ObservableObject {
         case .requestEnd:
             if phase == .idle {
                 // Rien en cours côté iPhone : la montre doit quand même arrêter sa capture.
-                connectivity.send(command: .end, kind: payload.kind, mode: .companion)
+                connectivity.send(command: .end, kind: payload.kind, mode: .auto)
             } else {
                 stop(reason: "Terminer touché sur la montre")
             }
@@ -741,7 +743,7 @@ final class CoachSession: ObservableObject {
         appleVoice.stop()
         audio.stop()
         endLiveActivity()
-        audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
+        audio.onCapturedPCM16 = { [weak self] data in self?.forwardCapture(data) }
         UIApplication.shared.isIdleTimerDisabled = false
         responseInProgress = false
         coachSpeaking = false
@@ -959,7 +961,7 @@ final class CoachSession: ObservableObject {
     private func writeSessionJournal() {
         guard let first = transcript.first else { return }
         let start = sessionStartedAt ?? latest?.sessionStart ?? first.at
-        var lines = ["Séance \(kind.coachLabel) · \(start.formatted(date: .abbreviated, time: .shortened)) · mode \(mode == .owned ? "piloté" : "compagnon") · \(config.usesAppleAI ? "Apple AI" : "Jeffrey AI (\(config.model))") · montre \(connectivity.diagnostic)", ""]
+        var lines = ["Séance \(kind.coachLabel) · \(start.formatted(date: .abbreviated, time: .shortened)) · montre \(mode == .owned ? "pilote" : (mode == .companion ? "suit l'app Exercice" : "en attente")) · \(config.usesAppleAI ? "Apple AI" : "Jeffrey AI (\(config.model))") · montre \(connectivity.diagnostic)", ""]
         for l in transcript {
             let t = Int(max(0, l.at.timeIntervalSince(start)))
             let who: String
@@ -989,7 +991,7 @@ final class CoachSession: ObservableObject {
             realtime.disconnect()
             realtime = wantsApple ? AppleCoachLink() : RealtimeClient()
             wireRealtime()
-            audio.onCapturedPCM16 = { [weak self] data in self?.realtime.appendAudio(data) }
+            audio.onCapturedPCM16 = { [weak self] data in self?.forwardCapture(data) }
         }
     }
 
@@ -1051,7 +1053,7 @@ final class CoachSession: ObservableObject {
             "tools": [[
                 "type": "function",
                 "name": "start_timer",
-                "description": "Lancer le chronomètre de l'application. L'app sonne et te prévient quand il se termine ; tu n'as pas besoin de compter. Pour un fractionné, indique work_seconds, rest_seconds et repeats : l'app enchaîne travail et récupération et te prévient à chaque changement.",
+                "description": "Chronomètre de l'app pour un bloc d'effort ou de récup (« 30 secondes de sprint », « 2 minutes de marche ») : l'app sonne, prévient à 10 s de la fin et te relance ; tu ne comptes jamais. Pour un fractionné, work_seconds + rest_seconds + repeats : l'app enchaîne et te relance à chaque changement. Confirme en une phrase courte puis n'annonce rien avant d'être relancé.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1065,7 +1067,7 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "suggest_workouts",
-                "description": "Quand l'utilisateur demande des exercices, une idée de séance ou un programme : renvoie deux séances types adaptées au sport en cours et à un niveau. Le niveau connu de son profil est renvoyé (known_level) ; si l'utilisateur n'a rien précisé, demande-lui d'abord en une question courte s'il veut « comme d'habitude, plus doux ou plus costaud », puis appelle avec le niveau choisi. Présente ensuite les deux options à l'oral, une phrase chacune, et laisse-le choisir.",
+                "description": "Quand il demande une idée de séance, des exercices ou un programme (« propose-moi un truc », « tu me conseilles quoi ? ») : renvoie deux séances types pour le sport en cours, au niveau de son profil. N'appelle level que s'il a dit « plus dur » ou « plus doux ». Présente les deux à l'oral en une phrase chacune, il choisit, puis start_workout.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1075,7 +1077,7 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "start_workout",
-                "description": "Lancer une séance type choisie à l'oral (id renvoyé par suggest_workouts). L'app enchaîne les blocs avec le chronomètre et te prévient à chaque changement ; tu annonces chaque bloc et sa consigne. Rien à faire sur le téléphone.",
+                "description": "Lancer la séance type qu'il a choisie à l'oral (id de suggest_workouts). L'app déroule les blocs au chronomètre et te relance à chaque bloc ; tu annonces chaque bloc avec sa consigne. Rien à valider sur le téléphone.",
                 "parameters": [
                     "type": "object",
                     "properties": ["id": ["type": "string"]],
@@ -1084,12 +1086,12 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "cancel_timer",
-                "description": "Arrêter le chronomètre en cours (et le programme s'il y en a un).",
+                "description": "Arrêter le chronomètre, le programme et les rappels en cours (« laisse tomber », « annule », « stop le chrono »).",
                 "parameters": ["type": "object", "properties": [:]],
             ], [
                 "type": "function",
                 "name": "get_time",
-                "description": "Lire l'heure exacte de la séance : temps écoulé, temps ou distance restants sur l'objectif, chronomètre en cours.",
+                "description": "Heure exacte de la séance : temps écoulé, restant sur l'objectif, chrono, depuis combien de temps il marche ou court. À appeler dès qu'il demande un temps précis (« ça fait combien de temps que je marche ? », « il me reste combien ? »).",
                 "parameters": ["type": "object", "properties": [:]],
             ], [
                 "type": "function",
@@ -1103,7 +1105,7 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "save_note",
-                "description": "Enregistrer une note demandée par l'utilisateur : kind=memory pour un fait durable sur lui (blessure, objectif, préférence) que tu dois retenir aux prochaines séances ; kind=feedback pour une remarque ou un bug destinés au développeur de l'application. Confirme oralement en une phrase après l'appel.",
+                "description": "Note demandée par l'utilisateur : kind=memory pour un fait durable sur lui (blessure, objectif, préférence) que tu retiendras aux prochaines séances ; kind=feedback pour une remarque ou un bug destinés au développeur. Ne dis jamais que tu ne peux pas noter. Confirme en une phrase après l'appel.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1115,7 +1117,7 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "set_goal",
-                "description": "Changer l'objectif de la séance en cours (raccourcir, allonger, passer en libre) après accord ORAL de l'utilisateur. Demande d'abord en une question courte (« on passe à 25 minutes ? »), et appelle cette fonction quand il a dit oui. Le changement s'applique immédiatement, rien à faire sur le téléphone.",
+                "description": "Fixer ou changer l'objectif de la séance. Au départ, quand il répond à « tu veux quoi aujourd'hui ? » (30 minutes, 5 km, à ma façon = free), applique directement. En cours de séance (raccourcir, allonger, passer en libre), demande d'abord en une question courte (« on passe à 25 minutes ? ») et appelle après son oui. Appliqué aussitôt, rien à faire sur le téléphone.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1128,7 +1130,7 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "show_on_watch",
-                "description": "Choisir ce que la montre affiche en grand. what=zone avec zone 1-5 : jauge de fréquence cardiaque avec la zone à tenir (« reste en zone 2 »). what=pace avec pace « 5:30 » : allure cible et écart en direct (« vise 5 min 30 au kilo »). what=message avec text : ta phrase en grand quelques secondes (consigne importante, encouragement fort). what=clear : retour à l'écran normal quand la consigne ne tient plus. Le chrono, les montées, l'objectif atteint et le parcours fantôme s'affichent tout seuls, tu n'as rien à faire pour eux.",
+                "description": "Ce que la montre affiche en grand. what=zone + zone 1-5 : jauge cardiaque avec la zone à tenir (« reste en zone 2 »). what=pace + pace « 5:30 » : allure cible et écart en direct. what=message + text : ta phrase en grand quelques secondes (consigne importante). what=clear : retour à l'écran normal quand la consigne ne tient plus. Chrono, montées, objectif atteint et parcours s'affichent tout seuls.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1143,8 +1145,17 @@ final class CoachSession: ObservableObject {
                 ],
             ], [
                 "type": "function",
+                "name": "set_presence",
+                "description": "Il te demande d'être plus discret (« parle moins », « laisse-moi tranquille », « juste la sécurité ») ou plus présent (« parle-moi plus », « guide-moi ») : règle ta présence pour la séance et les suivantes. discreet = seulement l'essentiel (sécurité, cœur, chrono, ce qu'il te demande), present = points réguliers. Confirme en trois mots.",
+                "parameters": [
+                    "type": "object",
+                    "properties": ["presence": ["type": "string", "enum": ["discreet", "present"]]],
+                    "required": ["presence"],
+                ],
+            ], [
+                "type": "function",
                 "name": "remind_me",
-                "description": "Rappel unique demandé par l'utilisateur : « préviens-moi dans 5 minutes », « dis-moi quand ça fait 30 secondes que je marche ». L'app compte (le décompte ne tourne que pendant l'activité visée et repart de zéro s'il en change) et te relance à l'échéance ; confirme en une phrase courte et n'annonce rien avant d'être relancé. Pour un bloc d'effort avec bip, préfère start_timer.",
+                "description": "Rappel unique : « préviens-moi dans 5 minutes », « dis-moi quand ça fait 30 secondes que je marche ». L'app compte (le décompte ne tourne que pendant l'activité visée et repart de zéro s'il en change) et te relance à l'échéance. Confirme en une phrase, puis n'annonce rien avant d'être relancé. Pour un bloc d'effort avec bip, préfère start_timer.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1346,6 +1357,14 @@ final class CoachSession: ObservableObject {
             realtime.sendFunctionOutput(callId: callId, output: ["cancelled": true])
             return
         }
+        if name == "set_presence" {
+            let p = json["presence"] as? String == "discreet" ? "discreet" : "present"
+            config.presence = p
+            UserDefaults.standard.set(p, forKey: Prefs.presence)
+            log(.info, p == "discreet" ? "Jeffrey passe en mode discret." : "Jeffrey passe en mode présent.")
+            realtime.sendFunctionOutput(callId: callId, output: ["presence": p])
+            return
+        }
         if name == "show_on_watch" {
             handleShowOnWatch(callId: callId, json: json)
             return
@@ -1378,7 +1397,8 @@ final class CoachSession: ObservableObject {
         }
         if name == "suggest_workouts" {
             let level = (json["level"] as? String).flatMap(AthleteLevel.init(rawValue:)) ?? config.level
-            let list = WorkoutLibrary.workouts(kind: kind, level: level).prefix(2).map(\.toolPayload)
+            // Deux options différentes à chaque fois (tirage), pour ne pas proposer toujours les deux mêmes.
+            let list = Array(WorkoutLibrary.workouts(kind: kind, level: level).shuffled().prefix(2)).map(\.toolPayload)
             log(.info, "Séances proposées (\(level.label)) : " + list.compactMap { $0["title"] as? String }.joined(separator: ", "))
             realtime.sendFunctionOutput(callId: callId, output: [
                 "known_level": config.level.rawValue, "level": level.rawValue, "sport": kind.coachLabel, "workouts": list,
@@ -1748,9 +1768,13 @@ final class CoachSession: ObservableObject {
             realtime.requestResponse(instructions: "C'est un tour d'essai de deux minutes, à la maison, pour vérifier que tout marche : présente-toi comme Jeffrey en une phrase chaleureuse.\(name) Explique qu'on ne sort pas, demande-lui de marcher quelques pas dans la pièce et de te dire un mot, tu confirmeras que tu l'entends et que la montre te donne son cœur. Une question courte à la fin.")
             return
         }
-        let goalPart = goal.kind == .free ? "" : " Rappelle l'objectif en quelques mots."
-        // Il sait qui parle : un « Salut Hervé » suffit, jamais « c'est Jeffrey » (retour du 20/09).
-        realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name)\(goalPart) Puis pose une seule question courte : il fait sa séance à sa façon, ou tu lui proposes un exercice adapté ? S'il veut une proposition, suis la règle 10 (suggest_workouts). S'il préfère sa façon, lance la séance sans insister.")
+        if goal.kind == .free {
+            // Rien de fixé sur le téléphone : une seule question, Jeffrey applique ce qu'il entend (set_goal ou suggest_workouts).
+            realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name) Puis une seule question courte : « Tu veux quoi aujourd'hui ? » Il peut répondre un temps (« 30 minutes tranquille »), une distance (« 5 km »), « à ma façon » ou « propose-moi un truc ». Temps ou distance : set_goal tout de suite, sans redemander. À sa façon : set_goal free et tu accompagnes. Proposition : suggest_workouts au niveau de son profil, deux options en une phrase chacune, il choisit, start_workout. Une seule question, ensuite on part.")
+        } else {
+            // Objectif déjà fixé sur le téléphone : on ne redemande rien.
+            realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name) Rappelle l'objectif en quelques mots (\(goal.coachLabel())) et lance la séance. Pas d'autre question.")
+        }
     }
 
     /// Si aucune parole de Jeffrey n'arrive dans la seconde qui suit la fin de la tienne, on joue « Je regarde. ».
@@ -1881,6 +1905,15 @@ final class CoachSession: ObservableObject {
         if phase == .connecting, snap.state == .ended, Date().timeIntervalSince(watchdogFrom) > 5 {
             stop(reason: "la montre a envoyé « terminé » avant le début (état \(snap.state), instantané de \(Int(Date().timeIntervalSince(snap.timestamp))) s)")
             return
+        }
+        if snap.mode != .auto, snap.mode != mode, snap.state != .ended {
+            let wasDecided = mode != .auto
+            mode = snap.mode
+            let line = mode == .companion ? "La montre suit l'app Exercice." : "La montre pilote la séance."
+            log(.info, line)
+            if wasDecided, phase == .live {
+                realtime.injectText("[MONTRE] \(line) " + (mode == .companion ? "La séance continue, rien ne change pour lui." : ""))
+            }
         }
         if phase == .live, snap.state == .ended {
             log(.info, mode == .owned ? "La montre a terminé la séance." : "La séance de l'app Exercice est terminée.")
@@ -2216,9 +2249,33 @@ final class CoachSession: ObservableObject {
             log(.info, "Bruit ignoré : « \(trimmed) »")
             return
         }
+        let recentCoach = transcript.filter { $0.role == .coach }.suffix(3).map(\.text)
+        if Self.looksLikeEcho(trimmed, of: recentCoach) {
+            echoIgnoredCount += 1
+            log(.info, "Écho ignoré (sa propre voix reprise par le micro) : « \(trimmed.prefix(60)) »")
+            if echoIgnoredCount == 3 { log(.info, "Écho répété : mets des écouteurs ou éloigne le téléphone du haut-parleur.") }
+            return
+        }
         log(.user, trimmed)
         lastUserSpokeAt = Date()
         if !appleAI { realtime.requestResponse() }
+    }
+
+    /// Écho : au moins 60 % des mots de la phrase (3 mots ou plus) se retrouvent dans une réplique récente de Jeffrey.
+    static func looksLikeEcho(_ text: String, of coachLines: [String]) -> Bool {
+        func words(_ t: String) -> [String] {
+            t.lowercased().folding(options: .diacriticInsensitive, locale: .current)
+                .split { !$0.isLetter }.map(String.init).filter { $0.count >= 3 }
+        }
+        let mine = words(text)
+        guard mine.count >= 3 else { return false }
+        for line in coachLines {
+            let theirs = Set(words(line))
+            guard !theirs.isEmpty else { continue }
+            let hits = mine.filter { theirs.contains($0) }.count
+            if Double(hits) / Double(mine.count) >= 0.6 { return true }
+        }
+        return false
     }
 
     /// Deux mots au moins, ou un mot court attendu (oui, non, ok, stop…), en alphabet latin.

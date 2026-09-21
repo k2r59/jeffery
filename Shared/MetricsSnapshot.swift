@@ -63,9 +63,12 @@ enum CaptureMode: String, Codable {
     case owned
     /// L'app Exercice native possède la séance ; on lit les échantillons qu'elle écrit dans HealthKit.
     case companion
+    /// Demande de l'iPhone : la montre choisit elle-même (séance native en cours → compagnon, sinon pilotée).
+    case auto
 
     var label: String {
         switch self {
+        case .auto: return "montre en attente de décision"
         case .owned: return "séance pilotée par WatchCoach"
         case .companion: return "compagnon de l'app Exercice"
         }
