@@ -28,6 +28,6 @@ echo "=== JOURNAL ==="; cat "$CONT/Documents/derniere-seance.txt" 2>/dev/null ||
 echo; echo "=== SESSIONS ==="; python3 -c "
 import json,sys
 try: d=json.load(open('$CONT/Documents/sessions.json'))
-except Exception as e: print('pas de sessions.json', e); sys.exit()
+except Exception as e: print('pas de sessions.json (normal sous 5 min : séance non comptée)'); sys.exit()
 for s in d: print({k:s.get(k) for k in ('elapsed','distance','averageHeartRate','maxHeartRate','goalLabel','goalReached','zoneCounts','analysis')})"
 echo "=== CRASHES (10 min) ==="; find ~/Library/Logs/DiagnosticReports -name 'WatchCoach-*.ips' -mmin -10 2>/dev/null

@@ -176,6 +176,9 @@ qu'elle dure.
 
 ## Journal de séance
 
+Une séance de moins de 5 minutes ne compte pas : pas de bilan, pas d'entrée dans l'historique, pas de référence pour
+Jeffrey (les départs ratés et les tests ne polluent plus la liste). Son journal texte est quand même écrit.
+
 Pendant et à la fin de chaque séance, l'app écrit `derniere-seance.txt` dans ses Documents (visible dans Fichiers > Sur mon iPhone > Jeffrey) :
 tout ce que Jeffrey a dit et entendu, horodaté, plus les événements internes (chrono, changement d'objectif, montre, GPS, reprise).
 Il est réécrit en continu, donc présent même si l'app est morte en route. C'est le premier réflexe quand une séance s'est mal passée ;

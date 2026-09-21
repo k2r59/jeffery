@@ -221,9 +221,9 @@ final class CoachSession: ObservableObject {
         guard phase == .connecting || phase == .live else { return }
         log(.info, "Application fermée par l'utilisateur : séance terminée.")
         connectivity.send(command: .end, kind: kind, mode: mode)
-        if let start = sessionStartedAt, hrSamples.count + transcript.count > 2, !goal.isTrial {
+        if let start = sessionStartedAt, !goal.isTrial {
             let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
-            SessionSummary.upsert(makeSummary(start: start, elapsed: elapsed))
+            if SessionSummary.counts(elapsed: elapsed) { SessionSummary.upsert(makeSummary(start: start, elapsed: elapsed)) }
         }
         writeSessionJournal()
         SessionCheckpoint.clear()
@@ -757,9 +757,14 @@ final class CoachSession: ObservableObject {
         // Journal écrit tant que le départ de séance est connu : les horodatages s'y réfèrent.
         writeSessionJournal()
         // Le tour d'essai de l'onboarding ne laisse pas de séance dans l'historique.
-        if let start = sessionStartedAt, hrSamples.count + transcript.count > 2, !goal.isTrial {
+        if let start = sessionStartedAt, !goal.isTrial {
             let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
-            endedSummary = makeSummary(start: start, elapsed: elapsed)
+            if SessionSummary.counts(elapsed: elapsed) {
+                endedSummary = makeSummary(start: start, elapsed: elapsed)
+            } else {
+                status = "Séance de moins de 5 minutes : pas de bilan, rien d'enregistré."
+                log(.info, "Séance de moins de 5 minutes : pas de bilan, pas d'historique (journal conservé).")
+            }
         }
         sessionStartedAt = nil
         resuming = false
@@ -819,8 +824,9 @@ final class CoachSession: ObservableObject {
             log(.info, "Séance interrompue il y a \(Int(checkpoint.age / 60)) min : close sans reprise.")
             endOrphanLiveActivities()
             connectivity.send(command: .end, kind: kind, mode: mode)
-            if hrSamples.count + transcript.count > 2 {
-                endedSummary = makeSummary(start: checkpoint.startedAt, elapsed: checkpoint.savedAt.timeIntervalSince(checkpoint.startedAt))
+            let elapsed = checkpoint.savedAt.timeIntervalSince(checkpoint.startedAt)
+            if SessionSummary.counts(elapsed: elapsed) {
+                endedSummary = makeSummary(start: checkpoint.startedAt, elapsed: elapsed)
             }
             writeSessionJournal()
             SessionCheckpoint.clear()

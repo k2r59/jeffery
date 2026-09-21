@@ -210,3 +210,14 @@ final class SpeechFilterTests: XCTestCase {
         XCTAssertFalse(CoachSession.looksLikeEcho("on passe à 25 minutes ?", of: coach))
     }
 }
+
+final class ShortSessionTests: XCTestCase {
+    func testSessionsUnderFiveMinutesAreNotKept() {
+        XCTAssertFalse(SessionSummary.counts(elapsed: 299))
+        XCTAssertTrue(SessionSummary.counts(elapsed: 300))
+        let short = SessionSummary(id: "short-test", date: Date(), kind: .running, elapsed: 120, distance: nil,
+                                   averageHeartRate: nil, maxHeartRate: nil, feeling: nil, lastCoachLine: nil)
+        SessionSummary.upsert(short)
+        XCTAssertFalse(SessionSummary.loadAll().contains { $0.id == "short-test" })
+    }
+}

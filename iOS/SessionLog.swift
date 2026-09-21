@@ -56,10 +56,16 @@ struct SessionSummary: Codable, Identifiable {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("sessions.json")
     }
 
+    /// Une séance compte à partir de 5 minutes : en dessous (départ raté, test, bug), elle n'entre pas dans l'historique,
+    /// n'a pas de bilan et ne sert pas de référence. Le journal texte, lui, est toujours écrit (pour comprendre les bugs).
+    static let minimumSeconds: TimeInterval = 5 * 60
+    static func counts(elapsed: TimeInterval) -> Bool { elapsed >= minimumSeconds }
+
     static func loadAll() -> [SessionSummary] {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
-        if let list = try? d.decode([SessionSummary].self, from: data) { return list }
+        // Les séances trop courtes déjà enregistrées disparaissent aussi de la liste.
+        if let list = try? d.decode([SessionSummary].self, from: data) { return list.filter { counts(elapsed: $0.elapsed) } }
         // Fichier illisible : on le met de côté au lieu de l'écraser.
         try? FileManager.default.moveItem(at: fileURL, to: fileURL.appendingPathExtension("bak-\(Int(Date().timeIntervalSince1970))"))
         return []
@@ -76,6 +82,7 @@ struct SessionSummary: Codable, Identifiable {
     }
 
     static func upsert(_ s: SessionSummary) {
+        guard counts(elapsed: s.elapsed) else { return }
         var all = loadAll().filter { $0.id != s.id }
         all.append(s)
         all.sort { $0.date > $1.date }
