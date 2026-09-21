@@ -105,7 +105,7 @@ final class FakeRealtimeBackend {
         let consigne = lastConsigne.lowercased()
         emit(["type": "response.created", "response": ["id": "resp_\(n)"]], after: 0.2)
         // Simulation d'un appel de fonction : la consigne de salut déclenche start_timer une fois (bloc 20 s).
-        if consigne.contains("présente-toi") || consigne.contains("tu veux quoi"), !pendingTimerCall {
+        if consigne.contains("présente-toi") || consigne.contains("salue-le"), !pendingTimerCall {
             pendingTimerCall = true
             let args = "{\"seconds\": 20, \"label\": \"test\"}"
             emit(["type": "response.function_call_arguments.done", "name": "start_timer", "call_id": "call_\(n)", "arguments": args], after: 0.6)

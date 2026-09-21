@@ -99,6 +99,8 @@ final class CoachSession: ObservableObject {
     private var timerRestSeconds = 0
     private var timerWorkSeconds = 0
     private var timerPhaseIsWork = true
+    /// Bloc unique avec récup : la récup a été jouée (pour ne pas la rejouer en boucle).
+    private var restDone = false
     /// Programme de séance (catalogue) déroulé bloc par bloc par le chronomètre.
     @Published private(set) var planTitle: String?
     @Published private(set) var planStep: String?
@@ -734,6 +736,8 @@ final class CoachSession: ObservableObject {
 
     private func finishTeardown() {
         guard phase == .ending else { return }
+        // Le parcours de référence vaut pour la séance lancée depuis « refaire ce parcours », pas pour les suivantes.
+        if referenceName != nil { ReferenceRoute.clear() }
         endTimeoutTask?.cancel()
         endTimeoutTask = nil
         connectTimeoutTask?.cancel()
@@ -1059,21 +1063,22 @@ final class CoachSession: ObservableObject {
             "tools": [[
                 "type": "function",
                 "name": "start_timer",
-                "description": "Chronomètre de l'app pour un bloc d'effort ou de récup (« 30 secondes de sprint », « 2 minutes de marche ») : l'app sonne, prévient à 10 s de la fin et te relance ; tu ne comptes jamais. Pour un fractionné, work_seconds + rest_seconds + repeats : l'app enchaîne et te relance à chaque changement. Confirme en une phrase courte puis n'annonce rien avant d'être relancé.",
+                "description": "Chronomètre de l'app : un bloc (« 5 minutes de course »), un bloc suivi d'une récup (seconds + rest_seconds : « 5 min de course puis 2 min de marche »), ou un fractionné (seconds + rest_seconds + repeats : « 1 min de course, 1 min de marche, 8 fois » ; repeats=99 = jusqu'à ce qu'il dise stop). L'app sonne, prévient à 10 s de la fin, te relance à chaque changement et affiche le compte à rebours sur la montre : « affiche le chrono » = cet outil. Tu ne comptes jamais et tu n'annonces jamais un enchaînement que tu n'as pas lancé ici. Un enchaînement en cours ne se remplace qu'après son accord (replace=true). Confirme en une phrase puis n'annonce rien avant d'être relancé.",
                 "parameters": [
                     "type": "object",
                     "properties": [
                         "seconds": ["type": "integer", "description": "Durée du bloc en secondes (ou du bloc de travail si repeats > 1)"],
                         "label": ["type": "string", "description": "Nom court du bloc (sprint, récup, plateau…)"],
-                        "rest_seconds": ["type": "integer", "description": "Durée de récupération entre répétitions, 0 si aucune"],
-                        "repeats": ["type": "integer", "description": "Nombre de répétitions, 1 par défaut"],
+                        "rest_seconds": ["type": "integer", "description": "Récupération après le bloc (ou entre répétitions), en secondes, 0 si aucune"],
+                        "repeats": ["type": "integer", "description": "Nombre de répétitions, 1 par défaut, 99 = jusqu'à ce qu'il dise stop"],
+                        "replace": ["type": "boolean", "description": "true seulement après son accord pour abandonner l'enchaînement en cours"],
                     ],
                     "required": ["seconds", "label"],
                 ],
             ], [
                 "type": "function",
                 "name": "suggest_workouts",
-                "description": "Quand il demande une idée de séance, des exercices ou un programme (« propose-moi un truc », « tu me conseilles quoi ? ») : renvoie deux séances types pour le sport en cours, au niveau de son profil. N'appelle level que s'il a dit « plus dur » ou « plus doux ». Présente les deux à l'oral en une phrase chacune, il choisit, puis start_workout.",
+                "description": "Dès qu'il demande un exercice, un fractionné, une idée de séance ou un programme (« propose-moi », « un fractionné pour débutant ») : appelle CET outil, ne compose jamais un programme de tête. Il renvoie deux séances types du catalogue pour le sport en cours, au niveau de son profil (level seulement s'il a dit « plus dur » ou « plus doux »). Présente les deux à l'oral en une phrase chacune, il choisit (« la première », « la deux »), puis start_workout avec l'id.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1083,10 +1088,10 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "start_workout",
-                "description": "Lancer la séance type qu'il a choisie à l'oral (id de suggest_workouts). L'app déroule les blocs au chronomètre et te relance à chaque bloc ; tu annonces chaque bloc avec sa consigne. Rien à valider sur le téléphone.",
+                "description": "Lancer la séance type qu'il a choisie (id de suggest_workouts). L'app déroule les blocs au chronomètre, affiche chaque bloc sur la montre et te relance à chaque changement ; tu annonces chaque bloc avec sa consigne, et « vas-y, cours » au moment exact. Un programme en cours ne se remplace qu'après son accord (replace=true).",
                 "parameters": [
                     "type": "object",
-                    "properties": ["id": ["type": "string"]],
+                    "properties": ["id": ["type": "string"], "replace": ["type": "boolean", "description": "true seulement après son accord pour abandonner l'enchaînement en cours"]],
                     "required": ["id"],
                 ],
             ], [
@@ -1097,7 +1102,7 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "get_time",
-                "description": "Heure exacte de la séance : temps écoulé, restant sur l'objectif, chrono, depuis combien de temps il marche ou court. À appeler dès qu'il demande un temps précis (« ça fait combien de temps que je marche ? », « il me reste combien ? »).",
+                "description": "Les valeurs exactes de l'instant, à lire telles quelles : temps écoulé, cœur (bpm et zone), allure, distance, calories, pente, restant sur l'objectif, chrono, depuis combien de temps il marche ou court. À appeler à CHAQUE demande de chiffre (« mon allure ? », « ma fréquence ? », « combien de temps ? », « il me reste combien ? »). Ne cite jamais un chiffre de mémoire.",
                 "parameters": ["type": "object", "properties": [:]],
             ], [
                 "type": "function",
@@ -1393,8 +1398,18 @@ final class CoachSession: ObservableObject {
         if name == "start_timer" {
             let seconds = min(4 * 3600, max(5, (json["seconds"] as? Int) ?? Int((json["seconds"] as? Double) ?? 30)))
             let label = (json["label"] as? String ?? "bloc").trimmingCharacters(in: .whitespaces)
-            let rest = max(0, (json["rest_seconds"] as? Int) ?? 0)
+            let rest = max(0, (json["rest_seconds"] as? Int) ?? Int((json["rest_seconds"] as? Double) ?? 0))
             let repeats = max(1, (json["repeats"] as? Int) ?? 1)
+            let replace = json["replace"] as? Bool ?? false
+            if let running = runningProgramLabel, !replace {
+                realtime.sendFunctionOutput(callId: callId, output: ["error": "un enchaînement est déjà en cours (\(running)) : demande-lui s'il veut vraiment l'abandonner, et rappelle avec replace=true après son oui"])
+                return
+            }
+            // « 1 minute de course, 30 minutes de marche » : presque toujours une erreur d'oreille (30 secondes).
+            if rest >= 600, rest >= seconds * 5 {
+                realtime.sendFunctionOutput(callId: callId, output: ["error": "récup de \(rest / 60) minutes pour un effort de \(seconds) s : fais-lui répéter la durée de récup avant de lancer"])
+                return
+            }
             startTimer(seconds: seconds, label: label, rest: rest, repeats: repeats)
             var out = timeStatus()
             out["started"] = true
@@ -1414,6 +1429,10 @@ final class CoachSession: ObservableObject {
         if name == "start_workout" {
             guard let id = json["id"] as? String, let w = WorkoutLibrary.workout(id: id) else {
                 realtime.sendFunctionOutput(callId: callId, output: ["error": "séance inconnue, rappelle suggest_workouts"])
+                return
+            }
+            if let running = runningProgramLabel, json["replace"] as? Bool != true {
+                realtime.sendFunctionOutput(callId: callId, output: ["error": "un enchaînement est déjà en cours (\(running)) : demande-lui s'il veut vraiment l'abandonner, et rappelle avec replace=true après son oui"])
                 return
             }
             startWorkout(w)
@@ -1464,6 +1483,15 @@ final class CoachSession: ObservableObject {
             "elapsed": Formatters.elapsed(liveElapsed()),
             "clock": Date().formatted(date: .omitted, time: .shortened),
         ]
+        if let hr = latest?.heartRate {
+            out["heart_rate_bpm"] = Int(hr)
+            out["zone"] = HeartRateZone.zone(for: hr, maxHR: config.maxHR).label
+        }
+        if let p = pace { out["pace"] = p }
+        if let d = displayDistance { out["distance_km"] = (d / 100).rounded() / 10 }
+        if let e = latest?.activeEnergy { out["kcal"] = Int(e) }
+        if let g = activity.grade, activity.terrain != .flat { out["grade_percent"] = Int(g.rounded()) }
+        if let age = latest.map({ Int(Date().timeIntervalSince($0.lastSampleAt ?? $0.timestamp)) }) { out["data_age_seconds"] = age }
         if goal.kind != .free {
             let p = goal.progress(elapsed: liveElapsed(), distance: displayDistance)
             out["goal"] = goal.coachLabel()
@@ -1513,6 +1541,13 @@ final class CoachSession: ObservableObject {
         }
     }
 
+    /// Enchaînement en cours (programme du catalogue, fractionné ou bloc avec récup), pour ne pas l'écraser sans accord.
+    private var runningProgramLabel: String? {
+        if let planTitle { return planTitle }
+        if timerEndsAt != nil, timerRepeatsLeft > 1 || !timerPhaseIsWork || timerRestSeconds > 0 { return timerLabel ?? "bloc" }
+        return nil
+    }
+
     // MARK: - Programme de séance (catalogue)
 
     func startWorkout(_ w: Workout) {
@@ -1544,6 +1579,7 @@ final class CoachSession: ObservableObject {
         timerRestSeconds = rest
         timerRepeatsLeft = repeats
         timerPhaseIsWork = true
+        restDone = false
         runTimerPhase(seconds: seconds, label: repeats > 1 ? "\(label) 1/\(repeats)" : label, baseLabel: label, index: 1)
     }
 
@@ -1584,15 +1620,17 @@ final class CoachSession: ObservableObject {
             runTimerPhase(seconds: timerWorkSeconds, label: "\(baseLabel) \(index + 1)/\(total)", baseLabel: baseLabel, index: index + 1)
             return
         }
-        if timerPhaseIsWork, timerRepeatsLeft > 1, timerRestSeconds > 0 {
-            // Travail terminé → récupération
+        if timerPhaseIsWork, timerRestSeconds > 0, timerRepeatsLeft >= 1, !(timerRepeatsLeft == 1 && restDone) {
+            // Travail terminé → récupération (aussi pour un bloc unique : « 5 min de course puis 2 min de marche »).
             timerPhaseIsWork = false
+            restDone = timerRepeatsLeft == 1
+            let total = timerRepeatsLeft + index - 1
             realtime.injectText("[CHRONO terminé] « \(finished) ». Récupération de \(timerRestSeconds) s qui démarre.")
             realtime.requestResponse(instructions: "Le chrono « \(finished) » vient de sonner : annonce la fin du bloc et lance la récupération de \(timerRestSeconds) s en une phrase.")
-            runTimerPhase(seconds: timerRestSeconds, label: "récup \(index)/\(timerRepeatsLeft + index - 1)", baseLabel: baseLabel, index: index)
+            runTimerPhase(seconds: timerRestSeconds, label: total > 1 ? "récup \(index)/\(total)" : "récup", baseLabel: baseLabel, index: index)
             return
         }
-        if !timerPhaseIsWork {
+        if !timerPhaseIsWork, timerRepeatsLeft > 1 {
             // Récupération terminée → répétition suivante
             timerPhaseIsWork = true
             timerRepeatsLeft -= 1
@@ -1602,7 +1640,9 @@ final class CoachSession: ObservableObject {
             runTimerPhase(seconds: timerWorkSeconds, label: "\(baseLabel) \(index + 1)/\(total)", baseLabel: baseLabel, index: index + 1)
             return
         }
+        timerPhaseIsWork = true
         timerRepeatsLeft = 0
+        restDone = false
         if let planTitle {
             if let next = planQueue.first {
                 let step = planIndex + 1
@@ -1776,7 +1816,7 @@ final class CoachSession: ObservableObject {
         }
         if goal.kind == .free {
             // Rien de fixé sur le téléphone : une seule question, Jeffrey applique ce qu'il entend (set_goal ou suggest_workouts).
-            realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name) Puis une seule question courte : « Tu veux quoi aujourd'hui ? » Il peut répondre un temps (« 30 minutes tranquille »), une distance (« 5 km »), « à ma façon » ou « propose-moi un truc ». Temps ou distance : set_goal tout de suite, sans redemander. À sa façon : set_goal free et tu accompagnes. Proposition : suggest_workouts au niveau de son profil, deux options en une phrase chacune, il choisit, start_workout. Une seule question, ensuite on part.")
+            realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name) Puis une seule question courte : « Tu veux quoi aujourd'hui ? » Il peut répondre un temps (« 30 minutes tranquille »), une distance (« 5 km »), « à ma façon » ou « propose-moi un truc ». Temps ou distance : set_goal tout de suite, sans redemander. À sa façon : set_goal free et tu accompagnes. Proposition, exercice, fractionné, programme : suggest_workouts (jamais un programme de tête), deux options en une phrase chacune, il choisit, start_workout. Une seule question, ensuite on part.")
         } else {
             // Objectif déjà fixé sur le téléphone : on ne redemande rien.
             realtime.requestResponse(instructions: "Salue-le par son prénom en une phrase chaleureuse, sans dire ton nom ni te présenter : il sait que c'est toi.\(name) Rappelle l'objectif en quelques mots (\(goal.coachLabel())) et lance la séance. Pas d'autre question.")
@@ -1787,7 +1827,7 @@ final class CoachSession: ObservableObject {
     private func scheduleAckIfSlow() {
         let stoppedAt = Date()
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
             guard let self, self.phase == .live else { return }
             // Seulement si le serveur a bien ouvert une réponse (vraie parole) et qu'aucun audio n'est encore arrivé.
             guard self.responseInProgress, self.lastAudioDeltaAt < stoppedAt, Date().timeIntervalSince(self.lastAckAt) > 8 else { return }
