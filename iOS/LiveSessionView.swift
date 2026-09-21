@@ -143,7 +143,6 @@ struct LiveSessionView: View {
     private var metricsCard: some View {
         let s = coach.latest
         let zone = coach.currentZone
-        let a = coach.activity
         return VStack(spacing: 0) {
             HStack(spacing: 0) {
                 metric("distance", coach.displayDistance.map { String(format: "%.2f", $0 / 1000).replacingOccurrences(of: ".", with: ",") } ?? "--", "km")
@@ -415,7 +414,7 @@ struct LiveSessionView: View {
     }
 }
 
-/// La conversation en cours : Jeffrey écoute en permanence, ceci n'est qu'une fenêtre de lecture (et de confirmation d'objectif).
+/// La conversation en cours : Jeffrey écoute en permanence, ceci n'est qu'une fenêtre de lecture .
 struct TalkSheet: View {
     @EnvironmentObject private var coach: CoachSession
     @Environment(\.dismiss) private var dismiss

@@ -20,7 +20,7 @@ struct WatchCoachWatchApp: App {
 final class WatchAppDelegate: NSObject, WKApplicationDelegate {
     func applicationDidFinishLaunching() {
         #if DEBUG
-        // Aperçu d'une scène sur simulateur : WATCHCOACH_SCENE=countdown|interval|zone|pace|message|climb|ghost|celebration
+        // Aperçu d'une scène sur simulateur : WATCHCOACH_SCENE=countdown|interval|zone|pace|climb|ghost|celebration
         if let name = ProcessInfo.processInfo.environment["WATCHCOACH_SCENE"] {
             let scene = WatchScenePreview.scene(named: name)
             var m = CoachMirror.idle
@@ -36,6 +36,9 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
         #endif
         WatchSender.shared.activate()
         WorkoutManager.shared.requestAuthorization()
+        #if DEBUG
+        WatchScript.runIfRequested()
+        #endif
     }
 
     func applicationDidBecomeActive() {
@@ -82,8 +85,6 @@ enum WatchScenePreview {
             return WatchScene(kind: .zone, id: "p3", title: "Reste en Z2", subtitle: "cible 130 – 148", low: 130, high: 148, zone: 2)
         case "pace":
             return WatchScene(kind: .pace, id: "p4", title: "Allure cible 5:30", subtitle: "min/km", low: 320, high: 340, value: 312)
-        case "message":
-            return WatchScene(kind: .message, id: "p5", title: "Jeffrey", subtitle: "Belle relance, garde ça jusqu'au pont.", until: now.addingTimeInterval(60))
         case "climb":
             return WatchScene(kind: .climb, id: "p6", title: "Montée · 6 %", subtitle: "encore +28 m sur 500 m", caption: "Petits pas, bras actifs.", value: 6, progress: 42)
         case "ghost":
@@ -93,6 +94,36 @@ enum WatchScenePreview {
         case "celebration":
             return WatchScene(kind: .celebration, id: "p8", title: "Objectif atteint", subtitle: "5 km · 27:41", until: now.addingTimeInterval(60))
         default: return nil
+        }
+    }
+}
+#endif
+
+#if DEBUG
+/// Utilisateur de montre scripté (banc d'essai) : WATCHCOACH_WATCH_SCRIPT="start@3,pause@40,resume@55,end@150"
+/// joue les appuis sur les boutons de la montre aux instants donnés (secondes après le lancement).
+enum WatchScript {
+    static func runIfRequested() {
+        guard let raw = ProcessInfo.processInfo.environment["WATCHCOACH_WATCH_SCRIPT"], !raw.isEmpty else { return }
+        for item in raw.split(separator: ",") {
+            let parts = item.split(separator: "@")
+            guard parts.count == 2, let at = Double(parts[1]) else { continue }
+            let action = String(parts[0]).trimmingCharacters(in: .whitespaces)
+            DispatchQueue.main.asyncAfter(deadline: .now() + at) {
+                let kind = WorkoutManager.shared.selectedKind
+                let command: WatchCommand?
+                switch action {
+                case "start": command = .requestStart
+                case "pause": command = .requestPause
+                case "resume": command = .requestResume
+                case "end": command = .requestEnd
+                default: command = nil
+                }
+                guard let command else { return }
+                WatchSender.shared.request(command, kind: kind) { refusal in
+                    Task { @MainActor in WatchMirror.shared.notice = refusal.map { "script \(action) : \($0)" } ?? "script \(action) : ok" }
+                }
+            }
         }
     }
 }

@@ -99,7 +99,7 @@ struct JeffreyView: View {
                                 HStack(spacing: 8) { JIcon("valider", size: 18); Text("Refaire la configuration") }
                                     .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
                                 Spacer()
-                                Text("montre, micro, position, clé, tour d'essai").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+                                Text("montre, micro, position, compte, tour d'essai").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
                                 JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
                             }
                             .card()

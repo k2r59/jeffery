@@ -23,7 +23,6 @@ struct MusicApp: Identifiable, Equatable {
 final class MusicController: ObservableObject {
     @Published private(set) var title: String?
     @Published private(set) var artist: String?
-    @Published private(set) var artwork: UIImage?
     @Published private(set) var isPlaying = false
     @Published private(set) var authorized = false
     /// Une autre app joue du son (Spotify, Deezer…) : on ne connaît pas le titre mais on sait qu'elle joue.
@@ -81,7 +80,6 @@ final class MusicController: ObservableObject {
         let item = player.nowPlayingItem
         title = item?.title
         artist = item?.artist ?? item?.albumArtist
-        artwork = item?.artwork?.image(at: CGSize(width: 120, height: 120))
     }
 
     func togglePlayPause() { isPlaying ? player.pause() : player.play() }

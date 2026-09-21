@@ -62,7 +62,6 @@ struct ReferenceRoute: Codable {
 
 /// Position de la séance en cours par rapport au parcours de référence.
 struct ReferenceStatus: Equatable {
-    var index: Int
     var covered: Double         // m parcourus le long de la référence
     var total: Double
     var offRoute: Bool
@@ -119,7 +118,7 @@ final class ReferenceTracker {
         let horiz = max(1, pts[j].cum - here.cum)
         let grade = (pts[j].alt - here.alt) / horiz * 100
         let ghost = bestD <= 60 ? here.elapsed - elapsed : nil
-        return ReferenceStatus(index: best, covered: here.cum, total: route.totalDistance, offRoute: bestD > 60,
+        return ReferenceStatus(covered: here.cum, total: route.totalDistance, offRoute: bestD > 60,
                                gainNext: gain, lossNext: loss, gradeNext: grade, ghostDelta: ghost)
     }
 }

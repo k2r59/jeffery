@@ -5,7 +5,7 @@ import CoreMotion
 import Combine
 
 /// État de la configuration de Jeffrey : ce qui est prêt, ce qui manque, et les demandes d'autorisation faites
-/// une à une, dans leur contexte (onboarding pas à pas, puis carte « Configuration » de l'onglet Jeffrey).
+/// une à une, dans leur contexte (onboarding pas à pas, puis « Refaire la configuration » dans l'onglet Jeffrey).
 @MainActor
 final class SetupState: NSObject, ObservableObject {
     enum Status: Equatable {

@@ -1,7 +1,7 @@
 import SwiftUI
 import WatchKit
 
-/// Les six vues de la maquette « Au rythme du poignet » : Séance, Effort, Intervalles, Coach vocal, Pause, Bilan.
+/// Les vues de la maquette « Au rythme du poignet » : Séance, Effort, Intervalles, Coach vocal, Pause, Bilan.
 /// Même grammaire partout : en-tête en petites capitales sauge sur la ligne de l'heure système, un grand chiffre
 /// citron (ou crème à l'arrêt), des libellés sauge, fond noir, pas de cartes.
 enum WatchUI {
@@ -298,14 +298,9 @@ struct WatchCoachPage: View {
             WatchUI.header("Jeffrey")
             Spacer(minLength: 2)
             JeffreyVoiceView(speaking: mirror.coachSpeaking, size: 30)
-            if let message {
-                Text(message).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(WatchUI.creme)
-                    .multilineTextAlignment(.center).lineLimit(3).minimumScaleFactor(0.8).padding(.top, 4)
-            } else {
-                Text(state).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(WatchUI.creme)
-                    .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
-                VoiceBars(active: mirror.coachSpeaking || mirror.userSpeaking).frame(height: 18).padding(.top, 4)
-            }
+            Text(state).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(WatchUI.creme)
+                .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
+            VoiceBars(active: mirror.coachSpeaking || mirror.userSpeaking).frame(height: 18).padding(.top, 4)
             Spacer(minLength: 8)
             WatchUI.chip("Comment je vais ?") { onAsk("Comment je vais ? Donne-moi ton avis sur mon effort en une phrase.") }
             WatchUI.chip("Répète le conseil") { onAsk("Répète ton dernier conseil, en une phrase.") }.padding(.top, 6)
@@ -314,8 +309,7 @@ struct WatchCoachPage: View {
         .modifier(WatchUI.Chrome())
     }
 
-    /// La montre n'affiche pas les phrases de Jeffrey (choix du 21/09) : il les dit, la montre montre son état.
-    private var message: String? { nil }
+    // La montre n'affiche pas les phrases de Jeffrey (choix du 21/09) : il les dit, la montre montre son état.
 
     private var state: String {
         if !phoneReachable { return "iPhone hors de portée" }
@@ -324,9 +318,7 @@ struct WatchCoachPage: View {
         case "foreground": return "Ouvre l'iPhone"
         case "ending": return "Débrief"
         case "live":
-            if mirror.coachSpeaking { return "Je te parle" }
-            if mirror.userSpeaking { return "Je t'écoute" }
-            return "Je t'écoute"
+            return mirror.coachSpeaking ? "Je te parle" : "Je t'écoute"
         default: return "Prêt"
         }
     }

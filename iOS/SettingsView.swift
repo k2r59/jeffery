@@ -9,8 +9,6 @@ struct SettingsView: View {
     @AppStorage(Prefs.maxHR) private var maxHR: Double = 0
     @AppStorage(Prefs.age) private var age: Int = 40
     @AppStorage(Prefs.goal) private var goal: String = ""
-    @AppStorage(Prefs.cueInterval) private var cueInterval: Double = 60
-    @AppStorage(Prefs.metricsInterval) private var metricsInterval: Double = 15
     @AppStorage(Prefs.autoCues) private var autoCues: Bool = true
     @AppStorage(Prefs.weightKg) private var weightKg: Double = 0
     @AppStorage(Prefs.heightCm) private var heightCm: Double = 0
@@ -151,9 +149,6 @@ struct SettingsView: View {
                     }
                     Text("Faible si Jeffrey se déclenche tout seul (vent, souffle, pas) ; haute si tu dois hausser la voix.")
                         .font(.caption).foregroundStyle(.secondary)
-                    Stepper("Toutes les \(Int(cueInterval)) s", value: $cueInterval, in: 20...300, step: 10)
-                        .disabled(!autoCues)
-                    Stepper("Métriques envoyées toutes les \(Int(metricsInterval)) s", value: $metricsInterval, in: 5...60, step: 5)
                 }
                 Section {
                     Text(apiKey.isEmpty ? "Aucune clé enregistrée." : "Clé enregistrée : \(apiKey.prefix(7))…\(apiKey.suffix(4)), \(apiKey.count) caractères.")
@@ -161,7 +156,7 @@ struct SettingsView: View {
                     if let saveNotice {
                         Text(saveNotice).font(.caption).foregroundStyle(.orange)
                     }
-                    Text("La clé est stockée dans le trousseau de l'iPhone. L'audio et les métriques transitent uniquement vers l'API OpenAI.")
+                    Text("La clé est stockée dans le trousseau de l'iPhone. L'audio et les métriques vont à l'API OpenAI (directement avec ta clé, ou via le serveur Jeffrey avec le compte Apple).")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

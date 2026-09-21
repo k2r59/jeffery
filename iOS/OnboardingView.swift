@@ -246,7 +246,7 @@ struct OnboardingView: View {
     // MARK: 3. Montre
 
     private var watchStep: some View {
-        page(title: "Ton cœur donne le tempo.", subtitle: "Ton Apple Watch transmet ton rythme cardiaque à Jeffrey.", centered: true, illustration: "onb-watch-heartbeat") {
+        page(title: "Ton cœur donne le tempo.", subtitle: "Ton Apple Watch transmet ton rythme cardiaque à Jeffrey.", centered: true) {
             checkRow(icon: "montre", title: setup.watch == .ok ? "Jeffrey est sur ta montre" : (setup.watchPairedWithoutApp ? "Montre trouvée, Jeffrey n'y est pas encore" : "Aucune montre jumelée"),
                      status: setup.watch,
                      detail: setup.watch == .ok ? "Connectée et prête à t'accompagner." : (setup.watchPairedWithoutApp ? "Dans l'app Watch › Apps disponibles, installe Jeffrey. Cette page se mettra à jour toute seule." : "Jumelle une Apple Watch dans l'app Watch, puis reviens ici."),
@@ -343,7 +343,7 @@ struct OnboardingView: View {
     // MARK: 6. Compte
 
     private var accountStep: some View {
-        page(title: "Ton coach, à toi.", subtitle: "Connecte-toi avec Apple pour continuer.", illustration: "onb-private-profile") {
+        page(title: "Ton coach, à toi.", subtitle: "Connecte-toi avec Apple pour continuer.") {
             if let u = account.user, account.isSignedIn {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
@@ -448,7 +448,7 @@ struct OnboardingView: View {
     // MARK: 7. Intelligence
 
     private var voiceStep: some View {
-        page(title: "Choisis ton intelligence.", subtitle: "Tu pourras changer dans l'onglet Jeffrey.") {
+        page(title: "Choisis ton intelligence.", subtitle: "Modifiable via « Refaire la configuration » dans l'onglet Jeffrey.") {
             voiceChoice(id: "openai", title: "Jeffrey AI", detail: "Recommandé. Voix naturelle, conversation fluide, bilan détaillé.", available: setup.access == .ok)
             voiceChoice(id: "apple", title: "Apple AI", detail: "Sur ton iPhone\nSans réseau\nVoix plus mécanique", available: appleAIAvailable)
             if voiceEngine == "apple" {
@@ -500,7 +500,7 @@ struct OnboardingView: View {
                     if id == "apple" {
                         Image(systemName: "apple.logo").font(.system(size: 22, weight: .medium)).foregroundStyle(ink)
                     } else if available {
-                        JeffreyMark(color: accent, size: 24)
+                        JeffreyMark(size: 24)
                     } else {
                         Image(systemName: "lock").font(.system(size: 20, weight: .medium)).foregroundStyle(ink)
                     }
@@ -537,7 +537,7 @@ struct OnboardingView: View {
                 }
             }
             .background(cardShape())
-            infoLine("Tu retrouveras ces réglages dans l'onglet Jeffrey.")
+            infoLine("Tu retrouveras ces réglages dans l'onglet Jeffrey (« Refaire la configuration »).")
         } footer: {
             let canTrial = setup.watch == .ok && setup.microphone == .ok && (setup.access == .ok || aiProvider == "apple")
             primaryButton("Faire un tour d'essai · 2 min", enabled: canTrial) {
@@ -895,24 +895,6 @@ private struct WatchHeartbeat: View {
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) { progress = 1 }
-        }
-    }
-
-    /// Bracelet trapézoïdal au-dessus et en dessous du boîtier.
-    private struct StrapShape: Shape {
-        let top: Bool
-        func path(in r: CGRect) -> Path {
-            var p = Path()
-            let inset: CGFloat = 8
-            if top {
-                p.move(to: CGPoint(x: r.minX + inset, y: r.minY)); p.addLine(to: CGPoint(x: r.maxX - inset, y: r.minY))
-                p.addLine(to: CGPoint(x: r.maxX, y: r.maxY)); p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
-            } else {
-                p.move(to: CGPoint(x: r.minX, y: r.minY)); p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
-                p.addLine(to: CGPoint(x: r.maxX - inset, y: r.maxY)); p.addLine(to: CGPoint(x: r.minX + inset, y: r.maxY))
-            }
-            p.closeSubpath()
-            return p
         }
     }
 

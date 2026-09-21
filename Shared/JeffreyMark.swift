@@ -9,7 +9,6 @@ enum JeffreyState {
 
 struct JeffreyMark: View {
     var state: JeffreyState = .available
-    var color: Color = Color(red: 0.831, green: 1.0, blue: 0.294)
     var size: CGFloat = 40
 
     @State private var pulse = false
@@ -46,8 +45,6 @@ struct JeffreyMark: View {
 
 /// Logotype officiel : J citron intégré + « effrey » crème (ou encre sur fond clair).
 struct JeffreyWordmark: View {
-    var color: Color = .white
-    var markColor: Color = Color(red: 0.831, green: 1.0, blue: 0.294)
     var size: CGFloat = 22
     var signature: Bool = false
 

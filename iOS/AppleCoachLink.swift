@@ -413,19 +413,17 @@ private struct SaveNoteTool: Tool {
 
 private struct ShowOnWatchTool: Tool {
     let name = "show_on_watch"
-    let description = "Afficher en grand sur la montre : what zone (avec zone 1 à 5), pace (avec pace m:ss), message (avec text) ou clear pour revenir à l'écran normal."
+    let description = "Afficher en grand sur la montre : what zone (avec zone 1 à 5), pace (avec pace m:ss) ou clear pour revenir à l'écran normal. La montre n'affiche jamais tes phrases."
     let bridge: AppleCoachLink.Bridge
     @Generable struct Arguments {
-        @Guide(description: "zone, pace, message ou clear", .anyOf(["zone", "pace", "message", "clear"])) var what: String
+        @Guide(description: "zone, pace ou clear", .anyOf(["zone", "pace", "clear"])) var what: String
         @Guide(description: "Zone 1 à 5 pour what=zone, sinon 0") var zone: Int
         @Guide(description: "Allure m:ss par km pour what=pace, sinon vide") var pace: String
-        @Guide(description: "Texte pour what=message (90 caractères max), sinon vide") var text: String
     }
     func call(arguments a: Arguments) async throws -> String {
         var args: [String: Any] = ["what": a.what]
         if a.zone > 0 { args["zone"] = a.zone }
         if !a.pace.isEmpty { args["pace"] = a.pace }
-        if !a.text.isEmpty { args["text"] = a.text }
         return await bridge.call(name, args)
     }
 }
@@ -469,10 +467,12 @@ private struct GetSessionLogTool: Tool {
 
 private struct StartWorkoutTool: Tool {
     let name = "start_workout"
-    let description = "Lancer une séance type choisie à l'oral (id renvoyé par suggest_workouts). L'app enchaîne les blocs et te prévient à chaque changement."
+    let description = "Lancer la séance type qu'il a choisie (id de suggest_workouts), uniquement après avoir reformulé son choix et obtenu son oui (confirmed=true). L'app enchaîne les blocs et te prévient à chaque changement. Un programme en cours ne se remplace qu'après son accord (replace=true)."
     let bridge: AppleCoachLink.Bridge
     @Generable struct Arguments {
         @Guide(description: "Identifiant de la séance renvoyé par suggest_workouts") var id: String
+        @Guide(description: "true seulement après qu'il a confirmé ton récapitulatif") var confirmed: Bool
+        @Guide(description: "true seulement après son accord pour abandonner l'enchaînement en cours") var replace: Bool
     }
-    func call(arguments a: Arguments) async throws -> String { await bridge.call(name, ["id": a.id]) }
+    func call(arguments a: Arguments) async throws -> String { await bridge.call(name, ["id": a.id, "confirmed": a.confirmed, "replace": a.replace]) }
 }

@@ -193,10 +193,6 @@ final class RealtimeClient: NSObject {
         sendQueue.async { [weak self] in self?.pendingResponses.removeAll() }
     }
 
-    func cancelResponse() {
-        send(["type": "response.cancel"])
-    }
-
     // MARK: - Réception
 
     private func receiveLoop() {
@@ -276,15 +272,12 @@ final class RealtimeClient: NSObject {
             let err = json["error"] as? [String: Any]
             let code = err?["code"] as? String ?? ""
             // Erreurs transitoires connues : on ne dérange pas l'utilisateur.
-            if code == "conversation_already_has_active_response" { responseFinishedIfIdle(); return }
+            // Le serveur refuse une seconde réponse : la nôtre repartira sur le prochain response.done.
+            if code == "conversation_already_has_active_response" { return }
             callbacks.onError(err?["message"] as? String ?? text)
         default:
             break
         }
-    }
-
-    private func responseFinishedIfIdle() {
-        // Le serveur refuse une seconde réponse : la nôtre repartira sur le prochain response.done.
     }
 
     private func startPing() {

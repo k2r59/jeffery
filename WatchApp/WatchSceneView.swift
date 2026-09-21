@@ -1,7 +1,7 @@
 import SwiftUI
 import WatchKit
 
-/// Écran plein piloté par Jeffrey : compte à rebours, fractionné, zone cible, allure cible, message, montée, fantôme, fête.
+/// Écran plein piloté par Jeffrey : compte à rebours, fractionné, zone cible, allure cible, montée, fantôme, fête.
 struct WatchSceneView: View {
     let scene: WatchScene
     let heartRate: Double?
@@ -30,7 +30,6 @@ struct WatchSceneView: View {
         case .countdown, .interval: framed { countdown(now: now) }
         case .zone: framed { zone }
         case .pace: framed { pace }
-        case .message: message
         case .climb: framed { climb }
         case .ghost: framed { ghost }
         case .celebration: celebration
@@ -171,24 +170,6 @@ struct WatchSceneView: View {
         }
     }
 
-    // MARK: Message de Jeffrey
-
-    private var message: some View {
-        ZStack {
-            citron.ignoresSafeArea()
-            VStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    JeffreyVoiceView(speaking: true, size: 18, color: Color.black.opacity(0.75))
-                    Text("JEFFREY").font(.system(size: 12, weight: .heavy)).foregroundStyle(Color.black.opacity(0.6)).tracking(1.2)
-                }
-                Text(scene.subtitle ?? "").font(.system(size: 19 * k, weight: .heavy)).foregroundStyle(Color.black)
-                    .multilineTextAlignment(.center).minimumScaleFactor(0.7)
-            }
-            .padding(.horizontal, 10)
-            .padding(.bottom, dotsInset)
-        }
-    }
-
     // MARK: Montée
 
     private var climb: some View {
@@ -308,7 +289,6 @@ final class SceneHaptics {
             wasInside = true
             switch scene.kind {
             case .celebration: WKInterfaceDevice.current().play(.success)
-            case .message: WKInterfaceDevice.current().play(.notification)
             default: WKInterfaceDevice.current().play(.directionUp)
             }
         }
@@ -327,119 +307,5 @@ final class SceneHaptics {
             }
             wasInside = inside
         }
-    }
-}
-
-/// Page « stats » de la montre (à droite du direct) : zones cardiaques quand il y en a, puis les chiffres utiles au sport.
-struct WatchStatsView: View {
-    let mirror: CoachMirror
-    let snapshot: MetricsSnapshot
-    let elapsed: TimeInterval
-
-    private let citron = JeffreyPalette.citron
-    private let creme = JeffreyPalette.creme
-    private let sauge = JeffreyPalette.sauge
-    private let surface = JeffreyPalette.surface
-    private let alerte = JeffreyPalette.alerte
-
-    private var zoneColors: [Color] { [sauge.opacity(0.7), citron.opacity(0.55), citron, Color.orange, alerte] }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 5) {
-                // En-tête sur la ligne de l'heure système (marge à gauche pour l'arrondi de l'écran).
-                HStack(spacing: 8) {
-                    Text("STATS").font(.system(size: 12, weight: .heavy)).foregroundStyle(sauge).tracking(1.2)
-                    Text(Formatters.elapsed(elapsed)).font(.system(size: 13, weight: .bold).monospacedDigit()).foregroundStyle(creme)
-                }
-                .frame(height: 24).padding(.leading, 8).padding(.trailing, 62).padding(.top, 10)
-                if let z = mirror.zoneSeconds, z.reduce(0, +) > 0 { zones(z) }
-                statGrid
-            }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 6)
-        }
-        .ignoresSafeArea(edges: .top)
-    }
-
-    private func zones(_ z: [Int]) -> some View {
-        let total = max(1, z.reduce(0, +))
-        return VStack(alignment: .leading, spacing: 3) {
-            GeometryReader { geo in
-                HStack(spacing: 2) {
-                    ForEach(0..<5, id: \.self) { i in
-                        let w = geo.size.width * CGFloat(z[i]) / CGFloat(total)
-                        if z[i] > 0 {
-                            RoundedRectangle(cornerRadius: 2).fill(zoneColors[i]).frame(width: max(3, w - 2))
-                        }
-                    }
-                }
-            }
-            .frame(height: 9)
-            HStack(spacing: 0) {
-                ForEach(0..<5, id: \.self) { i in
-                    VStack(spacing: 0) {
-                        Text("Z\(i + 1)").font(.system(size: 8, weight: .heavy)).foregroundStyle(z[i] > 0 ? zoneColors[i] : sauge.opacity(0.4))
-                        Text(z[i] > 0 ? (z[i] < 60 ? "\(z[i]) s" : Formatters.humanDuration(TimeInterval(z[i]))) : "–").font(.system(size: 8, weight: .semibold).monospacedDigit()).foregroundStyle(sauge)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(surface))
-    }
-
-    private var statGrid: some View {
-        let hr = snapshot.heartRate ?? mirror.heartRate
-        let kind = mirror.kind
-        let energy = snapshot.activeEnergy ?? mirror.energy
-        let distance = snapshot.distance ?? mirror.distance
-        let avgSpeed: Double? = {
-            if let d = distance, d > 20, elapsed > 30 { return d / elapsed }
-            return mirror.averageSpeed
-        }()
-        return VStack(spacing: 5) {
-            HStack(spacing: 5) {
-                stat("frequence-cardiaque", hr.map { "\(Int($0))" } ?? "--", "bpm")
-                stat("frequence-cardiaque", mirror.averageHeartRate.map { "\(Int($0))" } ?? "--", "moy.")
-            }
-            HStack(spacing: 5) {
-                stat("energie", energy.map { "\(Int($0))" } ?? "--", "kcal")
-                if kind == .cycling {
-                    stat("allure", avgSpeed.map { String(format: "%.1f", $0 * 3.6) } ?? "--", "km/h moy.")
-                } else if kind.usesDistance {
-                    stat("allure", avgSpeed.flatMap { pace($0) } ?? "--", "/km moy.")
-                } else {
-                    stat("chronometre", Formatters.elapsed(elapsed), "temps")
-                }
-            }
-            if kind.usesDistance {
-                HStack(spacing: 5) {
-                    stat("distance", distance.map { String(format: "%.2f", $0 / 1000) } ?? "--", "km")
-                    stat("allure", mirror.paceSecPerKm.flatMap { kind == .cycling ? String(format: "%.1f", 3600 / $0) : pace(1000 / $0) } ?? "--", kind == .cycling ? "km/h" : "/km")
-                }
-            }
-        }
-    }
-
-    private func pace(_ metersPerSecond: Double) -> String? {
-        guard metersPerSecond > 0.3 else { return nil }
-        let s = Int((1000 / metersPerSecond).rounded())
-        return String(format: "%d:%02d", s / 60, s % 60)
-    }
-
-    private func stat(_ icon: String, _ value: String, _ unit: String) -> some View {
-        // Centré : les coins arrondis de l'écran ne rognent plus les chiffres des tuiles du bas.
-        VStack(alignment: .center, spacing: 0) {
-            HStack(spacing: 4) {
-                JIcon(icon, size: 10).foregroundStyle(sauge)
-                Text(unit).font(.system(size: 9, weight: .bold)).foregroundStyle(sauge).lineLimit(1).minimumScaleFactor(0.8)
-            }
-            Text(value).font(.system(size: 16, weight: .heavy).monospacedDigit()).foregroundStyle(creme).lineLimit(1).minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(surface))
     }
 }

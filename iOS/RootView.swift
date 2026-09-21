@@ -65,12 +65,10 @@ struct RootView: View {
 
 /// En-tête commun : logotype + accroche.
 struct JeffreyHeader: View {
-    var trailing: AnyView? = nil
     var body: some View {
         HStack(alignment: .top) {
             JeffreyWordmark(size: 26, signature: true)
             Spacer()
-            if let trailing { trailing }
         }
     }
 }
@@ -78,12 +76,11 @@ struct JeffreyHeader: View {
 /// Bulle de Jeffrey (texte statique ou dernière phrase).
 struct JeffreyBubble: View {
     var text: String
-    var label: String = "JEFFREY"
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             JeffreyMark(size: 22).frame(width: 34, height: 34).background(Circle().fill(Theme.surfaceRaised))
             VStack(alignment: .leading, spacing: 3) {
-                Text(label).font(.system(size: 9, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
+                Text("JEFFREY").font(.system(size: 9, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.muted)
                 Text(text).font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
             }
             Spacer(minLength: 0)
@@ -95,14 +92,10 @@ struct JeffreyBubble: View {
 
 struct PrimaryButton: View {
     var title: String
-    var icon: String? = nil
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                if let icon { JIcon(icon, size: 18) }
-                Text(title)
-            }
+            Text(title)
             .font(.display(16, weight: .black)).foregroundStyle(Theme.background)
             .frame(maxWidth: .infinity).frame(height: 56)
             .background(Capsule().fill(Theme.lime))

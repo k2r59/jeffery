@@ -7,11 +7,8 @@ enum Prefs {
     static let maxHR = "pref.maxHR"
     static let age = "pref.age"
     static let goal = "pref.goal"
-    static let cueInterval = "pref.cueInterval"
-    static let metricsInterval = "pref.metricsInterval"
     static let autoCues = "pref.autoCues"
     static let kind = "pref.kind"
-    static let mode = "pref.mode"
     static let weightKg = "pref.weightKg"
     static let heightCm = "pref.heightCm"
     static let duckMusic = "pref.duckMusic"
@@ -56,11 +53,8 @@ enum Prefs {
             maxHR: 0,
             age: 40,
             goal: "",
-            cueInterval: 60.0,
-            metricsInterval: 15.0,
             autoCues: true,
             kind: WorkoutKind.running.rawValue,
-            mode: CaptureMode.companion.rawValue,
             weightKg: 0.0,
             heightCm: 0.0,
             duckMusic: true,
@@ -112,22 +106,6 @@ enum MicSensitivity: String, CaseIterable, Identifiable {
         case .high: return "Haute"
         }
     }
-    /// Seuil de détection de voix côté serveur (0-1) : plus haut = il faut parler plus franchement.
-    var vadThreshold: String {
-        switch self {
-        case .low: return "0.9"
-        case .medium: return "0.75"
-        case .high: return "0.55"
-        }
-    }
-    /// Silence requis pour considérer que la phrase est finie (ms).
-    var silenceMs: Int {
-        switch self {
-        case .low: return 1200
-        case .medium: return 900
-        case .high: return 600
-        }
-    }
     /// Niveau RMS (0-1) en dessous duquel l'iPhone envoie du silence au lieu du bruit ambiant.
     var noiseGate: Float {
         switch self {
@@ -159,8 +137,8 @@ struct CoachConfig {
     var voice: String
     var maxHR: Double
     var goal: String
-    var cueInterval: TimeInterval
-    var metricsInterval: TimeInterval
+    /// Vérification toutes les 30 s ; Jeffrey ne parle que s'il y a une raison (voir routineCheck).
+    let cueInterval: TimeInterval = 30
     var autoCues: Bool
 
     /// En Debug (simulateur), une clé passée en variable d'environnement OPENAI_API_KEY est copiée dans le trousseau
@@ -203,8 +181,6 @@ struct CoachConfig {
             voice: d.string(forKey: Prefs.voice) ?? "marin",
             maxHR: maxHR,
             goal: d.string(forKey: Prefs.goal) ?? "",
-            cueInterval: 30, // vérification toutes les 30 s ; Jeffrey ne parle que s'il y a une raison (voir routineCheck)
-            metricsInterval: max(5, d.double(forKey: Prefs.metricsInterval)),
             autoCues: d.bool(forKey: Prefs.autoCues)
         )
     }
@@ -219,7 +195,7 @@ struct CoachConfig {
            (errors, tools, watch, dialogue, events, all), éventuellement query ou since_minutes, puis réponds à partir du \
            résultat : horodatages mm:ss, nombre de reconnexions, dernières erreurs, âge des dernières métriques. Si le \
            journal ne contient pas la réponse, dis-le. Ne t'excuse pas, ne te justifie pas, ne romance pas : tu rapportes. \
-           Cette règle 14 prime sur la règle 12 pour ces questions, et uniquement pour lui.
+           Cette règle 9 prime sur la règle 8 pour ces questions, et uniquement pour lui.
 
         """
     }
@@ -253,7 +229,7 @@ struct CoachConfig {
         « corps/terrain » : marche, course, arrêt, cadence, plat, montée, descente, D+). Tes outils font le reste : chaque \
         outil dit quand l'utiliser. Rien ne se valide sur le téléphone : tout se règle à l'oral, avec toi.
 
-        Huit règles, par ordre d'importance :
+        Les règles, par ordre d'importance :
         1. Court et oral : 1 à 3 phrases, en français, tutoiement. Pas de liste, pas de chiffres récités.
         2. Coach, pas commentateur. Tu interviens tout de suite quand ça compte (montée dure, passage à la marche, cœur qui \
            s'emballe, arrêt, chrono qui sonne, objectif atteint) et tu fais un vrai point de temps en temps (kilomètre, \

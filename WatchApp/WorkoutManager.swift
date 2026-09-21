@@ -5,7 +5,7 @@ import Combine
 import CoreLocation
 
 /// Gère la capture des métriques côté montre, dans l'un des deux modes :
-/// - `owned` : notre app possède la HKWorkoutSession (séance enregistrée par WatchCoach).
+/// - `owned` : notre app possède la HKWorkoutSession (séance enregistrée par Jeffrey).
 /// - `companion` : l'app Exercice native possède la séance ; on garde de l'exécution en arrière-plan
 ///   via une WKExtendedRuntimeSession et on lit les échantillons HealthKit au fil de l'eau.
 @MainActor
@@ -47,6 +47,15 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     var isActive: Bool { snapshot.state == .running || snapshot.state == .paused }
 
+    #if DEBUG
+    /// Banc d'essai (simulateur) : pas de HealthKit, la montre fabrique elle-même un cœur, une distance et des calories
+    /// plausibles et les envoie à l'iPhone par la vraie WatchConnectivity. WATCHCOACH_FAKE_HEALTH=1.
+    static let fakeHealth = ProcessInfo.processInfo.environment["WATCHCOACH_FAKE_HEALTH"] == "1"
+    private var fakeTimer: Timer?
+    private var fakeDistance: Double = 0
+    private var fakeEnergy: Double = 0
+    #endif
+
     // MARK: - Veille active (app ouverte, écran éteint)
 
     /// Écran éteint, watchOS suspend l'app : plus de ping, iPhone « montre déconnectée ». Une session HealthKit
@@ -59,6 +68,9 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func armStandby() {
         guard !isActive else { return }
+        #if DEBUG
+        if Self.fakeHealth { standbyActive = true; return }
+        #endif
         scheduleStandbyTimeout()
         guard standbySession == nil else { return }
         let config = HKWorkoutConfiguration()
@@ -89,6 +101,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     // MARK: - Autorisation
 
     func requestAuthorization() {
+        #if DEBUG
+        if Self.fakeHealth { return }
+        #endif
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let read: Set<HKObjectType> = [
             HKQuantityType(.heartRate),
@@ -145,6 +160,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     func startOwned(kind: WorkoutKind) {
         guard !isActive else { return }
         endStandby()
+        #if DEBUG
+        if Self.fakeHealth { startFakeOwned(kind: kind); return }
+        #endif
         let config = HKWorkoutConfiguration()
         config.activityType = kind.activityType
         config.locationType = kind.locationType
@@ -166,7 +184,7 @@ final class WorkoutManager: NSObject, ObservableObject {
                     Task { @MainActor in self.statusMessage = "Collecte : \(error.localizedDescription)" }
                 }
             }
-            statusMessage = "Séance WatchCoach en cours"
+            statusMessage = "Séance Jeffrey en cours"
         } catch {
             statusMessage = "Impossible de démarrer : \(error.localizedDescription)"
         }
@@ -183,6 +201,9 @@ final class WorkoutManager: NSObject, ObservableObject {
         companionGeneration += 1
         let generation = companionGeneration
         statusMessage = "Recherche d'une séance en cours…"
+        #if DEBUG
+        if Self.fakeHealth { autoDecided = true; startOwned(kind: kind); return }
+        #endif
         Task {
             let inferred = await inferNativeWorkoutStart()
             await MainActor.run {
@@ -339,6 +360,9 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func pause() {
         guard snapshot.state == .running else { return }
+        #if DEBUG
+        if Self.fakeHealth { markPaused(); return }
+        #endif
         if snapshot.mode == .owned {
             session?.pause()
         } else {
@@ -348,6 +372,9 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func resume() {
         guard snapshot.state == .paused else { return }
+        #if DEBUG
+        if Self.fakeHealth { markResumed(); return }
+        #endif
         if snapshot.mode == .owned {
             session?.resume()
         } else {
@@ -358,6 +385,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     func end() {
         companionGeneration += 1
         guard isActive else { return }
+        #if DEBUG
+        if Self.fakeHealth { fakeTimer?.invalidate(); fakeTimer = nil; endRequested = true; autoDecided = false; finishTracking(); return }
+        #endif
         if snapshot.mode == .owned {
             endRequested = true
             session?.end()
@@ -599,7 +629,7 @@ extension WorkoutManager: WKExtendedRuntimeSessionDelegate {
     nonisolated func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
         Task { @MainActor in
             WKInterfaceDevice.current().play(.notification)
-            self.statusMessage = "Arrière-plan bientôt expiré : rouvre WatchCoach pour prolonger"
+            self.statusMessage = "Arrière-plan bientôt expiré : rouvre Jeffrey sur la montre"
         }
     }
 
@@ -610,7 +640,7 @@ extension WorkoutManager: WKExtendedRuntimeSessionDelegate {
             self.runtimeSession = nil
             switch reason {
             case .sessionInProgress, .expired, .resignedFrontmost:
-                self.statusMessage = "Arrière-plan interrompu (\(reason.rawValue)) : touche « Prolonger »"
+                self.statusMessage = "Arrière-plan interrompu (\(reason.rawValue)) : rouvre Jeffrey sur la montre"
             default:
                 self.statusMessage = "Arrière-plan interrompu : \(error?.localizedDescription ?? "raison \(reason.rawValue)")"
             }
@@ -636,3 +666,44 @@ extension WorkoutManager: WKExtendedRuntimeSessionDelegate {
         snapshot.mode == .companion && isActive && runtimeSession == nil
     }
 }
+
+#if DEBUG
+// MARK: - Source factice (banc d'essai simulateur)
+
+extension WorkoutManager {
+    /// Profil de séance plausible : montée en 90 s vers 150 bpm, plateau, pointe à 172 bpm entre 4 et 6 min, puis
+    /// endurance ; en pause le cœur redescend. 2,8 m/s en course, kcal cumulées.
+    fileprivate func startFakeOwned(kind: WorkoutKind) {
+        fakeDistance = 0
+        fakeEnergy = 0
+        beginTracking(kind: kind, mode: .owned, start: Date())
+        statusMessage = "Séance factice en cours (banc d'essai)"
+        fakeTimer?.invalidate()
+        fakeTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.fakeTick() }
+        }
+    }
+
+    private func fakeTick() {
+        guard isActive else { fakeTimer?.invalidate(); fakeTimer = nil; return }
+        let t = currentElapsed()
+        var snap = snapshot
+        let paused = snapshot.state == .paused
+        let target: Double
+        switch t {
+        case ..<90: target = 110 + 40 * (t / 90)
+        case 240..<360: target = 172
+        default: target = 150
+        }
+        let wobble = sin(t / 7) * 3
+        snap.heartRate = paused ? max(95, (snap.heartRate ?? 120) - 2) : target + wobble
+        if !paused {
+            if snapshot.kind.usesDistance { fakeDistance += 2.8 * 2; snap.distance = fakeDistance; snap.speed = 2.8 + sin(t / 11) * 0.3 }
+            fakeEnergy += 0.4
+            snap.activeEnergy = fakeEnergy
+        }
+        snap.lastSampleAt = Date()
+        publish(snap, force: true)
+    }
+}
+#endif

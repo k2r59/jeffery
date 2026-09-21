@@ -197,6 +197,13 @@ le second, les rapports de plantage du téléphone (`pymobiledevice3 crash pull`
   relancer sans `WATCHCOACH_AUTOSTART` (avec `WATCHCOACH_STOP_AFTER` pour la clôture) : le journal montre la ligne « Reprise ». Sur le simulateur montre : `WATCHCOACH_SCENE=countdown|interval|zone|pace|message|climb|ghost|celebration|stats`
   affiche une scène avec un miroir factice, `WATCHCOACH_PAGE=0..3` choisit la page.
 - Commande : `xcodebuild -scheme WatchCoach -destination 'id=<simulateur>' test`. Séance simulée clé en main : `Tests/Scripts/sim-session.sh`.
+- Séance de bout en bout **montre + iPhone** sur la paire de simulateurs (vraie WatchConnectivity) :
+  `Tests/Scripts/e2e-session.sh [dossier] ["pause@60,resume@78"]`. La montre tourne avec `WATCHCOACH_FAKE_HEALTH=1`
+  (elle fabrique cœur, distance, calories sans HealthKit) et joue des appuis scriptés (`WATCHCOACH_WATCH_SCRIPT`,
+  actions start/pause/resume/end à des secondes données) ; l'iPhone tourne avec le coach factice et sans montre factice.
+  Le script capture les deux écrans à 25 s, 70 s, 130 s et à la fin, puis imprime le journal. C'est le test à lancer
+  avant toute sortie réelle : départ, mode décidé par la montre, chrono, programme, pause/reprise depuis la montre,
+  fin, bilan montre.
 
 ## Limites connues
 

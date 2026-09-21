@@ -18,7 +18,6 @@ enum Theme {
     static let pulse = alerte
     static let ice = creme
     static let muted = sauge
-    static let text = creme
 
     static func zoneColor(_ zone: HeartRateZone?) -> Color {
         switch zone {
@@ -60,16 +59,3 @@ extension View {
     func card() -> some View { modifier(CardStyle()) }
 }
 
-/// Pictogramme du pack Jeffrey (version crème rendue en gabarit : la couleur vient de `.foregroundStyle`).
-struct JIcon: View {
-    let name: String
-    var size: CGFloat = 18
-    init(_ name: String, size: CGFloat = 18) { self.name = name; self.size = size }
-    var body: some View {
-        Image("\(name)-creme")
-            .renderingMode(.template)
-            .resizable()
-            .scaledToFit()
-            .frame(width: size, height: size)
-    }
-}

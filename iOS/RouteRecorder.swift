@@ -79,7 +79,6 @@ final class RouteRecorder: NSObject, ObservableObject {
     private var lastGood: CLLocation?
     private var lastSaveAt: Date = .distantPast
 
-    var isRecording: Bool { route != nil }
     /// Identifiant du tracé en cours, pour le point de reprise.
     var routeID: String? { route?.id }
 

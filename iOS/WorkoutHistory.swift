@@ -3,7 +3,7 @@ import HealthKit
 import CoreLocation
 import Combine
 
-/// Séances enregistrées dans Santé (app Exercice ou WatchCoach) et leurs tracés GPS.
+/// Séances enregistrées dans Santé (app Exercice ou Jeffrey) et leurs tracés GPS.
 @MainActor
 final class WorkoutHistory: ObservableObject {
     @Published private(set) var workouts: [HKWorkout] = []
@@ -89,7 +89,7 @@ final class WorkoutHistory: ObservableObject {
 
     static func sourceLabel(_ w: HKWorkout) -> String {
         let name = w.sourceRevision.source.name
-        return name.localizedCaseInsensitiveContains("watchcoach") ? "WatchCoach" : name
+        return name.localizedCaseInsensitiveContains("watchcoach") || name.localizedCaseInsensitiveContains("jeffrey") ? "Jeffrey" : name
     }
 
     /// Dénivelé positif cumulé (m), en ignorant les positions à l'altitude imprécise.

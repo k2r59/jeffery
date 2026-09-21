@@ -75,10 +75,3 @@ struct SessionGoal: Codable, Equatable {
     }
 }
 
-/// Proposition de Jeffrey (via appel de fonction) en attente de confirmation.
-struct GoalProposal: Identifiable, Equatable {
-    let id = UUID()
-    let callId: String
-    let goal: SessionGoal
-    let reason: String
-}

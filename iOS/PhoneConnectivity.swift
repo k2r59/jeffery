@@ -42,11 +42,6 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     /// L'app montre est éveillée (elle répondra tout de suite) ; sinon, à portée mais endormie, l'iPhone la réveille.
     var watchAppAwake: Bool { isReachable || Date().timeIntervalSince(lastWatchSeenAt) < Self.heartbeatGrace }
 
-    enum LinkState { case connected, paired, unpaired }
-    var linkState: LinkState {
-        if watchConnected { return .connected }
-        return isPaired && isWatchAppInstalled ? .paired : .unpaired
-    }
     var linkLabel: String { watchConnected ? "Montre connectée" : "Montre déconnectée" }
     /// Ce qu'il faut faire pour que la montre passe « connectée ».
     var disconnectedHint: String {
@@ -132,6 +127,8 @@ final class PhoneConnectivity: NSObject, ObservableObject {
             isPaired = true; isWatchAppInstalled = true; isReachable = true; watchConnected = true
             return
         }
+        // Tests d'interface « sans montre » : WatchConnectivity n'est pas activée, même si une montre simulée est jumelée.
+        if ProcessInfo.processInfo.environment["WATCHCOACH_NO_WATCH"] == "1" { return }
         #endif
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
@@ -189,7 +186,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
             })
         } else {
             completion?(NSError(domain: "WatchCoach", code: 4,
-                                userInfo: [NSLocalizedDescriptionKey: "Montre non joignable : ouvre WatchCoach sur la montre"]))
+                                userInfo: [NSLocalizedDescriptionKey: "Montre non joignable : ouvre Jeffrey sur la montre"]))
         }
     }
 

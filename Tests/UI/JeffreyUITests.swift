@@ -98,6 +98,7 @@ final class JeffreyUITests: XCTestCase {
 
     func testNoWatchBlocksStart() {
         app.launchEnvironment["WATCHCOACH_FAKE_WATCH"] = "0"
+        app.launchEnvironment["WATCHCOACH_NO_WATCH"] = "1"
         app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Montre déconnectée"].waitForExistence(timeout: 5))

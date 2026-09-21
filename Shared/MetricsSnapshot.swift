@@ -69,7 +69,7 @@ enum CaptureMode: String, Codable {
     var label: String {
         switch self {
         case .auto: return "montre en attente de décision"
-        case .owned: return "séance pilotée par WatchCoach"
+        case .owned: return "séance pilotée par la montre Jeffrey"
         case .companion: return "compagnon de l'app Exercice"
         }
     }
@@ -120,9 +120,9 @@ enum WatchCommand: String, Codable {
 
 /// État de la séance iPhone reflété sur la montre.
 /// Scène pilotée par Jeffrey, affichée en plein écran sur la montre (et reprise sur l'iPhone).
-/// Certaines sont automatiques (chrono, montée, objectif atteint), d'autres demandées par Jeffrey (zone, allure, message).
+/// Certaines sont automatiques (chrono, montée, objectif atteint), d'autres demandées par Jeffrey (zone, allure).
 struct WatchScene: Codable, Equatable {
-    enum Kind: String, Codable { case countdown, interval, zone, pace, message, climb, ghost, celebration }
+    enum Kind: String, Codable { case countdown, interval, zone, pace, climb, ghost, celebration }
     var kind: Kind
     /// Identifiant stable de l'épisode : la montre vibre quand il change.
     var id: String
@@ -142,7 +142,7 @@ struct WatchScene: Codable, Equatable {
     var progress: Double? = nil
     /// Nom de la zone cible (Z2), utile au texte.
     var zone: Int? = nil
-    /// Limite d'affichage pour les scènes éphémères (message, célébration).
+    /// Limite d'affichage pour les scènes éphémères (célébration).
     var until: Date? = nil
 }
 

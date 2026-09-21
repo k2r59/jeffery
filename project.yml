@@ -102,6 +102,7 @@ targets:
       - path: Widgets
       - path: LiveActivity
       - path: Shared/MetricsSnapshot.swift
+      - path: Shared/JeffreyPalette.swift
     info:
       path: Widgets/Info.plist
       properties:

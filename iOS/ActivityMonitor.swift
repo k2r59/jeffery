@@ -40,7 +40,6 @@ final class ActivityMonitor: ObservableObject {
     @Published private(set) var grade: Double?              // % sur les 100 derniers mètres
     @Published private(set) var ascent: Double = 0          // D+ cumulé (m)
     @Published private(set) var descent: Double = 0         // D- cumulé (m)
-    @Published private(set) var available = false
     /// Séance en pause : les détections et compteurs sont gelés.
     var paused = false
     /// Cadence de course habituelle de ce coureur (médiane glissante), pour juger une chute de cadence.
@@ -85,7 +84,6 @@ final class ActivityMonitor: ObservableObject {
         horizontal = 0; lastAltitudeAt = nil; lastCadenceAt = .distantPast
         secondsByActivity = [:]; secondsClimbing = 0; lastTick = Date(); stationaryAnnounced = false
         paused = false; runningCadences.removeAll(); typicalRunningCadence = 160
-        available = CMMotionActivityManager.isActivityAvailable() || CMAltimeter.isRelativeAltitudeAvailable()
 
         if CMMotionActivityManager.isActivityAvailable() {
             motion.startActivityUpdates(to: .main) { [weak self] a in
@@ -153,7 +151,7 @@ final class ActivityMonitor: ObservableObject {
         timer?.invalidate(); timer = nil
     }
 
-    // MARK: Activité (hystérésis 15 s)
+    // MARK: Activité (hystérésis 6 s)
 
     private func consider(_ raw: Activity) {
         guard raw != .unknown, !paused else { return }
@@ -167,7 +165,7 @@ final class ActivityMonitor: ObservableObject {
         guard candidate != activity, Date().timeIntervalSince(candidateSince) >= needed else { return }
         let from = activity
         activity = candidate
-        // Le vrai début de l'activité, pas l'instant où l'hystérésis de 15 s la confirme.
+        // Le vrai début de l'activité, pas l'instant où l'hystérésis de 6 s la confirme.
         activitySince = candidateSince
         stationaryAnnounced = false
         onLog?("Détection : \(from.label) → \(activity.label)\(cadence.map { String(format: " (cadence %.0f)", $0) } ?? "")")

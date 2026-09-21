@@ -51,7 +51,7 @@ struct AccessView: View {
                 Button("Se déconnecter") { account.signOut(); dismiss() }.font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
             } else {
                 Text("Pas connecté.").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                Text("Refais la configuration (onglet Jeffrey) pour te connecter avec Apple, ou renseigne une clé dans Avancé.")
+                Text("Refais la configuration (onglet Jeffrey) pour te connecter avec Apple, ou (administrateur) renseigne une clé dans Avancé.")
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
             }
         }

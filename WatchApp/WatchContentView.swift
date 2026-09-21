@@ -11,15 +11,13 @@ struct WatchContentView: View {
     @State private var finalCountdownShownFor: String?
 
     private let citron = JeffreyPalette.citron
-    private let creme = JeffreyPalette.creme
     private let sauge = JeffreyPalette.sauge
-    private let surface = JeffreyPalette.surface
 
     private var live: Bool { mirror.state.phase != "idle" || workout.isActive }
 
     private var scene: WatchScene? { mirror.state.scene }
     /// Scène qui mérite sa propre page : chrono et fractionné, cible de zone ou d'allure. Les autres (montée, fantôme,
-    /// fête) sont un bandeau sur la page Séance ; le message de Jeffrey s'affiche sur sa page.
+    /// fête) sont un bandeau sur la page Séance.
     private var scenePageKind: WatchScene.Kind? {
         guard let k = scene?.kind else { return nil }
         return [.countdown, .interval, .zone, .pace].contains(k) ? k : nil
@@ -73,12 +71,12 @@ struct WatchContentView: View {
         }
     }
 
-    /// Réaction à une scène : chrono et cibles prennent la page 3 tant qu'elles durent ; le message de Jeffrey va sur
-    /// sa page ; montée, fantôme et fête restent un bandeau sur la page Séance.
+    /// Réaction à une scène : chrono et cibles prennent la page 3 tant qu'elles durent ; montée, fantôme et fête
+    /// restent un bandeau sur la page Séance.
     private func react(to scene: WatchScene) {
         switch scene.kind {
         case .countdown, .interval, .zone, .pace: withAnimation { page = 3 }
-        case .message, .celebration, .climb, .ghost: withAnimation { page = 1 }
+        case .celebration, .climb, .ghost: withAnimation { page = 1 }
         }
     }
 

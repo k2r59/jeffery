@@ -9,10 +9,10 @@ struct JeffreyWidgetsBundle: WidgetBundle {
     }
 }
 
-private let citron = Color(red: 0.831, green: 1.0, blue: 0.294)
-private let creme = Color(red: 0.949, green: 0.941, blue: 0.906)
-private let sauge = Color(red: 0.592, green: 0.643, blue: 0.549)
-private let encre = Color(red: 0.063, green: 0.078, blue: 0.067)
+private let citron = JeffreyPalette.citron
+private let creme = JeffreyPalette.creme
+private let sauge = JeffreyPalette.sauge
+private let encre = JeffreyPalette.encre
 
 struct JeffreyLiveActivity: Widget {
     var body: some WidgetConfiguration {
@@ -49,7 +49,7 @@ struct JeffreyLiveActivity: Widget {
     @ViewBuilder
     private func timerText(_ s: JeffreyActivityAttributes.ContentState) -> some View {
         if s.paused {
-            Text(formatted(s.elapsedFrozen))
+            Text(Formatters.elapsed(s.elapsedFrozen))
         } else {
             Text(timerInterval: s.startedAt...Date(timeIntervalSinceNow: 12 * 3600), countsDown: false)
         }
@@ -72,9 +72,6 @@ struct JeffreyLiveActivity: Widget {
         switch st { case "parle": return "Jeffrey te parle"; case "ecoute": return "Jeffrey écoute"; default: return "Jeffrey arrive" }
     }
 
-    private func formatted(_ t: TimeInterval) -> String {
-        let s = Int(t); return String(format: "%d:%02d", s / 60, s % 60)
-    }
 }
 
 struct LockView: View {
@@ -162,8 +159,7 @@ struct LockView: View {
     @ViewBuilder
     private func timer(_ s: JeffreyActivityAttributes.ContentState) -> some View {
         if s.paused {
-            let t = Int(s.elapsedFrozen)
-            Text(String(format: "%d:%02d", t / 60, t % 60))
+            Text(Formatters.elapsed(s.elapsedFrozen))
         } else {
             Text(timerInterval: s.startedAt...Date(timeIntervalSinceNow: 12 * 3600), countsDown: false)
         }

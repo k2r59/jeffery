@@ -64,7 +64,7 @@ struct SessionsView: View {
     }
 
     private func row(_ w: HKWorkout) -> some View {
-        let coached = SessionSummary.matching(start: w.startDate, end: w.endDate, in: coached) != nil || WorkoutHistory.sourceLabel(w) == "WatchCoach"
+        let coached = SessionSummary.matching(start: w.startDate, end: w.endDate, in: coached) != nil || WorkoutHistory.sourceLabel(w) == "Jeffrey"
         return HStack(spacing: 12) {
             JIcon("course", size: 17).foregroundStyle(Theme.creme)
                 .frame(width: 34, height: 34).background(Circle().fill(Theme.surfaceRaised))
