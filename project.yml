@@ -31,6 +31,8 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Jeffrey
+        # Chiffrement : uniquement HTTPS standard, donc exempt (évite la question à chaque envoi TestFlight).
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
           UIColorName: JeffreyEncre
           UIImageName: jeffrey-symbole-citron

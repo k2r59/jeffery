@@ -143,6 +143,26 @@ Prérequis : Xcode 27, iPhone sous iOS 27 avec Apple Watch, compte développeur 
 5. Premier lancement : onboarding (intention, prénom, mesures depuis Santé, clé OpenAI), autorisations micro,
    Santé, position, mouvement, Musique.
 
+## TestFlight
+
+Envoi d'une version de test, sans clé API (la session Xcode du compte suffit) :
+
+```bash
+xcodegen generate
+xcodebuild -project WatchCoach.xcodeproj -scheme WatchCoach -configuration Release \
+  -destination 'generic/platform=iOS' -archivePath build/Jeffrey.xcarchive -allowProvisioningUpdates archive
+xcodebuild -exportArchive -archivePath build/Jeffrey.xcarchive -exportPath build/upload \
+  -exportOptionsPlist build/ExportOptions.plist -allowProvisioningUpdates
+```
+
+`build/ExportOptions.plist` : `method app-store-connect`, `teamID PTB959SX83`, `signingStyle automatic`,
+`destination upload`. Mettre `destination export` pour obtenir seulement le `.ipa`.
+
+Avant chaque envoi, incrémenter `CURRENT_PROJECT_VERSION` dans `project.yml` (Apple refuse deux fois le même
+numéro de build). La fiche de l'app doit exister dans App Store Connect avec l'identifiant `dev.promo.watchcoach`.
+Cible iOS 27 : les testeurs sous iOS 26 ou antérieur ne peuvent pas installer. Chaque testeur doit être autorisé
+dans la liste blanche du Worker (onglet Jeffrey › Accès), et chaque séance consomme la clé OpenAI du serveur.
+
 ## Utilisation
 
 Le principe : une seule décision au départ, tout le reste à la voix. Sur l'iPhone, on choisit le sport et on appuie ;
