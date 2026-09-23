@@ -1485,9 +1485,10 @@ final class CoachSession: ObservableObject {
             out["heart_rate_bpm"] = Int(hr)
             out["zone"] = HeartRateZone.zone(for: hr, maxHR: config.maxHR).label
         }
-        if let p = pace { out["pace"] = p }
-        if let d = displayDistance { out["distance_km"] = (d / 100).rounded() / 10 }
-        if let e = latest?.activeEnergy { out["kcal"] = Int(e) }
+        if let sec = currentPaceSecPerKm, let p = Formatters.spokenPace(secondsPerKm: sec) { out["pace"] = p }
+        else if let p = pace { out["pace"] = p }
+        if let d = displayDistance { out["distance"] = Formatters.spokenDistance(d) }
+        if let e = latest?.activeEnergy { out["calories"] = Int(e) }
         if let g = activity.grade, activity.terrain != .flat { out["grade_percent"] = Int(g.rounded()) }
         if let age = latest.map({ Int(Date().timeIntervalSince($0.lastSampleAt ?? $0.timestamp)) }) { out["data_age_seconds"] = age }
         if goal.kind != .free {
@@ -2017,8 +2018,8 @@ final class CoachSession: ObservableObject {
         guard let s = latest else {
             var parts = ["\(prefix) temps écoulé \(Formatters.elapsed(elapsedNow)) · aucune donnée de la montre pour l'instant"]
             if kind.usesDistance, let d = displayDistance {
-                parts.append("distance \(Formatters.distance(d)) (GPS iPhone)")
-                if let v = gps.speed, let p = Formatters.pace(speedMetersPerSecond: v) { parts.append("allure \(p)") }
+                parts.append("distance \(Formatters.spokenDistance(d)) (GPS iPhone)")
+                if let v = gps.speed, v > 0.3, let p = Formatters.spokenPace(secondsPerKm: 1000 / v) { parts.append("allure \(p)") }
             }
             let act = activity.summaryLine()
             if !act.isEmpty { parts.append("corps/terrain : \(act)") }
@@ -2037,11 +2038,12 @@ final class CoachSession: ObservableObject {
             parts.append("FC inconnue")
         }
         if s.kind.usesDistance {
-            if let d = s.distance { parts.append("distance \(Formatters.distance(d))") }
-            else if let d = displayDistance { parts.append("distance \(Formatters.distance(d)) (GPS iPhone)") }
-            if let p = pace { parts.append("allure \(p)") }
+            if let d = s.distance { parts.append("distance \(Formatters.spokenDistance(d))") }
+            else if let d = displayDistance { parts.append("distance \(Formatters.spokenDistance(d)) (GPS iPhone)") }
+            if let sec = currentPaceSecPerKm, let p = Formatters.spokenPace(secondsPerKm: sec) { parts.append("allure \(p)") }
+            else if let p = pace { parts.append("allure \(p)") }
         }
-        if let e = s.activeEnergy { parts.append("\(Int(e)) kcal") }
+        if let e = s.activeEnergy { parts.append("\(Int(e)) calories") }
         let act = activity.summaryLine()
         if !act.isEmpty { parts.append("corps/terrain : \(act)") }
         if goal.kind != .free {

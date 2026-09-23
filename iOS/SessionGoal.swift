@@ -44,7 +44,7 @@ struct SessionGoal: Codable, Equatable {
         var s: String
         switch kind {
         case .duration: s = "tenir \(Int(target / 60)) minutes"
-        case .distance: s = "faire \(Formatters.distance(target))"
+        case .distance: s = "faire \(Formatters.spokenDistance(target))"
         case .free: s = "sortie libre, sans objectif chiffré"
         }
         if !note.trimmingCharacters(in: .whitespaces).isEmpty { s += " (\(note))" }

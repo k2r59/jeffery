@@ -271,6 +271,22 @@ enum Formatters {
         meters >= 1000 ? String(format: "%.2f km", meters / 1000) : String(format: "%.0f m", meters)
     }
 
+    /// Distance telle que Jeffrey doit la dire : « 2,45 kilomètres », « 450 mètres ». Les écrans, eux, gardent « km ».
+    static func spokenDistance(_ meters: Double) -> String {
+        guard meters >= 1000 else { return String(format: "%.0f mètres", meters) }
+        let km = meters / 1000
+        let text = String(format: "%.2f", km).replacingOccurrences(of: ".", with: " virgule ")
+        return "\(text) kilomètre\(km >= 2 ? "s" : "")"
+    }
+
+    /// Allure telle que Jeffrey doit la dire : « 5 minutes 30 par kilomètre ».
+    static func spokenPace(secondsPerKm: Double) -> String? {
+        guard secondsPerKm > 0, secondsPerKm < 3600 else { return nil }
+        let s = Int(secondsPerKm.rounded())
+        let m = s / 60, sec = s % 60
+        return sec == 0 ? "\(m) minutes par kilomètre" : "\(m) minutes \(sec) par kilomètre"
+    }
+
     /// Allure min/km à partir d'une vitesse en m/s.
     static func pace(speedMetersPerSecond v: Double) -> String? {
         guard v > 0.3 else { return nil }

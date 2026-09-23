@@ -239,3 +239,18 @@ final class ShortSessionTests: XCTestCase {
         XCTAssertFalse(CoachSession.looksLikeEcho("j'ai mal au genou droit depuis hier", of: coach))
     }
 }
+
+final class SpokenUnitsTests: XCTestCase {
+    func testDistancesAreSpelledOut() {
+        XCTAssertEqual(Formatters.spokenDistance(2450), "2 virgule 45 kilomètres")
+        XCTAssertEqual(Formatters.spokenDistance(1200), "1 virgule 20 kilomètre")
+        XCTAssertEqual(Formatters.spokenDistance(450), "450 mètres")
+        XCTAssertFalse(Formatters.spokenDistance(5000).contains("km"))
+    }
+
+    func testPaceIsSpelledOut() {
+        XCTAssertEqual(Formatters.spokenPace(secondsPerKm: 330), "5 minutes 30 par kilomètre")
+        XCTAssertEqual(Formatters.spokenPace(secondsPerKm: 360), "6 minutes par kilomètre")
+        XCTAssertNil(Formatters.spokenPace(secondsPerKm: 0))
+    }
+}
