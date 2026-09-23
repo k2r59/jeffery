@@ -65,6 +65,63 @@ https://jeffrey-api.dns-d5d.workers.dev/aide
 
 Laisser vide, ou mettre la même que l'assistance.
 
+## Copyright (200 caractères max)
+
+```
+2026 Hervé Colard
+```
+
+## Fichier de couverture géographique, Extrait d'app, App iMessage, Game Center
+
+Rien à mettre : laisser vide, ne pas cocher Game Center.
+
+---
+
+## Informations utiles à la vérification de l'app
+
+**Connexion requise** : décocher la case. Il n'y a ni nom d'utilisateur ni mot de passe, la connexion se fait
+avec « Se connecter avec Apple », donc avec le compte du relecteur.
+
+**Coordonnées**
+
+```
+Hervé Colard · rv@colard.net
+```
+
+**Remarques (4 000 caractères max)**
+
+```
+Fonctionnement et prérequis
+
+Jeffrey est un coach sportif vocal. Il exige iOS 27 et une Apple Watch jumelée avec l'app montre installée :
+la montre mesure la fréquence cardiaque, sans elle aucune séance ne peut démarrer. C'est volontaire.
+
+Connexion : « Se connecter avec Apple », aucun mot de passe. Le compte est ensuite autorisé par
+l'administrateur. Pour la vérification, l'autorisation automatique a été activée : le compte du relecteur sera
+accepté dès sa première connexion.
+
+Pour essayer sans sortir courir
+1. Ouvrir l'app, suivre la configuration (intention, prénom, montre, micro, position, compte).
+2. À l'étape finale, lancer le tour d'essai de deux minutes : Jeffrey se présente, demande de marcher
+   quelques pas dans la pièce, confirme qu'il entend et que la montre transmet le cœur.
+3. Pour une séance complète, appuyer sur « Démarrer » depuis l'écran d'accueil. Sans mouvement, la distance
+   et l'allure restent à zéro, mais la conversation, le chronomètre et les affichages de la montre
+   fonctionnent normalement.
+
+Micro et son : l'app écoute en continu pendant la séance pour permettre la conversation. Des écouteurs sont
+conseillés, sinon le haut-parleur suffit.
+
+Santé : l'app lit la fréquence cardiaque, la distance, les calories et les séances, et enregistre la séance
+qu'elle pilote. Position : utilisée pour le tracé et l'allure pendant la séance uniquement.
+```
+
+**Pièce jointe** : facultative. Une courte vidéo d'une séance aide la vérification si elle est refusée pour
+« fonctionnalité non démontrable ».
+
+## Publication de la version
+
+« Publier cette version manuellement » est le choix prudent pour une première app.
+
 ---
 
 ## Ce qui reste à produire pour publier
