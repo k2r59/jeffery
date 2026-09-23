@@ -10,6 +10,7 @@ struct JeffreyView: View {
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var showAdvanced = false
     @State private var showAccess = false
+    @State private var routeStorage = LocalRoute.storage()
     @AppStorage(Prefs.setupVersion) private var setupVersion: Int = 0
     @ObservedObject private var account = AccountStore.shared
     @StateObject private var preview = VoicePreview()
@@ -94,6 +95,8 @@ struct JeffreyView: View {
                         }
                         .accessibilityIdentifier("Mon compte")
 
+                        routesCard
+
                         Button { setupVersion = 0 } label: {
                             HStack {
                                 HStack(spacing: 8) { JIcon("valider", size: 18); Text("Refaire la configuration") }
@@ -138,6 +141,33 @@ struct JeffreyView: View {
             if let hint { Text(hint).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted) }
         }
         .card()
+    }
+
+    /// Tracés GPS gardés sur l'iPhone : résumé, la liste complète s'ouvre sur une vue à part.
+    private var routesCard: some View {
+        NavigationLink { RoutesView() } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    JIcon("parcours", size: 18).foregroundStyle(Theme.creme)
+                    Text("Tes parcours").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                    Spacer()
+                    Text(routeStorage.count == 0 ? "aucun" : "\(routeStorage.count) · \(formattedSize)")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
+                    JIcon("suivant", size: 14).foregroundStyle(Theme.muted)
+                }
+                Text("Les tracés GPS enregistrés par l'iPhone. Balaie vers la gauche pour en supprimer un.")
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
+            }
+            .card()
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("Tes parcours")
+        .onAppear { routeStorage = LocalRoute.storage() }
+    }
+
+    private var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: Int64(routeStorage.bytes), countStyle: .file)
     }
 
     private func segment(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {

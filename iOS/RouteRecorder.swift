@@ -38,6 +38,44 @@ struct LocalRoute: Codable, Identifiable {
         return try? decoder.decode(LocalRoute.self, from: data)
     }
 
+    /// Distance du tracé (points fiables), pour l'affichage de la liste.
+    var distance: Double {
+        let good = points.filter { $0.hAcc > 0 && $0.hAcc < 60 }
+        guard good.count > 1 else { return 0 }
+        var total = 0.0
+        for i in 1..<good.count {
+            let a = CLLocation(latitude: good[i - 1].lat, longitude: good[i - 1].lon)
+            let b = CLLocation(latitude: good[i].lat, longitude: good[i].lon)
+            total += b.distance(from: a)
+        }
+        return total
+    }
+
+    /// Efface un tracé.
+    @discardableResult
+    static func delete(id: String) -> Bool {
+        (try? FileManager.default.removeItem(at: directory.appendingPathComponent("\(id).json"))) != nil
+    }
+
+    /// Nombre de tracés gardés sur l'iPhone et place occupée.
+    static func storage() -> (count: Int, bytes: Int) {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        let json = files.filter { $0.pathExtension == "json" }
+        let bytes = json.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0) }
+        return (json.count, bytes)
+    }
+
+    /// Efface tous les tracés enregistrés sur l'iPhone (les séances et leurs tracés dans Santé ne sont pas touchés).
+    @discardableResult
+    static func deleteAll() -> Int {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        var deleted = 0
+        for url in files where url.pathExtension == "json" {
+            if (try? FileManager.default.removeItem(at: url)) != nil { deleted += 1 }
+        }
+        return deleted
+    }
+
     static func loadAll() -> [LocalRoute] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

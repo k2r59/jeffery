@@ -62,6 +62,7 @@
 		A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */; };
 		A795789D70318C0FFA83C6C6 /* WorkoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FCE21CB7DC6DA46AFCC57A8 /* WorkoutManager.swift */; };
 		AA8054D04A39FFBD9DEA1CBA /* ObjectiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A433BC192FA6379ABE91035B /* ObjectiveView.swift */; };
+		AED66011B905CADDC8EC253B /* RoutesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49AE18514C6A358F9E3DD2CF /* RoutesView.swift */; };
 		AF21B4369DE8C663A6C3113E /* WorkoutLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4258493F240A344A20E69581 /* WorkoutLibrary.swift */; };
 		AF42FE9D13F26A8EB1ECF454 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349670EE16768E2C8346D827 /* KeychainStore.swift */; };
 		B180FAF67E248B926432C8FD /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 832F703E00E10E90BBABCDAE /* SplashView.swift */; };
@@ -164,6 +165,7 @@
 		4258493F240A344A20E69581 /* WorkoutLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLibrary.swift; sourceTree = "<group>"; };
 		474EEACB50F315D0D866388C /* WatchCoach-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "WatchCoach-Bridging-Header.h"; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
+		49AE18514C6A358F9E3DD2CF /* RoutesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutesView.swift; sourceTree = "<group>"; };
 		50D4AA1667A3275F3D77C3C7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		52A82CCD5D6A35897EA2DA91 /* ObjCExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ObjCExceptionCatcher.h; sourceTree = "<group>"; };
 		5417E0D16E3AE64DB6CF826D /* SetupState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupState.swift; sourceTree = "<group>"; };
@@ -315,6 +317,7 @@
 				2CCE076F0877C612BFD4113D /* ReferenceRoute.swift */,
 				D5A63CF06A05D2BA57DB5461 /* RootView.swift */,
 				C5B6379F23E53F7CDE62C740 /* RouteRecorder.swift */,
+				49AE18514C6A358F9E3DD2CF /* RoutesView.swift */,
 				3E565DD4B3701C8EEC7FD653 /* SessionAnalysisService.swift */,
 				0FC8C31809CD02803421C632 /* SessionAnalyst.swift */,
 				9AFF59D00152AF73C8A232E7 /* SessionCheckpoint.swift */,
@@ -662,6 +665,7 @@
 				A608ADBEF292BFA36D6CA87F /* ReferenceRoute.swift in Sources */,
 				48B34E824CC2E58A4B52982A /* RootView.swift in Sources */,
 				827D5CAB3F985BAA71B2D832 /* RouteRecorder.swift in Sources */,
+				AED66011B905CADDC8EC253B /* RoutesView.swift in Sources */,
 				0BEB9A6157CAAA7BDAE7583A /* SessionAnalysisService.swift in Sources */,
 				283FD722227E973622E5D7CE /* SessionAnalyst.swift in Sources */,
 				4DF632D978F09FB6349E5C42 /* SessionCheckpoint.swift in Sources */,

@@ -137,4 +137,29 @@ extension JeffreyUITests {
         app.buttons["Retour"].tap()
         XCTAssertTrue(card.waitForExistence(timeout: 3))
     }
+
+    func testRoutesCardOffersDelete() {
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2", "-pref.userName", "Test"]
+        app.launchEnvironment["WATCHCOACH_SEED_ROUTES"] = "1"
+        app.launch()
+        app.tabBars.buttons["Jeffrey"].tap()
+        let card = app.buttons["Tes parcours"]
+        for _ in 0..<6 where !card.exists { app.swipeUp() }
+        XCTAssertTrue(card.waitForExistence(timeout: 3))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["Balaie une ligne vers la gauche pour la supprimer. Tes séances dans Santé ne sont pas touchées."].waitForExistence(timeout: 3))
+        screenshot("12-parcours")
+        // Balayage vers la gauche : le bouton Supprimer apparaît, la confirmation aussi.
+        let firstRow = app.cells.element(boundBy: 0)
+        XCTAssertTrue(firstRow.waitForExistence(timeout: 3))
+        firstRow.swipeLeft()
+        let delete = app.buttons["Supprimer"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3))
+        screenshot("13-parcours-balayage")
+        delete.tap()
+        let cancel = app.sheets.buttons["Annuler"].exists ? app.sheets.buttons["Annuler"] : app.buttons["Annuler"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5), "la suppression doit demander confirmation")
+        screenshot("14-parcours-confirmation")
+        cancel.tap()
+    }
 }

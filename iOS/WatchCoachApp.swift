@@ -12,6 +12,19 @@ struct WatchCoachApp: App {
             UserDefaults.standard.removePersistentDomain(forName: bundle)
             _ = KeychainStore.delete(KeychainStore.apiKeyAccount)
         }
+        // Tests d'interface : quelques tracés GPS enregistrés.
+        if ProcessInfo.processInfo.environment["WATCHCOACH_SEED_ROUTES"] == "1" {
+            LocalRoute.deleteAll()
+            for i in 0..<3 {
+                let start = Date().addingTimeInterval(-Double(i + 1) * 86_400)
+                let points = (0..<40).map { j in
+                    LocalRoute.Point(lat: 50.62 + Double(j) * 0.0002, lon: 3.05 + Double(j) * 0.0002,
+                                     alt: 25, hAcc: 8, vAcc: 8, t: start.addingTimeInterval(Double(j) * 30))
+                }
+                LocalRoute(id: "seed-\(i)", start: start, end: start.addingTimeInterval(1200),
+                           kind: WorkoutKind.running.rawValue, points: points).save()
+            }
+        }
         // Tests d'interface : quelques séances avec ressenti dans le journal.
         if ProcessInfo.processInfo.environment["WATCHCOACH_SEED_SESSIONS"] == "1" {
             let rows: [SessionSummary] = [
