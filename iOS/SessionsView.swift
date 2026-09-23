@@ -7,6 +7,16 @@ struct SessionsView: View {
     @ObservedObject var history: WorkoutHistory
     private let coached = SessionSummary.loadAll()
 
+    /// Séances coachées par Jeffrey qui ne sont pas (ou plus) visibles dans Santé : elles restent listées,
+    /// pour que l'historique ne disparaisse jamais si l'accès à Santé est coupé.
+    private var orphanCoached: [SessionSummary] {
+        coached.filter { s in
+            !history.workouts.contains { w in
+                abs(w.startDate.timeIntervalSince(s.date)) < 600 && w.startDate < s.date.addingTimeInterval(s.elapsed + 600)
+            }
+        }
+    }
+
     private var weekCount: (Int, Double) {
         guard let start = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start else { return (0, 0) }
         let w = history.workouts.filter { $0.startDate >= start }
@@ -40,9 +50,18 @@ struct SessionsView: View {
                             Text("\(weekCount.0) séance\(weekCount.0 > 1 ? "s" : "") · \(Formatters.distance(weekCount.1))")
                                 .font(.system(size: 12, weight: .bold).monospacedDigit()).foregroundStyle(Theme.muted)
                         }
-                        if history.workouts.isEmpty {
+                        if history.workouts.isEmpty, orphanCoached.isEmpty {
                             Text(history.isLoading ? "Lecture de Santé…" : "Aucune séance sur les 90 derniers jours.")
                                 .font(.subheadline).foregroundStyle(Theme.muted).padding(.top, 20)
+                        }
+                        if history.workouts.isEmpty, !history.isLoading {
+                            healthAccessCard
+                        }
+                        if !orphanCoached.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Avec Jeffrey").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
+                                ForEach(orphanCoached) { s in coachedRow(s) }
+                            }
                         }
                         ForEach(groups, id: \.0) { title, items in
                             VStack(alignment: .leading, spacing: 8) {
@@ -61,6 +80,46 @@ struct SessionsView: View {
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await history.load() }
         }
+    }
+
+    /// Santé ne renvoie rien : souvent l'autorisation de lecture a été coupée (réinstallation de l'app).
+    private var healthAccessCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                JIcon("information", size: 16).foregroundStyle(Theme.alerte)
+                Text("Santé ne renvoie aucune séance").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+            }
+            Text("Vérifie l'accès : Réglages › Santé › Accès aux données › Jeffrey, et active la lecture des entraînements. Tes séances coachées restent listées ci-dessous.")
+                .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            } label: {
+                Text("Ouvrir les réglages").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.background)
+                    .frame(maxWidth: .infinity).frame(height: 40)
+                    .background(Capsule().fill(Theme.lime))
+            }
+            .buttonStyle(.plain)
+        }
+        .card()
+    }
+
+    /// Séance coachée par Jeffrey, affichée même sans Santé.
+    private func coachedRow(_ s: SessionSummary) -> some View {
+        HStack(spacing: 12) {
+            JIcon("course", size: 17).foregroundStyle(Theme.creme)
+                .frame(width: 34, height: 34).background(Circle().fill(Theme.surfaceRaised))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(s.kind.label) · \(s.date.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                Text("\(Formatters.elapsed(s.elapsed))\(s.distance.map { " · \(Formatters.distance($0))" } ?? "")\(s.averageHeartRate.map { " · \(Int($0)) bpm" } ?? "")")
+                    .font(.system(size: 12, weight: .medium).monospacedDigit()).foregroundStyle(Theme.muted)
+            }
+            Spacer()
+            Text("Avec Jeffrey").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.lime)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
     }
 
     private func row(_ w: HKWorkout) -> some View {
