@@ -175,6 +175,20 @@ qu'elle dure.
 - `WatchApp/` : `WorkoutManager` (capture), `WatchSender` (connectivité, miroir), `WatchContentView` (télécommande).
 - `iOS/Assets.xcassets` : pack d'assets Jeffrey (icône, logos, pictogrammes Lucide, couleurs). Licence Lucide dans `LICENCE-LUCIDE.txt`.
 
+### Marche ou course
+
+La cadence ne suffit pas (on peut courir moins vite qu'en marchant). Ce qui sépare vraiment les deux, c'est la phase
+aérienne de la course : la réception tape. La décision se prend donc par ordre de fiabilité :
+
+1. Métrique que watchOS ne calcule qu'en course (vitesse de course, temps de contact au sol, oscillation verticale) :
+   sa fraîcheur prouve la foulée courue.
+2. Pic d'accélération verticale mesuré par l'iPhone à 50 Hz (marche 1,2 à 1,6 g, course 2,5 à 4 g). Le seuil part de
+   2,0 g et se recale sur le coureur en séance (médiane observée en marche et en course).
+3. Classificateur d'Apple (CoreMotion), quand sa confiance est haute.
+4. Cadence, en dernier recours seulement.
+
+Le journal de séance note sur quoi chaque bascule s'est appuyée (« impact 3,1 g (seuil 2,0) · cadence 158 »).
+
 ## Journal de séance
 
 Une séance de moins de 5 minutes ne compte pas : pas de bilan, pas d'entrée dans l'historique, pas de référence pour

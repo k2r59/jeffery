@@ -1908,6 +1908,8 @@ final class CoachSession: ObservableObject {
             distanceHistory.removeAll { snap.timestamp.timeIntervalSince($0.0) > 45 }
         }
         pace = computePace(snap)
+        // Métrique que watchOS ne calcule qu'en course : preuve directe d'une foulée courue.
+        if let at = snap.runningMetricAt, Date().timeIntervalSince(at) < 15 { activity.noteWatchRunningMetric() }
         if let hr = snap.heartRate, snap.state == .running {
             hrSamples.append(hr)
             let now = snap.timestamp

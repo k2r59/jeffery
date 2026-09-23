@@ -62,6 +62,23 @@ final class ActivityMonitor: ObservableObject {
     private let motion = CMMotionActivityManager()
     private let pedometer = CMPedometer()
     private let altimeter = CMAltimeter()
+    private let deviceMotion = CMMotionManager()
+
+    // MARK: Impact à la réception (le signal qui sépare vraiment marche et course)
+
+    /// Pic d'accélération verticale sur la dernière seconde, en g. Marche : 1,2 à 1,6. Course : 2,5 à 4.
+    /// C'est la phase aérienne de la course qui produit cette réception, quelle que soit la vitesse.
+    @Published private(set) var impactG: Double?
+    private var impactWindow: [Double] = []      // pics par seconde, 6 dernières secondes
+    private var impactPeak: Double = 0           // pic de la seconde en cours
+    private var impactSamples: [Double] = []     // |accélération verticale| brute de la seconde en cours
+    /// Pics observés dans chaque état, pour se caler sur ce coureur (médiane, remplie en séance).
+    private var walkImpacts: [Double] = []
+    private var runImpacts: [Double] = []
+    /// La montre écrit des métriques que watchOS ne calcule qu'en course : leur présence tranche.
+    private var watchRunningMetricAt: Date = .distantPast
+    /// Dernier verdict du classificateur d'Apple et sa confiance.
+    private var appleGuess: (activity: Activity, confidence: CMMotionActivityConfidence, at: Date)?
     private var candidate: Activity = .unknown
     private var candidateSince: Date = Date()
     private var lastRawActivity: Activity = .unknown
@@ -84,6 +101,8 @@ final class ActivityMonitor: ObservableObject {
         horizontal = 0; lastAltitudeAt = nil; lastCadenceAt = .distantPast
         secondsByActivity = [:]; secondsClimbing = 0; lastTick = Date(); stationaryAnnounced = false
         paused = false; runningCadences.removeAll(); typicalRunningCadence = 160
+        impactG = nil; impactWindow.removeAll(); impactPeak = 0; impactSamples.removeAll()
+        walkImpacts.removeAll(); runImpacts.removeAll(); watchRunningMetricAt = .distantPast; appleGuess = nil
 
         if CMMotionActivityManager.isActivityAvailable() {
             motion.startActivityUpdates(to: .main) { [weak self] a in
@@ -97,11 +116,10 @@ final class ActivityMonitor: ObservableObject {
                 // Faible confiance : on garde la valeur précédente plutôt que d'osciller.
                 if a.confidence == .low, raw != .stationary { return }
                 self.lastRawActivity = raw
-                // Marche/course : la cadence décide (plus rapide) ; ici on ne tranche que l'arrêt et le vélo,
-                // ou marche/course quand la cadence manque depuis plus de 10 s.
-                if raw == .stationary || raw == .cycling || Date().timeIntervalSince(self.lastCadenceAt) > 10 {
-                    self.consider(raw)
-                }
+                if raw == .walking || raw == .running { self.appleGuess = (raw, a.confidence, Date()) }
+                // Arrêt et vélo : le classificateur d'Apple tranche seul. Marche/course : voir `decide()`.
+                if raw == .stationary || raw == .cycling { self.consider(raw) }
+                else { self.decide() }
             }
         }
         if CMPedometer.isCadenceAvailable() {
@@ -118,11 +136,22 @@ final class ActivityMonitor: ObservableObject {
                         if self.runningCadences.count > 120 { self.runningCadences.removeFirst() }
                         if self.runningCadences.count >= 20 { self.typicalRunningCadence = self.runningCadences.sorted()[self.runningCadences.count / 2] }
                     }
-                    // La cadence tranche vite : ≥ 140 pas/min = course, 30-125 = marche, < 30 = arrêt.
-                    if spm >= 140 { self.consider(.running) }
-                    else if spm <= 125, spm >= 30 { self.consider(.walking) }
-                    else if spm < 30, self.lastRawActivity != .cycling { self.consider(.stationary) }
+                    // Plus de verdict sur la seule cadence : elle n'est qu'un indice dans `decide()`.
+                    if spm < 30, self.lastRawActivity != .cycling { self.consider(.stationary) }
+                    else { self.decide() }
                 }
+            }
+        }
+        // Accéléromètre : on mesure l'impact de chaque foulée, c'est ce qui distingue la course de la marche.
+        if deviceMotion.isDeviceMotionAvailable {
+            deviceMotion.deviceMotionUpdateInterval = 1.0 / 50
+            deviceMotion.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
+                guard let self, let motion, !self.paused else { return }
+                // Composante verticale de l'accélération propre (hors gravité), en g, quelle que soit l'orientation.
+                let g = motion.gravity, a = motion.userAcceleration
+                let vertical = abs(a.x * g.x + a.y * g.y + a.z * g.z)
+                self.impactSamples.append(vertical)
+                self.impactPeak = max(self.impactPeak, vertical)
             }
         }
         if CMAltimeter.isRelativeAltitudeAvailable() {
@@ -148,7 +177,63 @@ final class ActivityMonitor: ObservableObject {
         motion.stopActivityUpdates()
         pedometer.stopUpdates()
         altimeter.stopRelativeAltitudeUpdates()
+        deviceMotion.stopDeviceMotionUpdates()
         timer?.invalidate(); timer = nil
+    }
+
+    // MARK: Impact et décision marche / course
+
+    /// Fin de seconde : on garde le pic, on lisse sur 6 s, et on alimente la calibration de ce coureur.
+    private func closeImpactSecond() {
+        guard !impactSamples.isEmpty else { impactPeak = 0; return }
+        impactWindow.append(impactPeak)
+        if impactWindow.count > 6 { impactWindow.removeFirst() }
+        impactG = impactWindow.sorted()[impactWindow.count / 2]
+        impactSamples.removeAll(keepingCapacity: true)
+        impactPeak = 0
+        // Calibration : on n'apprend que sur les états bien établis (au moins 15 s dans l'état).
+        if let g = impactG, Date().timeIntervalSince(activitySince) > 15 {
+            if activity == .walking { walkImpacts.append(g); if walkImpacts.count > 240 { walkImpacts.removeFirst() } }
+            if activity == .running { runImpacts.append(g); if runImpacts.count > 240 { runImpacts.removeFirst() } }
+        }
+    }
+
+    private func median(_ xs: [Double]) -> Double? { xs.isEmpty ? nil : xs.sorted()[xs.count / 2] }
+
+    /// Seuil d'impact séparant marche et course, en g. Par défaut 2,0 ; ajusté à mi-chemin entre les médianes
+    /// observées chez ce coureur dès qu'on a assez de mesures dans les deux états.
+    private var impactThreshold: Double {
+        guard let w = median(walkImpacts), let r = median(runImpacts),
+              walkImpacts.count >= 20, runImpacts.count >= 20, r - w > 0.5 else { return 2.0 }
+        return (w + r) / 2
+    }
+
+    /// La montre vient d'écrire une métrique que watchOS ne calcule qu'en course (vitesse de course, temps de
+    /// contact au sol, oscillation verticale) : preuve directe d'une foulée courue.
+    func noteWatchRunningMetric() {
+        watchRunningMetricAt = Date()
+        decide()
+    }
+
+    /// Marche ou course, par ordre de fiabilité : métrique de course de la montre, impact à la réception,
+    /// classificateur d'Apple, puis la cadence en dernier recours.
+    private func decide() {
+        guard !paused else { return }
+        // Vélo et arrêt restent décidés par le classificateur d'Apple (voir `start()`).
+        if lastRawActivity == .cycling { return }
+        if Date().timeIntervalSince(watchRunningMetricAt) < 12 { consider(.running); return }
+        if let g = impactG, impactWindow.count >= 3 {
+            let t = impactThreshold
+            // Zone franche : l'impact décide seul. Zone grise (±15 %) : on demande l'avis des autres.
+            if g >= t * 1.15 { consider(.running); return }
+            if g <= t * 0.85 { consider(.walking); return }
+        }
+        if let guess = appleGuess, guess.confidence == .high, Date().timeIntervalSince(guess.at) < 20 {
+            consider(guess.activity); return
+        }
+        if let spm = cadence, Date().timeIntervalSince(lastCadenceAt) < 10 {
+            if spm >= 150 { consider(.running) } else if spm <= 120, spm >= 30 { consider(.walking) }
+        }
     }
 
     // MARK: Activité (hystérésis 6 s)
@@ -168,7 +253,11 @@ final class ActivityMonitor: ObservableObject {
         // Le vrai début de l'activité, pas l'instant où l'hystérésis de 6 s la confirme.
         activitySince = candidateSince
         stationaryAnnounced = false
-        onLog?("Détection : \(from.label) → \(activity.label)\(cadence.map { String(format: " (cadence %.0f)", $0) } ?? "")")
+        var why = ""
+        if let g = impactG { why += String(format: " impact %.1f g (seuil %.1f)", g, impactThreshold) }
+        if let c = cadence { why += String(format: " · cadence %.0f", c) }
+        if Date().timeIntervalSince(watchRunningMetricAt) < 12 { why += " · métrique de course de la montre" }
+        onLog?("Détection : \(from.label) → \(activity.label)\(why.isEmpty ? "" : " ·" + why)")
         if from != .unknown { onEvent?(.activity(from: from, to: activity)) }
     }
 
@@ -219,6 +308,8 @@ final class ActivityMonitor: ObservableObject {
         let dt = now.timeIntervalSince(lastTick)
         lastTick = now
         guard !paused else { return }
+        closeImpactSecond()
+        decide()
         secondsByActivity[activity, default: 0] += dt
         if terrain == .climb { secondsClimbing += dt }
         commitIfStable()
@@ -234,6 +325,7 @@ final class ActivityMonitor: ObservableObject {
         var parts: [String] = []
         if activity != .unknown { parts.append("\(activity.label) depuis \(Formatters.elapsed(Date().timeIntervalSince(activitySince)))") }
         if let c = cadence, c > 0 { parts.append("cadence \(Int(c)) pas/min") }
+        if let g = impactG { parts.append(String(format: "impact %.1f g", g)) }
         if let g = grade { parts.append("\(terrain.label)\(abs(g) >= 1.5 ? String(format: " %.0f %%", g) : "")") }
         if ascent >= 5 || descent >= 5 { parts.append("D+ \(Int(ascent)) m / D- \(Int(descent)) m") }
         return parts.joined(separator: " · ")
