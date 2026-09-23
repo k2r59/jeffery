@@ -606,7 +606,7 @@ final class CoachSession: ObservableObject {
             startedAt: Date().addingTimeInterval(-elapsed), paused: isPaused, elapsedFrozen: elapsed,
             heartRate: latest?.heartRate.map { Int($0) }, distanceMeters: displayDistance,
             goalLabel: goal.kind == .free ? nil : goal.label, remaining: p.remaining, progress: p.fraction,
-            coachState: phase == .connecting ? "arrive" : (coachSpeaking ? "parle" : "ecoute"),
+            coachState: phase == .ending || phase == .idle ? "fini" : (phase == .connecting ? "arrive" : (coachSpeaking ? "parle" : "ecoute")),
             lastLine: lastCoachLine.map { String($0.prefix(120)) }, timerLabel: mirrorTimerLabel, timerEndsAt: timerEndsAt)
     }
 
@@ -646,11 +646,17 @@ final class CoachSession: ObservableObject {
         Task { await activity.update(.init(state: state, staleDate: stale)) }
     }
 
+    /// Fin de séance : l'écran verrouillé et la Smart Stack de la montre ne doivent plus rien afficher (séance du 22/09 :
+    /// la séance restait « en cours » 5 minutes après la fin). Chrono figé, disparition immédiate.
     private func endLiveActivity() {
-        guard let activity = liveActivity else { return }
+        let running = Activity<JeffreyActivityAttributes>.activities
         liveActivity = nil
-        let state = activityState()
-        Task { await activity.end(.init(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(300))) }
+        guard !running.isEmpty else { return }
+        var state = activityState()
+        state.paused = true // fige le chronomètre : il ne doit plus compter après la fin
+        for activity in running {
+            Task { await activity.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate) }
+        }
     }
 
     private func sendMirror(force: Bool = false) {

@@ -38,6 +38,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var autoDecided = false
     /// Fin demandée par l'utilisateur ou l'iPhone (par opposition à une session coupée par watchOS).
     private var endRequested = false
+    /// Départ demandé pendant qu'une capture se terminait : rejoué dès qu'elle est close.
+    private var pendingStart: WatchCommandPayload?
     private var pausedAccumulated: TimeInterval = 0
     private var pauseStartedAt: Date?
     private var tickTimer: Timer?
@@ -136,22 +138,29 @@ final class WorkoutManager: NSObject, ObservableObject {
     func handle(command payload: WatchCommandPayload) {
         switch payload.command {
         case .start:
-            if isActive {
-                // Une séance pilotée ne peut pas être remplacée ; un suivi compagnon oublié, si.
-                guard snapshot.mode == .companion else { return }
-                stopCompanion()
-            }
+            // Nouveau départ = tout repart de zéro : une capture encore en cours (séance précédente mal close,
+            // suivi compagnon oublié) est arrêtée avant, sinon l'iPhone hérite du chrono et des distances d'avant.
+            // La fin d'une HKWorkoutSession est asynchrone : le nouveau départ attend qu'elle soit close.
             selectedKind = payload.kind
-            switch payload.mode {
-            case .owned: startOwned(kind: payload.kind)
-            case .companion: startCompanion(kind: payload.kind)
-            case .auto: startAuto(kind: payload.kind)
+            if isActive {
+                pendingStart = payload
+                end()
+                return
             }
+            begin(payload)
         case .pause: pause()
         case .resume: resume()
         case .end: end()
         case .requestStart, .requestPause, .requestResume, .requestEnd, .ask:
             break // demandes montre → iPhone, jamais reçues ici
+        }
+    }
+
+    private func begin(_ payload: WatchCommandPayload) {
+        switch payload.mode {
+        case .owned: startOwned(kind: payload.kind)
+        case .companion: startCompanion(kind: payload.kind)
+        case .auto: startAuto(kind: payload.kind)
         }
     }
 
@@ -209,7 +218,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             await MainActor.run {
                 guard generation == self.companionGeneration, !self.isActive else { return }
                 if let inferred {
-                    self.beginCompanion(kind: kind, start: inferred, inferred: true)
+                    self.beginCompanion(kind: kind, start: Self.sessionStart(nativeStart: inferred), inferred: true)
                 } else {
                     self.autoDecided = true
                     self.startOwned(kind: kind)
@@ -250,9 +259,16 @@ final class WorkoutManager: NSObject, ObservableObject {
             let inferred = await inferNativeWorkoutStart()
             await MainActor.run {
                 guard generation == self.companionGeneration else { return } // un .end est arrivé entre-temps
-                self.beginCompanion(kind: kind, start: inferred ?? Date(), inferred: inferred != nil)
+                self.beginCompanion(kind: kind, start: inferred.map(Self.sessionStart(nativeStart:)) ?? Date(), inferred: inferred != nil)
             }
         }
+    }
+
+    /// Départ de la séance Jeffrey en mode compagnon : on se cale sur la séance native si elle vient de commencer
+    /// (l'utilisateur a lancé les deux à la suite), sinon on compte à partir de maintenant. Sans ça, relancer Jeffrey
+    /// pendant une séance Exercice déjà bien engagée héritait de son chrono et de sa distance (retour du 22/09).
+    static func sessionStart(nativeStart: Date) -> Date {
+        Date().timeIntervalSince(nativeStart) <= 180 ? nativeStart : Date()
     }
 
     /// L'app Exercice écrit la fréquence cardiaque toutes les quelques secondes pendant une séance, contre
@@ -464,6 +480,12 @@ final class WorkoutManager: NSObject, ObservableObject {
         snap.elapsed = elapsed ?? currentElapsed()
         snapshot = snap
         publish(snap, force: true)
+        // Un départ attendait la fin de la capture précédente (deux séances à la suite) : il part maintenant, à zéro.
+        if let next = pendingStart {
+            pendingStart = nil
+            begin(next)
+            return
+        }
         // Séance finie, l'app reste sous les yeux : on la garde éveillée pour la suivante.
         armStandby()
     }

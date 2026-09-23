@@ -204,6 +204,8 @@ le second, les rapports de plantage du téléphone (`pymobiledevice3 crash pull`
   Le script capture les deux écrans à 25 s, 70 s, 130 s et à la fin, puis imprime le journal. C'est le test à lancer
   avant toute sortie réelle : départ, mode décidé par la montre, chrono, programme, pause/reprise depuis la montre,
   fin, bilan montre.
+- Deux séances à la suite : `Tests/Scripts/two-sessions.sh [dossier]`. La seconde doit repartir de zéro (chrono,
+  distance, calories) sans redémarrer la montre.
 
 ## Limites connues
 

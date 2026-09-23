@@ -171,15 +171,18 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         let payload = WatchCommandPayload(command: command, kind: kind, mode: mode)
         guard let data = try? WCCodec.encoder.encode(payload) else { return }
         let session = WCSession.default
+        // Horodatage porté par les deux canaux (message et contexte) : la montre n'exécute la commande qu'une fois,
+        // même quand les deux la lui livrent.
+        let at = Date().timeIntervalSince1970
         context[WCKeys.command] = data
-        context[WCKeys.commandAt] = Date().timeIntervalSince1970
+        context[WCKeys.commandAt] = at
         pushContext()
         guard session.activationState == .activated else {
             completion?(NSError(domain: "WatchCoach", code: 3, userInfo: [NSLocalizedDescriptionKey: "WatchConnectivity inactif"]))
             return
         }
         if session.isReachable {
-            session.sendMessage([WCKeys.command: data], replyHandler: { _ in
+            session.sendMessage([WCKeys.command: data, WCKeys.commandAt: at], replyHandler: { _ in
                 DispatchQueue.main.async { completion?(nil) }
             }, errorHandler: { error in
                 DispatchQueue.main.async { completion?(error) }

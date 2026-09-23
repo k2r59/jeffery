@@ -69,7 +69,12 @@ struct JeffreyLiveActivity: Widget {
     }
 
     private func stateLabel(_ st: String) -> String {
-        switch st { case "parle": return "Jeffrey te parle"; case "ecoute": return "Jeffrey écoute"; default: return "Jeffrey arrive" }
+        switch st {
+        case "parle": return "Jeffrey te parle"
+        case "ecoute": return "Jeffrey écoute"
+        case "fini": return "Séance terminée"
+        default: return "Jeffrey arrive"
+        }
     }
 
 }

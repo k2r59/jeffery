@@ -25,7 +25,7 @@ xcrun simctl privacy $WATCH grant location $WBID 2>/dev/null
 
 CONT=$(xcrun simctl get_app_container $PHONE $PBID data)
 rm -f "$CONT/Documents/sessions.json" "$CONT/Documents/derniere-seance.txt"; rm -rf "$CONT/Documents/journaux"
-xcrun simctl launch --terminate-running-process $PHONE $PBID -pref.onboarded YES -pref.userName Test >/dev/null; sleep 3
+xcrun simctl launch --terminate-running-process $PHONE $PBID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null; sleep 3
 xcrun simctl terminate $PHONE $PBID
 
 # 1. La montre d'abord (elle doit être « connectée » pour que l'iPhone accepte de démarrer).
@@ -35,7 +35,7 @@ sleep 6
 # 2. L'iPhone : coach factice, départ automatique, objectif 2 min, arrêt à 170 s. Pas de montre factice : la vraie WC.
 SIMCTL_CHILD_WATCHCOACH_FAKE_REALTIME=1 SIMCTL_CHILD_WATCHCOACH_AUTOSTART=1 SIMCTL_CHILD_WATCHCOACH_GOAL_MIN=2 \
 SIMCTL_CHILD_WATCHCOACH_STOP_AFTER=170 SIMCTL_CHILD_WATCHCOACH_NO_HEALTH=1 SIMCTL_CHILD_WATCHCOACH_NO_SPLASH=1 \
-  xcrun simctl launch $PHONE $PBID -pref.onboarded YES -pref.userName Test >/dev/null
+  xcrun simctl launch $PHONE $PBID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null
 
 snap() { xcrun simctl io $PHONE screenshot "$OUT/phone-$1.png" >/dev/null 2>&1; xcrun simctl io $WATCH screenshot "$OUT/watch-$1.png" >/dev/null 2>&1; }
 sleep 25; snap 25s

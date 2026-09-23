@@ -109,7 +109,14 @@ final class WatchSender: NSObject, WCSessionDelegate {
         guard let data = dict[WCKeys.coachState] as? Data,
               let mirror = try? WCCodec.decoder.decode(CoachMirror.self, from: data) else { return }
         Task { @MainActor in
-            if WatchMirror.shared.state.timestamp <= mirror.timestamp { WatchMirror.shared.state = mirror }
+            guard WatchMirror.shared.state.timestamp <= mirror.timestamp else { return }
+            let wasLive = WatchMirror.shared.state.phase != "idle"
+            WatchMirror.shared.state = mirror
+            // L'iPhone dit que la séance est finie : la montre arrête sa capture même si la commande « terminer »
+            // s'est perdue (iPhone verrouillé ou app suspendue au moment de l'envoi). Séance du 22/09.
+            if wasLive, mirror.phase == "idle", WorkoutManager.shared.isActive {
+                WorkoutManager.shared.end()
+            }
         }
     }
 
@@ -121,11 +128,9 @@ final class WatchSender: NSObject, WCSessionDelegate {
         }
     }
 
-    /// Commande déposée dans le contexte (montre injoignable au moment de l'envoi) : exécutée si récente et pas déjà vue.
+    /// Commande déposée dans le contexte (montre injoignable au moment de l'envoi) : même chemin que les messages,
+    /// la déduplication est faite une seule fois dans `handleCommand`.
     private func handleContextCommand(_ dict: [String: Any]) {
-        guard let at = dict[WCKeys.commandAt] as? Double, at > lastHandledCommandAt,
-              Date().timeIntervalSince1970 - at < 600 else { return }
-        lastHandledCommandAt = at
         handleCommand(in: dict)
     }
 
@@ -155,9 +160,15 @@ final class WatchSender: NSObject, WCSessionDelegate {
         replyHandler(["ok": true])
     }
 
+    /// Une commande arrive souvent deux fois (message direct + contexte applicatif) : l'horodatage de l'iPhone sert
+    /// à ne l'exécuter qu'une seule fois. Sans ça, un « démarrer » en double relançait puis arrêtait la séance.
     private func handleCommand(in message: [String: Any]) {
         guard let data = message[WCKeys.command] as? Data,
               let payload = try? WCCodec.decoder.decode(WatchCommandPayload.self, from: data) else { return }
+        if let at = message[WCKeys.commandAt] as? Double {
+            guard at > lastHandledCommandAt, Date().timeIntervalSince1970 - at < 600 else { return }
+            lastHandledCommandAt = at
+        }
         Task { @MainActor in
             WorkoutManager.shared.handle(command: payload)
         }
