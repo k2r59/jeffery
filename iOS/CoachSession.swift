@@ -41,6 +41,10 @@ final class CoachSession: ObservableObject {
     private var micMutedUntil: Date = .distantPast
     private var micMuted: Bool { coachSpeaking || Date() < micMutedUntil }
     private var echoIgnoredCount = 0
+    /// Jeffrey vient de poser une question : tant qu'il n'a pas de réponse, un bruit ou un écho ignoré doit le faire
+    /// redemander au lieu d'attendre en silence (séance du 22/09 : réponse perdue dans le vent).
+    private var awaitingAnswerSince: Date?
+    private var reaskedForCurrentQuestion = false
 
     /// Capture micro → coach, avec la garde anti-écho.
     private func forwardCapture(_ data: Data) {
@@ -325,6 +329,8 @@ final class CoachSession: ObservableObject {
         distanceHistory.removeAll()
         reminders.removeAll()
         echoIgnoredCount = 0
+        awaitingAnswerSince = nil
+        reaskedForCurrentQuestion = false
         requestedScene = nil
         celebrationScene = nil
         currentPaceSecPerKm = nil
@@ -2278,28 +2284,52 @@ final class CoachSession: ObservableObject {
         let appleAI = realtime is AppleCoachLink
         if !appleAI, !Self.looksLikeSpeech(trimmed) {
             log(.info, "Bruit ignoré : « \(trimmed) »")
+            reaskIfAwaitingAnswer(because: "un bruit")
             return
         }
+        // L'écho n'existe que pendant que Jeffrey parle (haut-parleur repris par le micro), ou juste après.
+        let echoWindow = coachSpeaking || Date().timeIntervalSince(lastCoachSpokeAt) < 2.5
         let recentCoach = transcript.filter { $0.role == .coach }.suffix(3).map(\.text)
-        if Self.looksLikeEcho(trimmed, of: recentCoach) {
+        if echoWindow, Self.looksLikeEcho(trimmed, of: recentCoach) {
             echoIgnoredCount += 1
             log(.info, "Écho ignoré (sa propre voix reprise par le micro) : « \(trimmed.prefix(60)) »")
             if echoIgnoredCount == 3 { log(.info, "Écho répété : mets des écouteurs ou éloigne le téléphone du haut-parleur.") }
+            reaskIfAwaitingAnswer(because: "un écho de ta propre voix")
             return
         }
         log(.user, trimmed)
         lastUserSpokeAt = Date()
+        awaitingAnswerSince = nil
+        reaskedForCurrentQuestion = false
         if !appleAI { realtime.requestResponse() }
     }
 
-    /// Écho : au moins 60 % des mots de la phrase (3 mots ou plus) se retrouvent dans une réplique récente de Jeffrey.
+    /// Une parole a été écartée alors que Jeffrey attendait une réponse : il redemande, une seule fois par question.
+    private func reaskIfAwaitingAnswer(because reason: String) {
+        guard phase == .live, let since = awaitingAnswerSince, !reaskedForCurrentQuestion,
+              Date().timeIntervalSince(since) < 90, !responseInProgress, !coachSpeaking else { return }
+        reaskedForCurrentQuestion = true
+        log(.info, "Réponse perdue (\(reason)) : Jeffrey redemande.")
+        realtime.injectText("[INAUDIBLE] Il vient de répondre à ta question mais le micro n'a capté que \(reason) (vent, souffle, écho).")
+        realtime.requestResponse(instructions: "Tu n'as pas compris sa réponse : excuse-toi en trois mots et repose la MÊME question, plus courte et plus fermée (par exemple « la première ou la deuxième ? »). Rien d'autre.")
+    }
+
+    /// Écho : une phrase longue dont les mots viennent d'une réplique récente de Jeffrey, ou la même phrase courte
+    /// répétée trois fois (bégaiement du haut-parleur). Une réponse brève (« la première », « oui ») n'est jamais
+    /// un écho, même si Jeffrey vient d'employer les mêmes mots (séance du 22/09 : « Première option » écartée à tort).
     static func looksLikeEcho(_ text: String, of coachLines: [String]) -> Bool {
         func words(_ t: String) -> [String] {
             t.lowercased().folding(options: .diacriticInsensitive, locale: .current)
                 .split { !$0.isLetter }.map(String.init).filter { $0.count >= 3 }
         }
         let mine = words(text)
-        guard mine.count >= 3 else { return false }
+        // Même groupe de mots répété trois fois de suite : c'est le haut-parleur, pas lui.
+        if mine.count >= 3, mine.count % 3 == 0 {
+            let third = mine.count / 3
+            let a = Array(mine[0..<third]), b = Array(mine[third..<(2 * third)]), c = Array(mine[(2 * third)...])
+            if a == b, b == c { return true }
+        }
+        guard mine.count >= 6 else { return false }
         for line in coachLines {
             let theirs = Set(words(line))
             guard !theirs.isEmpty else { continue }
@@ -2315,7 +2345,10 @@ final class CoachSession: ObservableObject {
         if lowered.unicodeScalars.contains(where: { $0.value > 0x24F && !CharacterSet.punctuationCharacters.contains($0) && !CharacterSet.symbols.contains($0) }) { return false }
         let words = lowered.split { !$0.isLetter && $0 != "'" }.map(String.init)
         if words.count >= 2 { return true }
-        let short: Set<String> = ["oui", "non", "ok", "okay", "stop", "go", "merci", "d'accord", "vas-y", "pause", "reprends", "termine", "continue", "attends", "ouais", "nan", "encore"]
+        let short: Set<String> = ["oui", "non", "ok", "okay", "stop", "go", "merci", "d'accord", "vas-y", "pause",
+                                  "reprends", "termine", "continue", "attends", "ouais", "nan", "encore",
+                                  // Réponses à un choix : elles arrivent souvent seules et hachées par le vent.
+                                  "première", "premier", "deuxième", "second", "seconde", "un", "deux", "celle"]
         return words.first.map { short.contains($0) } ?? false
     }
 
@@ -2338,6 +2371,13 @@ final class CoachSession: ObservableObject {
             transcript[idx].text = full
         }
         if let line = partialCoachLine { lastCoachLine = full.isEmpty ? line.text : full }
+        // Il vient de poser une question : on attend une réponse, et un bruit ne doit pas la faire disparaître.
+        if let last = lastCoachLine?.trimmingCharacters(in: .whitespacesAndNewlines), last.hasSuffix("?") {
+            awaitingAnswerSince = Date()
+            reaskedForCurrentQuestion = false
+        } else {
+            awaitingAnswerSince = nil
+        }
         partialCoachLine = nil
         lastCoachSpokeAt = Date()
         sendMirror(force: true)

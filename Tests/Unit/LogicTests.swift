@@ -221,3 +221,21 @@ final class ShortSessionTests: XCTestCase {
         XCTAssertFalse(SessionSummary.loadAll().contains { $0.id == "short-test" })
     }
 }
+
+@MainActor final class NoiseAndEchoTests: XCTestCase {
+    func testShortChoiceAnswersAreKept() {
+        // Séance du 22/09 : « Première option » avait été écartée comme un écho.
+        let coach = ["Première option : marche 3 min, puis 6 fois 2 min de course et 1 min de récup, total 23 min."]
+        XCTAssertTrue(CoachSession.looksLikeSpeech("Première"))
+        XCTAssertTrue(CoachSession.looksLikeSpeech("deuxième"))
+        XCTAssertFalse(CoachSession.looksLikeEcho("Première option.", of: coach))
+        XCTAssertFalse(CoachSession.looksLikeEcho("la deuxième", of: coach))
+    }
+
+    func testRepeatedPhraseAndLongRepeatAreEcho() {
+        let coach = ["Allez Hervé, trouve ton allure douce, et pense à relâcher les épaules."]
+        XCTAssertTrue(CoachSession.looksLikeEcho("Première option. Première option. Première option.", of: coach))
+        XCTAssertTrue(CoachSession.looksLikeEcho("trouve ton allure douce et pense à relâcher les épaules", of: coach))
+        XCTAssertFalse(CoachSession.looksLikeEcho("j'ai mal au genou droit depuis hier", of: coach))
+    }
+}
