@@ -33,7 +33,7 @@ Projet personnel, installé hors App Store en signature de développement.
 - Écran de lancement : symbole Jeffrey puis logo et signature, fondu vers l'app.
 - Séances types : à l'accueil, Jeffrey demande si on fait la séance à sa façon ou s'il propose un exercice (on peut aussi
   le lui demander à tout moment). S'il propose, il demande juste « comme d'habitude, plus doux ou plus
-  costaud ? », propose deux séances adaptées au sport choisi et au niveau (catalogue `iOS/WorkoutLibrary.swift`,
+  costaud ? », propose deux séances d'au moins 30 minutes adaptées au sport choisi et au niveau (catalogue `iOS/WorkoutLibrary.swift`,
   7 sports × 3 niveaux), et déroule celle qu'on choisit bloc par bloc avec le chronomètre. Tout à l'oral, rien à valider
   sur le téléphone ; la carte chrono (iPhone, montre, écran verrouillé) montre le bloc en cours et sa position.
 - La montre est obligatoire : sans montre joignable, pas de départ ; montre perdue plus de deux minutes, séance arrêtée.

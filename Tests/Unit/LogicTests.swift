@@ -128,7 +128,7 @@ final class WorkoutLibraryTests: XCTestCase {
                 XCTAssertFalse(list.isEmpty, "\(kind) \(level)")
                 for w in list {
                     XCTAssertFalse(w.blocks.isEmpty, w.id)
-                    XCTAssertGreaterThan(w.totalSeconds, 5 * 60, w.id)
+                    XCTAssertGreaterThanOrEqual(w.totalSeconds, WorkoutLibrary.minimumSeconds, "\(w.id) dure moins de 30 minutes")
                     XCTAssertLessThan(w.totalSeconds, 3 * 3600, w.id)
                     XCTAssertEqual(WorkoutLibrary.workout(id: w.id)?.id, w.id)
                 }
