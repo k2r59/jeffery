@@ -20,20 +20,19 @@ struct RoutesView: View {
                         .padding(.horizontal, 18).padding(.top, 12)
                     Spacer()
                 } else {
-                    List {
-                        ForEach(routes) { route in
-                            row(route)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparatorTint(Theme.creme.opacity(0.08))
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) { pendingDelete = route } label: {
-                                        Label("Supprimer", systemImage: "trash")
-                                    }
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 8) {
+                            ForEach(routes) { route in
+                                SwipeToDelete { pendingDelete = route } content: {
+                                    row(route)
+                                        .padding(.horizontal, 12)
+                                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
                                 }
+                            }
                         }
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 80)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
                 }
             }
         }

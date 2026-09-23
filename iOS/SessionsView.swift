@@ -5,13 +5,28 @@ import CoreLocation
 
 struct SessionsView: View {
     @ObservedObject var history: WorkoutHistory
-    private let coached = SessionSummary.loadAll()
+    @State private var coached = SessionSummary.loadAll()
+    @State private var hidden = HiddenWorkouts.ids
+    /// Suppression en attente de confirmation. Un seul dialogue : deux `confirmationDialog` sur la même vue
+    /// ne s'affichent pas de façon fiable (le second reste muet).
+    private enum Deletion: Equatable {
+        case workout(HKWorkout)
+        case coached(SessionSummary)
+        static func == (a: Deletion, b: Deletion) -> Bool {
+            switch (a, b) {
+            case let (.workout(x), .workout(y)): return x.uuid == y.uuid
+            case let (.coached(x), .coached(y)): return x.id == y.id
+            default: return false
+            }
+        }
+    }
+    @State private var pending: Deletion?
 
     /// Séances coachées par Jeffrey qui ne sont pas (ou plus) visibles dans Santé : elles restent listées,
     /// pour que l'historique ne disparaisse jamais si l'accès à Santé est coupé.
     private var orphanCoached: [SessionSummary] {
         coached.filter { s in
-            !history.workouts.contains { w in
+            !visibleWorkouts.contains { w in
                 abs(w.startDate.timeIntervalSince(s.date)) < 600 && w.startDate < s.date.addingTimeInterval(s.elapsed + 600)
             }
         }
@@ -19,15 +34,17 @@ struct SessionsView: View {
 
     private var weekCount: (Int, Double) {
         guard let start = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start else { return (0, 0) }
-        let w = history.workouts.filter { $0.startDate >= start }
+        let w = visibleWorkouts.filter { $0.startDate >= start }
         return (w.count, w.compactMap(WorkoutHistory.distanceMeters).reduce(0, +))
     }
+
+    private var visibleWorkouts: [HKWorkout] { history.workouts.filter { !hidden.contains($0.uuid.uuidString) } }
 
     private var groups: [(String, [HKWorkout])] {
         let cal = Calendar.current
         var today: [HKWorkout] = [], yesterday: [HKWorkout] = [], week: [HKWorkout] = [], earlier: [HKWorkout] = []
         let weekStart = cal.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
-        for w in history.workouts {
+        for w in visibleWorkouts {
             if cal.isDateInToday(w.startDate) { today.append(w) }
             else if cal.isDateInYesterday(w.startDate) { yesterday.append(w) }
             else if w.startDate >= weekStart { week.append(w) }
@@ -50,25 +67,29 @@ struct SessionsView: View {
                             Text("\(weekCount.0) séance\(weekCount.0 > 1 ? "s" : "") · \(Formatters.distance(weekCount.1))")
                                 .font(.system(size: 12, weight: .bold).monospacedDigit()).foregroundStyle(Theme.muted)
                         }
-                        if history.workouts.isEmpty, orphanCoached.isEmpty {
+                        if visibleWorkouts.isEmpty, orphanCoached.isEmpty {
                             Text(history.isLoading ? "Lecture de Santé…" : "Aucune séance sur les 90 derniers jours.")
                                 .font(.subheadline).foregroundStyle(Theme.muted).padding(.top, 20)
                         }
-                        if history.workouts.isEmpty, !history.isLoading {
+                        if visibleWorkouts.isEmpty, !history.isLoading {
                             healthAccessCard
                         }
                         if !orphanCoached.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Avec Jeffrey").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
-                                ForEach(orphanCoached) { s in coachedRow(s) }
+                                ForEach(orphanCoached) { s in
+                                    SwipeToDelete { pending = .coached(s) } content: { coachedRow(s) }
+                                }
                             }
                         }
                         ForEach(groups, id: \.0) { title, items in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(title).font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
                                 ForEach(items, id: \.uuid) { w in
-                                    NavigationLink { RedoRouteView(workout: w, history: history) } label: { row(w) }
-                                        .buttonStyle(.plain)
+                                    SwipeToDelete { pending = .workout(w) } content: {
+                                        NavigationLink { RedoRouteView(workout: w, history: history) } label: { row(w) }
+                                            .buttonStyle(.plain)
+                                    }
                                 }
                             }
                         }
@@ -79,7 +100,48 @@ struct SessionsView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await history.load() }
+            .confirmationDialog("Supprimer cette séance ?",
+                                isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
+                                titleVisibility: .visible) {
+                Button("Supprimer", role: .destructive) {
+                    switch pending {
+                    case .workout(let w): remove(w)
+                    case .coached(let s): removeCoached(s)
+                    case nil: break
+                    }
+                }
+                Button("Annuler", role: .cancel) { pending = nil }
+            } message: {
+                if case .workout = pending {
+                    Text("Elle disparaît de cette liste, avec son bilan et son tracé. La séance reste dans l'app Santé : Jeffrey n'a pas le droit d'y effacer ce qu'il n'a pas écrit.")
+                } else {
+                    Text("Son bilan et son tracé seront effacés.")
+                }
+            }
         }
+    }
+
+    /// Retire une séance de Santé de la liste de Jeffrey : bilan et tracé effacés, la séance reste dans Santé.
+    private func remove(_ workout: HKWorkout?) {
+        guard let workout else { return }
+        defer { pending = nil }
+        if let s = SessionSummary.matching(start: workout.startDate, end: workout.endDate, in: coached) {
+            SessionSummary.delete(id: s.id)
+            if let route = LocalRoute.matching(start: workout.startDate, end: workout.endDate) { LocalRoute.delete(id: route.id) }
+        }
+        HiddenWorkouts.hide(workout.uuid.uuidString)
+        hidden = HiddenWorkouts.ids
+        coached = SessionSummary.loadAll()
+    }
+
+    private func removeCoached(_ summary: SessionSummary?) {
+        guard let summary else { return }
+        defer { pending = nil }
+        SessionSummary.delete(id: summary.id)
+        if let route = LocalRoute.matching(start: summary.date, end: summary.date.addingTimeInterval(summary.elapsed + 60)) {
+            LocalRoute.delete(id: route.id)
+        }
+        coached = SessionSummary.loadAll()
     }
 
     /// Santé ne renvoie rien : souvent l'autorisation de lecture a été coupée (réinstallation de l'app).

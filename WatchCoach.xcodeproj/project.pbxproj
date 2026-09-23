@@ -30,6 +30,7 @@
 		3DA39242827E3FB5DEFE1921 /* JeffreyVoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4058C3F6AD9D59EB9596853A /* JeffreyVoiceView.swift */; };
 		3E0BED32725F9FD516A9645A /* WorkoutKind+HealthKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EA9D6E0CF16BBB2466EE8E /* WorkoutKind+HealthKit.swift */; };
 		4024B3C36572BA7581C1D224 /* JIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE502A3667A6B0DBE968AE84 /* JIcon.swift */; };
+		41E12E8CCCD023A76862005E /* SwipeToDelete.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42F3169E019AFD8A1592D5D /* SwipeToDelete.swift */; };
 		47118DA6C3D02BA896B1D9C0 /* animation.html in Resources */ = {isa = PBXBuildFile; fileRef = 80319898643C3E9768D2D281 /* animation.html */; };
 		48A9A39515C84655284DF338 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD82806422AB8276FBD93DB2 /* OnboardingView.swift */; };
 		48B34E824CC2E58A4B52982A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A63CF06A05D2BA57DB5461 /* RootView.swift */; };
@@ -37,6 +38,7 @@
 		4DF632D978F09FB6349E5C42 /* SessionCheckpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AFF59D00152AF73C8A232E7 /* SessionCheckpoint.swift */; };
 		4EC84103B5AB0B8C3C3CB051 /* YouView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8EE1F43250706F36FF0C16 /* YouView.swift */; };
 		509C76BD84E7D18BBD014B3F /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */; };
+		5788FA3494AA77E0203BF95A /* HiddenWorkouts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 694117D92297D8F40AEF18A6 /* HiddenWorkouts.swift */; };
 		57D26E3739DEBCE115D10AEB /* WorkoutHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 915E8A5DC9D24B7E9D94DD75 /* WorkoutHistory.swift */; };
 		5B0CE21D56CC710BDD6EFC61 /* WatchSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E02BD34C7EDAE2584384F97 /* WatchSender.swift */; };
 		621D15B63E630840EF4F1E1B /* HealthProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B72EA6338816D49A380C3D1 /* HealthProfile.swift */; };
@@ -174,6 +176,7 @@
 		6007B40D0AD1397CFB26FD68 /* JeffreyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = JeffreyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		64B1107759066FF97483A70F /* WatchCoachUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = WatchCoachUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		67F577FE663392DD612E8BDE /* JeffreyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyUITests.swift; sourceTree = "<group>"; };
+		694117D92297D8F40AEF18A6 /* HiddenWorkouts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiddenWorkouts.swift; sourceTree = "<group>"; };
 		6B2DA5DD09E89CF2639E1253 /* MusicController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicController.swift; sourceTree = "<group>"; };
 		6C37A5613D449E4AAFC56744 /* JeffreyAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JeffreyAccount.swift; sourceTree = "<group>"; };
 		6DE299FA1791CF96CE29EA49 /* SessionEndView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEndView.swift; sourceTree = "<group>"; };
@@ -204,6 +207,7 @@
 		CB07464CCC26C18B28EB4F8B /* SessionGoal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionGoal.swift; sourceTree = "<group>"; };
 		CD82806422AB8276FBD93DB2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPipeline.swift; sourceTree = "<group>"; };
+		D42F3169E019AFD8A1592D5D /* SwipeToDelete.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeToDelete.swift; sourceTree = "<group>"; };
 		D501B5BC019DE9395044ADA3 /* VoicePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreview.swift; sourceTree = "<group>"; };
 		D5A63CF06A05D2BA57DB5461 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		D6CC93125F229C76E8D0C5C5 /* LogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogicTests.swift; sourceTree = "<group>"; };
@@ -302,6 +306,7 @@
 				F5AB293DEF66C1989E86B75F /* DebugFakes.swift */,
 				39AE0E78538EB40DB1DE2E09 /* DeveloperFeedback.swift */,
 				1B72EA6338816D49A380C3D1 /* HealthProfile.swift */,
+				694117D92297D8F40AEF18A6 /* HiddenWorkouts.swift */,
 				283D571A2B12BF08F2767D09 /* Info.plist */,
 				6C37A5613D449E4AAFC56744 /* JeffreyAccount.swift */,
 				C633A224C23AEA7E5F906EE0 /* JeffreyMemory.swift */,
@@ -328,6 +333,7 @@
 				BF832909FB51387ABE5722ED /* SettingsView.swift */,
 				5417E0D16E3AE64DB6CF826D /* SetupState.swift */,
 				832F703E00E10E90BBABCDAE /* SplashView.swift */,
+				D42F3169E019AFD8A1592D5D /* SwipeToDelete.swift */,
 				50D4AA1667A3275F3D77C3C7 /* Theme.swift */,
 				DEA482D9F644EE21C7810B1F /* TodayView.swift */,
 				D501B5BC019DE9395044ADA3 /* VoicePreview.swift */,
@@ -643,6 +649,7 @@
 				FE39D07F4536F0D9A40ECACB /* DebugFakes.swift in Sources */,
 				E82550A98E525C664B168E43 /* DeveloperFeedback.swift in Sources */,
 				621D15B63E630840EF4F1E1B /* HealthProfile.swift in Sources */,
+				5788FA3494AA77E0203BF95A /* HiddenWorkouts.swift in Sources */,
 				D92E5FFAD3BD3DD8928830B7 /* JIcon.swift in Sources */,
 				778C71A2F0A70BD00B2A85FB /* JeffreyAccount.swift in Sources */,
 				F55E74FE7A7CC4D291C25571 /* JeffreyActivityAttributes.swift in Sources */,
@@ -676,6 +683,7 @@
 				94537B092149D76C4523AC7E /* SettingsView.swift in Sources */,
 				FFD506F7318D6EAF8B7D9C2F /* SetupState.swift in Sources */,
 				B180FAF67E248B926432C8FD /* SplashView.swift in Sources */,
+				41E12E8CCCD023A76862005E /* SwipeToDelete.swift in Sources */,
 				10B71EEE9658C3AD09BBBBE1 /* Theme.swift in Sources */,
 				7E00FDA4D53A37441BE3CBF0 /* TodayView.swift in Sources */,
 				E26AB3EAECF37CF14F030331 /* VoicePreview.swift in Sources */,

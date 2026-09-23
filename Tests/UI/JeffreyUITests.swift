@@ -12,6 +12,16 @@ final class JeffreyUITests: XCTestCase {
         app.launchEnvironment["WATCHCOACH_NO_SPLASH"] = "1"
     }
 
+    /// La confirmation s'affiche en feuille (iPhone) ou en popover (grand écran, sans bouton Annuler) :
+    /// on vérifie le titre, puis on ferme comme l'utilisateur.
+    private func expectConfirmation(_ title: String) {
+        let heading = app.staticTexts[title]
+        XCTAssertTrue(heading.waitForExistence(timeout: 5), "la suppression doit demander confirmation")
+        let dismiss = app.otherElements["PopoverDismissRegion"]
+        if dismiss.exists { dismiss.tap() }
+        else if app.buttons["Annuler"].exists { app.buttons["Annuler"].tap() }
+    }
+
     private func screenshot(_ name: String) {
         let a = XCTAttachment(screenshot: app.screenshot())
         a.name = name; a.lifetime = .keepAlways
@@ -150,16 +160,30 @@ extension JeffreyUITests {
         XCTAssertTrue(app.staticTexts["Balaie une ligne vers la gauche pour la supprimer. Tes séances dans Santé ne sont pas touchées."].waitForExistence(timeout: 3))
         screenshot("12-parcours")
         // Balayage vers la gauche : le bouton Supprimer apparaît, la confirmation aussi.
-        let firstRow = app.cells.element(boundBy: 0)
+        let firstRow = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Course du'")).element(boundBy: 0)
         XCTAssertTrue(firstRow.waitForExistence(timeout: 3))
         firstRow.swipeLeft()
         let delete = app.buttons["Supprimer"]
         XCTAssertTrue(delete.waitForExistence(timeout: 3))
         screenshot("13-parcours-balayage")
         delete.tap()
-        let cancel = app.sheets.buttons["Annuler"].exists ? app.sheets.buttons["Annuler"] : app.buttons["Annuler"]
-        XCTAssertTrue(cancel.waitForExistence(timeout: 5), "la suppression doit demander confirmation")
+        expectConfirmation("Supprimer ce parcours ?")
         screenshot("14-parcours-confirmation")
-        cancel.tap()
+    }
+
+    func testSwipeDeletesSessionWithConfirmation() {
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2", "-pref.userName", "Test"]
+        app.launchEnvironment["WATCHCOACH_SEED_SESSIONS"] = "1"
+        app.launch()
+        app.tabBars.buttons["Séances"].tap()
+        let row = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Course ·'")).element(boundBy: 0)
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.swipeLeft()
+        let delete = app.buttons["Supprimer"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "le balayage doit découvrir Supprimer")
+        screenshot("15-seance-balayage")
+        delete.tap()
+        expectConfirmation("Supprimer cette séance ?")
+        screenshot("16-seance-confirmation")
     }
 }

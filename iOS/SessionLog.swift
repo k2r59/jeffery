@@ -81,6 +81,13 @@ struct SessionSummary: Codable, Identifiable {
         }
     }
 
+    /// Efface une séance de l'historique de Jeffrey (et son tracé GPS local).
+    static func delete(id: String) {
+        let all = loadAll().filter { $0.id != id }
+        let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601
+        if let data = try? e.encode(all) { try? data.write(to: fileURL, options: .atomic) }
+    }
+
     static func upsert(_ s: SessionSummary) {
         guard counts(elapsed: s.elapsed) else { return }
         var all = loadAll().filter { $0.id != s.id }
