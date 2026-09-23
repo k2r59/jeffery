@@ -1589,21 +1589,26 @@ final class CoachSession: ObservableObject {
         timerEndsAt = Date().addingTimeInterval(TimeInterval(seconds))
         log(.info, "Chrono : \(label), \(seconds) s")
         sendMirror(force: true)
+        // C'est Jeffrey qui décompte à l'oral (« 30 secondes », « 10 secondes »), plus de bip sur l'iPhone ;
+        // la montre, elle, continue de vibrer et de sonner (choix d'Hervé du 23/09).
         timerTask = Task { [weak self] in
-            // Rappel à 10 s de la fin pour les blocs longs.
-            if seconds >= 45 {
-                try? await Task.sleep(nanoseconds: UInt64(seconds - 10) * 1_000_000_000)
+            var remaining = seconds
+            for step in [30, 10] where seconds > step + 5 {
+                try? await Task.sleep(nanoseconds: UInt64(remaining - step) * 1_000_000_000)
                 guard let self, !Task.isCancelled else { return }
-                self.beep(short: true)
-                self.realtime.injectText("[CHRONO] plus que 10 s sur « \(label) ».")
-                try? await Task.sleep(nanoseconds: 10_000_000_000)
-            } else {
-                try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+                remaining = step
+                self.announceCountdown(step, label: label)
             }
+            try? await Task.sleep(nanoseconds: UInt64(remaining) * 1_000_000_000)
             guard let self, !Task.isCancelled else { return }
-            self.beep(short: false)
             self.timerPhaseFinished(baseLabel: baseLabel, index: index)
         }
+    }
+
+    /// Décompte dit par Jeffrey. Deux mots, sans commentaire : c'est un repère, pas une intervention.
+    private func announceCountdown(_ seconds: Int, label: String) {
+        realtime.injectText("[CHRONO] plus que \(seconds) secondes sur « \(label) ».")
+        realtime.requestResponse(instructions: "Dis exactement « \(seconds) secondes », rien d'autre, sans commentaire ni encouragement.")
     }
 
     private func timerPhaseFinished(baseLabel: String, index: Int) {
@@ -1687,27 +1692,6 @@ final class CoachSession: ObservableObject {
         planIndex = 0
         planTotal = 0
         sendMirror(force: true)
-    }
-
-    /// Bip local (dans la file audio de Jeffrey) : court pour le rappel, double pour la fin.
-    private func beep(short: Bool) {
-        let rate = 24_000.0
-        func tone(_ freq: Double, _ dur: Double) -> [Int16] {
-            (0..<Int(rate * dur)).map { i in
-                let t = Double(i) / rate
-                let env = min(1, min(t / 0.01, (dur - t) / 0.03))
-                return Int16(sin(2 * .pi * freq * t) * 0.6 * env * 32767)
-            }
-        }
-        var samples = tone(880, short ? 0.12 : 0.15)
-        if !short { samples += [Int16](repeating: 0, count: Int(rate * 0.08)) + tone(1320, 0.18) }
-        let data = samples.withUnsafeBufferPointer { Data(buffer: $0) }
-        if useAppleVoice {
-            // La voix Apple n'utilise pas la file PCM : petit lecteur dédié.
-            BeepPlayer.shared.play(pcm16: data)
-        } else {
-            audio.enqueuePlayback(pcm16: data)
-        }
     }
 
     private func onRealtimeReady() {

@@ -20,7 +20,8 @@ Projet personnel, installé hors App Store en signature de développement.
   arrêt prolongé, sommet, descente raide, dérive de fatigue, objectif atteint.
 - Objectif de séance (durée, distance ou libre) fixé avant de partir, dicté en langage naturel ou par boutons ; en cours
   de route, Jeffrey peut le changer après ton accord à l'oral, rien à toucher sur le téléphone.
-- Chronomètre piloté par Jeffrey (blocs, fractionné travail/récup) : l'app sonne et le prévient, il n'a jamais à compter.
+- Chronomètre piloté par Jeffrey (blocs, fractionné travail/récup) : il annonce « 30 secondes », « 10 secondes »,
+  puis l'action suivante à zéro ; la montre vibre et sonne. L'app le prévient, il n'a jamais à compter.
 - La montre, écran de Jeffrey : à droite du direct, une page « stats » (temps par zone cardiaque, FC et moyenne, kcal,
   vitesse ou allure moyenne selon le sport). Et des scènes plein écran qui prennent la main d'elles-mêmes : anneau de
   compte à rebours (« dans 30 secondes tu marches »), fractionné effort/récup avec la répétition en cours, montée

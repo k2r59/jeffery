@@ -71,7 +71,6 @@
 		C7908D583D26CC144A48A6B9 /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5679A20688F985B95732882B /* ActivityMonitor.swift */; };
 		C899428C5426D7A8690625AB /* JeffreyMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C633A224C23AEA7E5F906EE0 /* JeffreyMemory.swift */; };
 		CB08DD05ED173449299454B6 /* WatchCoachWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A49963EB0372F4358D8E1722 /* WatchCoachWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		D3E9191F7BC99494DF29BA20 /* BeepPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */; };
 		D92E5FFAD3BD3DD8928830B7 /* JIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE502A3667A6B0DBE968AE84 /* JIcon.swift */; };
 		E26AB3EAECF37CF14F030331 /* VoicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = D501B5BC019DE9395044ADA3 /* VoicePreview.swift */; };
 		E82550A98E525C664B168E43 /* DeveloperFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AE0E78538EB40DB1DE2E09 /* DeveloperFeedback.swift */; };
@@ -165,7 +164,6 @@
 		4258493F240A344A20E69581 /* WorkoutLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLibrary.swift; sourceTree = "<group>"; };
 		474EEACB50F315D0D866388C /* WatchCoach-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "WatchCoach-Bridging-Header.h"; sourceTree = "<group>"; };
 		4858AFABA3B0FDA2DC7F077B /* WatchCoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCoachApp.swift; sourceTree = "<group>"; };
-		4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeepPlayer.swift; sourceTree = "<group>"; };
 		50D4AA1667A3275F3D77C3C7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		52A82CCD5D6A35897EA2DA91 /* ObjCExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ObjCExceptionCatcher.h; sourceTree = "<group>"; };
 		5417E0D16E3AE64DB6CF826D /* SetupState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupState.swift; sourceTree = "<group>"; };
@@ -297,7 +295,6 @@
 				E062557903F7829899F6BCFE /* AppleVoice.swift */,
 				3E1F94AF9504750D0AC84335 /* Assets.xcassets */,
 				D1EC5CB9BAAA863B3ADE5C28 /* AudioPipeline.swift */,
-				4D5A408133F8CBD2BD0565AA /* BeepPlayer.swift */,
 				A2097E145A239323A219EBC1 /* CoachConfig.swift */,
 				FAB112F058BBADDA9A8B2F7C /* CoachSession.swift */,
 				F5AB293DEF66C1989E86B75F /* DebugFakes.swift */,
@@ -638,7 +635,6 @@
 				772ACAD98DE635F44F081D8D /* AppleCoachLink.swift in Sources */,
 				386E28887225C03332FE61BB /* AppleVoice.swift in Sources */,
 				509C76BD84E7D18BBD014B3F /* AudioPipeline.swift in Sources */,
-				D3E9191F7BC99494DF29BA20 /* BeepPlayer.swift in Sources */,
 				3C0DA67E865FD64FA0A8BBC6 /* CoachConfig.swift in Sources */,
 				82C1230E51C0C277FC02F078 /* CoachSession.swift in Sources */,
 				FE39D07F4536F0D9A40ECACB /* DebugFakes.swift in Sources */,
