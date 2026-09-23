@@ -21,6 +21,16 @@ struct SessionsView: View {
         }
     }
     @State private var pending: Deletion?
+    /// Mode sélection : cases à cocher sur chaque ligne, « Tout sélectionner » et suppression groupée.
+    @State private var selecting = false
+    @State private var selectedWorkouts: Set<UUID> = []
+    @State private var selectedCoached: Set<String> = []
+    @State private var confirmBulk = false
+
+    private var selectedCount: Int { selectedWorkouts.count + selectedCoached.count }
+    private var allSelected: Bool {
+        selectedWorkouts.count == visibleWorkouts.count && selectedCoached.count == orphanCoached.count && selectedCount > 0
+    }
 
     /// Séances coachées par Jeffrey qui ne sont pas (ou plus) visibles dans Santé : elles restent listées,
     /// pour que l'historique ne disparaisse jamais si l'accès à Santé est coupé.
@@ -62,10 +72,38 @@ struct SessionsView: View {
                         JeffreyHeader()
                         Text("Tes séances").font(.display(30, weight: .black)).foregroundStyle(.white)
                         HStack {
-                            Text("On construit le rythme.").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+                            Text(selecting ? "\(selectedCount) sélectionnée\(selectedCount > 1 ? "s" : "")" : "On construit le rythme.")
+                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(selecting ? Theme.lime : Theme.muted)
                             Spacer()
-                            Text("\(weekCount.0) séance\(weekCount.0 > 1 ? "s" : "") · \(Formatters.distance(weekCount.1))")
-                                .font(.system(size: 12, weight: .bold).monospacedDigit()).foregroundStyle(Theme.muted)
+                            if selecting {
+                                Button(allSelected ? "Tout désélectionner" : "Tout sélectionner") { toggleAll() }
+                                    .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.creme)
+                            } else {
+                                Text("\(weekCount.0) séance\(weekCount.0 > 1 ? "s" : "") · \(Formatters.distance(weekCount.1))")
+                                    .font(.system(size: 12, weight: .bold).monospacedDigit()).foregroundStyle(Theme.muted)
+                            }
+                        }
+                        if !visibleWorkouts.isEmpty || !orphanCoached.isEmpty {
+                            HStack(spacing: 10) {
+                                Button(selecting ? "Terminer" : "Sélectionner") {
+                                    withAnimation(.snappy) { selecting.toggle(); selectedWorkouts = []; selectedCoached = [] }
+                                }
+                                .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.creme)
+                                .padding(.horizontal, 14).frame(height: 34)
+                                .background(Capsule().fill(Theme.surfaceRaised))
+                                .accessibilityIdentifier("Sélectionner")
+                                if selecting, selectedCount > 0 {
+                                    Button { confirmBulk = true } label: {
+                                        HStack(spacing: 6) { JIcon("fermer", size: 13); Text("Supprimer (\(selectedCount))") }
+                                            .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.alerte)
+                                            .padding(.horizontal, 14).frame(height: 34)
+                                            .background(Capsule().fill(Theme.alerte.opacity(0.14)))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("Supprimer la sélection")
+                                }
+                                Spacer()
+                            }
                         }
                         if visibleWorkouts.isEmpty, orphanCoached.isEmpty {
                             Text(history.isLoading ? "Lecture de Santé…" : "Aucune séance sur les 90 derniers jours.")
@@ -78,7 +116,14 @@ struct SessionsView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Avec Jeffrey").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
                                 ForEach(orphanCoached) { s in
-                                    SwipeToDelete { pending = .coached(s) } content: { coachedRow(s) }
+                                    if selecting {
+                                        Button { toggle(coached: s.id) } label: {
+                                            selectable(selectedCoached.contains(s.id)) { coachedRow(s) }
+                                        }
+                                        .buttonStyle(.plain)
+                                    } else {
+                                        SwipeToDelete { pending = .coached(s) } content: { coachedRow(s) }
+                                    }
                                 }
                             }
                         }
@@ -86,9 +131,16 @@ struct SessionsView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(title).font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
                                 ForEach(items, id: \.uuid) { w in
-                                    SwipeToDelete { pending = .workout(w) } content: {
-                                        NavigationLink { RedoRouteView(workout: w, history: history) } label: { row(w) }
-                                            .buttonStyle(.plain)
+                                    if selecting {
+                                        Button { toggle(workout: w.uuid) } label: {
+                                            selectable(selectedWorkouts.contains(w.uuid)) { row(w) }
+                                        }
+                                        .buttonStyle(.plain)
+                                    } else {
+                                        SwipeToDelete { pending = .workout(w) } content: {
+                                            NavigationLink { RedoRouteView(workout: w, history: history) } label: { row(w) }
+                                                .buttonStyle(.plain)
+                                        }
                                     }
                                 }
                             }
@@ -100,6 +152,12 @@ struct SessionsView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await history.load() }
+            .confirmationDialog("Supprimer \(selectedCount) séance\(selectedCount > 1 ? "s" : "") ?", isPresented: $confirmBulk, titleVisibility: .visible) {
+                Button("Supprimer", role: .destructive) { removeSelection() }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Leurs bilans et tracés seront effacés. Les séances venues de l'app Exercice disparaissent de cette liste mais restent dans Santé.")
+            }
             .confirmationDialog("Supprimer cette séance ?",
                                 isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
                                 titleVisibility: .visible) {
@@ -121,27 +179,67 @@ struct SessionsView: View {
         }
     }
 
+    /// Ligne en mode sélection : une pastille à gauche, cochée ou non.
+    private func selectable<Content: View>(_ isOn: Bool, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle().strokeBorder(isOn ? Theme.lime : Theme.muted, lineWidth: 2).frame(width: 22, height: 22)
+                if isOn { Circle().fill(Theme.lime).frame(width: 13, height: 13) }
+            }
+            content()
+        }
+    }
+
+    private func toggle(workout id: UUID) {
+        if selectedWorkouts.contains(id) { selectedWorkouts.remove(id) } else { selectedWorkouts.insert(id) }
+    }
+
+    private func toggle(coached id: String) {
+        if selectedCoached.contains(id) { selectedCoached.remove(id) } else { selectedCoached.insert(id) }
+    }
+
+    private func toggleAll() {
+        if allSelected {
+            selectedWorkouts = []; selectedCoached = []
+        } else {
+            selectedWorkouts = Set(visibleWorkouts.map(\.uuid))
+            selectedCoached = Set(orphanCoached.map(\.id))
+        }
+    }
+
+    /// Supprime tout ce qui est coché, d'un coup.
+    private func removeSelection() {
+        for w in visibleWorkouts where selectedWorkouts.contains(w.uuid) { remove(w, reload: false) }
+        for s in orphanCoached where selectedCoached.contains(s.id) { removeCoached(s, reload: false) }
+        hidden = HiddenWorkouts.ids
+        coached = SessionSummary.loadAll()
+        selectedWorkouts = []; selectedCoached = []
+        withAnimation(.snappy) { selecting = false }
+    }
+
     /// Retire une séance de Santé de la liste de Jeffrey : bilan et tracé effacés, la séance reste dans Santé.
-    private func remove(_ workout: HKWorkout?) {
+    private func remove(_ workout: HKWorkout?, reload: Bool = true) {
         guard let workout else { return }
-        defer { pending = nil }
+        defer { if reload { pending = nil } }
         if let s = SessionSummary.matching(start: workout.startDate, end: workout.endDate, in: coached) {
             SessionSummary.delete(id: s.id)
             if let route = LocalRoute.matching(start: workout.startDate, end: workout.endDate) { LocalRoute.delete(id: route.id) }
         }
         HiddenWorkouts.hide(workout.uuid.uuidString)
-        hidden = HiddenWorkouts.ids
-        coached = SessionSummary.loadAll()
+        if reload {
+            hidden = HiddenWorkouts.ids
+            coached = SessionSummary.loadAll()
+        }
     }
 
-    private func removeCoached(_ summary: SessionSummary?) {
+    private func removeCoached(_ summary: SessionSummary?, reload: Bool = true) {
         guard let summary else { return }
-        defer { pending = nil }
+        defer { if reload { pending = nil } }
         SessionSummary.delete(id: summary.id)
         if let route = LocalRoute.matching(start: summary.date, end: summary.date.addingTimeInterval(summary.elapsed + 60)) {
             LocalRoute.delete(id: route.id)
         }
-        coached = SessionSummary.loadAll()
+        if reload { coached = SessionSummary.loadAll() }
     }
 
     /// Santé ne renvoie rien : souvent l'autorisation de lecture a été coupée (réinstallation de l'app).

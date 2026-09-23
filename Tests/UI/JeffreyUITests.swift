@@ -186,4 +186,21 @@ extension JeffreyUITests {
         expectConfirmation("Supprimer cette séance ?")
         screenshot("16-seance-confirmation")
     }
+
+    func testSelectAllAndBulkDelete() {
+        app.launchArguments += ["-pref.onboarded", "YES", "-pref.setupVersion", "2", "-pref.userName", "Test"]
+        app.launchEnvironment["WATCHCOACH_SEED_SESSIONS"] = "1"
+        app.launch()
+        app.tabBars.buttons["Séances"].tap()
+        let select = app.buttons["Sélectionner"]
+        XCTAssertTrue(select.waitForExistence(timeout: 5))
+        select.tap()
+        app.buttons["Tout sélectionner"].tap()
+        let bulk = app.buttons["Supprimer la sélection"]
+        XCTAssertTrue(bulk.waitForExistence(timeout: 3))
+        screenshot("17-selection")
+        bulk.tap()
+        expectConfirmation("Supprimer 4 séances ?")
+        screenshot("18-selection-confirmation")
+    }
 }
