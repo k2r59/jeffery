@@ -113,9 +113,6 @@ final class WorkoutManager: NSObject, ObservableObject {
             HKQuantityType(.distanceWalkingRunning),
             HKQuantityType(.distanceCycling),
             HKQuantityType(.runningSpeed),
-            HKQuantityType(.runningGroundContactTime),
-            HKQuantityType(.runningVerticalOscillation),
-            HKQuantityType(.runningStrideLength),
             HKObjectType.workoutType(),
         ]
         let share: Set<HKSampleType> = [
@@ -317,10 +314,8 @@ final class WorkoutManager: NSObject, ObservableObject {
             HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-5), end: nil, options: []),
             HKQuery.predicateForObjects(from: Set([HKDevice.local()])),
         ])
-        // Les trois dernières ne sont écrites qu'en course : elles servent de preuve de foulée courue.
         var types: [HKQuantityType] = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned),
-                                       HKQuantityType(.runningSpeed), HKQuantityType(.runningGroundContactTime),
-                                       HKQuantityType(.runningVerticalOscillation)]
+                                       HKQuantityType(.runningSpeed)]
         if let d = kind.distanceType { types.append(d) }
         for type in types {
             let query = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: nil, limit: HKObjectQueryNoLimit) { [weak self] _, samples, _, _, _ in
@@ -367,12 +362,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             case HKQuantityType(.runningSpeed):
                 if let latest {
                     snap.speed = latest.quantity.doubleValue(for: .meter().unitDivided(by: .second()))
-                    snap.runningMetricAt = latest.endDate
                 }
-            case HKQuantityType(.runningGroundContactTime), HKQuantityType(.runningVerticalOscillation),
-                 HKQuantityType(.runningStrideLength):
-                // watchOS ne calcule ces métriques que pendant une foulée courue.
-                if let latest { snap.runningMetricAt = latest.endDate }
             default:
                 // distance (marche/course ou vélo)
                 self.companionDistance += fresh.reduce(0) { $0 + $1.quantity.doubleValue(for: .meter()) }
@@ -640,10 +630,6 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
                     snap.distance = stats.sumQuantity()?.doubleValue(for: .meter())
                 case HKQuantityType(.runningSpeed):
                     snap.speed = stats.mostRecentQuantity()?.doubleValue(for: .meter().unitDivided(by: .second()))
-                    if snap.speed != nil { snap.runningMetricAt = Date() }
-                case HKQuantityType(.runningGroundContactTime), HKQuantityType(.runningVerticalOscillation),
-                     HKQuantityType(.runningStrideLength):
-                    if stats.mostRecentQuantity() != nil { snap.runningMetricAt = Date() }
                 default:
                     continue
                 }

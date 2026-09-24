@@ -90,9 +90,6 @@ struct MetricsSnapshot: Codable, Equatable {
     var activeEnergy: Double?   // kcal cumulées
     var distance: Double?       // mètres cumulés
     var speed: Double?          // m/s instantané (runningSpeed) si dispo
-    /// Date de la dernière métrique que watchOS ne calcule QUE pendant une foulée courue (vitesse de course,
-    /// temps de contact au sol, oscillation verticale, puissance). Sa fraîcheur prouve la course.
-    var runningMetricAt: Date?
     var mode: CaptureMode
     var kind: WorkoutKind
     var state: SessionState

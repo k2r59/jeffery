@@ -392,11 +392,10 @@ private struct RemindMeTool: Tool {
     let bridge: AppleCoachLink.Bridge
     @Generable struct Arguments {
         @Guide(description: "Délai en secondes, de 5 à 3600") var seconds: Int
-        @Guide(description: "any pour un simple délai, sinon walking, running ou stationary : le décompte ne tourne que dans cette activité", .anyOf(["any", "walking", "running", "stationary"])) var while_activity: String
         @Guide(description: "Ce que tu diras au déclenchement, en quelques mots") var reason: String
     }
     func call(arguments a: Arguments) async throws -> String {
-        await bridge.call(name, ["seconds": a.seconds, "while_activity": a.while_activity, "reason": a.reason])
+        await bridge.call(name, ["seconds": a.seconds, "reason": a.reason])
     }
 }
 

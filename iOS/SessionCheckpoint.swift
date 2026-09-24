@@ -40,8 +40,6 @@ struct SessionCheckpoint: Codable, Equatable {
     var timer: TimerState?
     var plan: PlanState?
     var routeID: String?
-    var walkingSeconds: TimeInterval
-    var runningSeconds: TimeInterval
     var stationarySeconds: TimeInterval
     var climbingSeconds: TimeInterval
     var ascent: Double

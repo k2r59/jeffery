@@ -157,7 +157,7 @@ final class SessionCheckpointTests: XCTestCase {
             timer: .init(label: "échauffement 1/3", baseLabel: "échauffement", index: 1, endsAt: savedAt.addingTimeInterval(60),
                          workSeconds: 300, restSeconds: 0, repeatsLeft: 1, phaseIsWork: true),
             plan: .init(title: "Reprise douce", queue: [WorkoutBlock(label: "footing", seconds: 600)], total: 3, index: 1),
-            routeID: "2026-09-19T09-10-00Z", walkingSeconds: 30, runningSeconds: 380, stationarySeconds: 10, climbingSeconds: 45,
+            routeID: "2026-09-19T09-10-00Z", stationarySeconds: 10, climbingSeconds: 45,
             ascent: 12, descent: 3)
     }
 

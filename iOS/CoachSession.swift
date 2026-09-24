@@ -166,8 +166,6 @@ final class CoachSession: ObservableObject {
     /// Rappel demandé à l'oral (outil `remind_me`) : « préviens-moi dans 5 min », « dis-moi quand ça fait 30 s que je marche ».
     private struct Reminder {
         let seconds: TimeInterval
-        /// Activité à tenir sans interruption ; `nil` pour un simple délai.
-        let activity: ActivityMonitor.Activity?
         let reason: String
         let createdAt: Date
     }
@@ -236,35 +234,15 @@ final class CoachSession: ObservableObject {
         phase = .idle
     }
 
-    /// Marche, course, arrêt, montée, descente : Jeffrey réagit, avec au plus une réaction toutes les 30 s.
+    /// Arrêt, reprise, montée, descente : Jeffrey réagit, avec au plus une réaction toutes les 30 s.
     private func handle(activityEvent event: ActivityMonitor.Event) {
         guard phase == .live, config.autoCues, !isPaused else { return }
         let now = Date()
         guard now.timeIntervalSince(lastEventCueAt) >= 30 else { return }
         let reason: String
         switch event {
-        case .activity(let from, let to):
-            switch (from, to) {
-            case (.running, .walking):
-                if activity.terrain == .climb {
-                    struggleAnnouncedForClimb = true
-                    reason = "il passe à la marche dans la montée : c'est dur, soutiens-le, marcher est un bon choix, propose de repartir en haut"
-                } else {
-                    reason = "il vient de passer de la course à la marche (pause marchée ou fatigue ?) : accompagne sans juger, propose de repartir quand il veut"
-                }
-            case (.walking, .running):
-                // Pas de « c'est bien, garde ça » quatre secondes après le départ : on attend que les données bougent.
-                let token = sessionToken
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: 25_000_000_000)
-                    guard let self, self.sessionToken == token, self.phase == .live, self.activity.activity == .running else { return }
-                    self.cue(reason: "il court depuis 25 s après une reprise : un mot sur ce que disent les données maintenant (FC, allure), pas de bravo réflexe")
-                }
-                return
-            case (_, .stationary): return // annoncé seulement si l'arrêt dure
-            case (.stationary, .running), (.stationary, .walking): reason = "il repart après un arrêt"
-            default: reason = "activité détectée : \(to.label) (avant : \(from.label))"
-            }
+        case .resumed:
+            reason = "il repart après un arrêt"
         case .terrain(let from, let to):
             let g = activity.grade ?? 0
             switch to {
@@ -782,8 +760,7 @@ final class CoachSession: ObservableObject {
             lastCoachLine: transcript.last(where: { $0.role == .coach })?.text,
             zoneCounts: HeartRateZone.allCases.map { z in hrSamples.filter { HeartRateZone.zone(for: $0, maxHR: config.maxHR) == z }.count },
             transcriptExcerpt: transcript.filter { $0.role != .info }.suffix(80).map { ($0.role == .user ? "Lui : " : "Jeffrey : ") + $0.text },
-            walkingSeconds: activity.secondsByActivity[.walking], runningSeconds: activity.secondsByActivity[.running],
-            stationarySeconds: activity.secondsByActivity[.stationary], ascent: activity.ascent, descent: activity.descent,
+            stationarySeconds: activity.secondsStationary, ascent: activity.ascent, descent: activity.descent,
             climbingSeconds: activity.secondsClimbing)
     }
 
@@ -806,8 +783,7 @@ final class CoachSession: ObservableObject {
             transcript: transcript.map { .init(role: $0.role.rawValue, text: $0.text, at: $0.at) },
             hrSamples: hrSamples, zoneSeconds: zoneSeconds, lastKmAnnounced: lastKmAnnounced,
             timer: timer, plan: plan, routeID: gps.routeID,
-            walkingSeconds: activity.secondsByActivity[.walking] ?? 0, runningSeconds: activity.secondsByActivity[.running] ?? 0,
-            stationarySeconds: activity.secondsByActivity[.stationary] ?? 0, climbingSeconds: activity.secondsClimbing,
+            stationarySeconds: activity.secondsStationary, climbingSeconds: activity.secondsClimbing,
             ascent: activity.ascent, descent: activity.descent
         ).save()
         writeSessionJournal()
@@ -892,7 +868,7 @@ final class CoachSession: ObservableObject {
         sentenceBuffer = ""; textResponseBuffer = ""
         gps.start(kind: kind, resuming: c.routeID)
         activity.start()
-        activity.restore(walking: c.walkingSeconds, running: c.runningSeconds, stationary: c.stationarySeconds,
+        activity.restore(stationary: c.stationarySeconds,
                          climbing: c.climbingSeconds, ascent: c.ascent, descent: c.descent)
         if let ref = ReferenceRoute.load() {
             referenceTracker = ReferenceTracker(route: ref)
@@ -1101,7 +1077,7 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "get_time",
-                "description": "Les valeurs exactes de l'instant, à lire telles quelles : temps écoulé, cœur (bpm et zone), allure, distance, calories, pente, restant sur l'objectif, chrono, depuis combien de temps il marche ou court. À appeler à CHAQUE demande de chiffre (« mon allure ? », « ma fréquence ? », « combien de temps ? », « il me reste combien ? »). Ne cite jamais un chiffre de mémoire.",
+                "description": "Les valeurs exactes de l'instant, à lire telles quelles : temps écoulé, cœur (bpm et zone), allure, distance, calories, pente, restant sur l'objectif, chrono, temps passé dans chaque zone cardiaque. À appeler à CHAQUE demande de chiffre (« mon allure ? », « ma fréquence ? », « combien de temps ? », « il me reste combien ? »). Ne cite jamais un chiffre de mémoire.",
                 "parameters": ["type": "object", "properties": [:]],
             ], [
                 "type": "function",
@@ -1163,15 +1139,14 @@ final class CoachSession: ObservableObject {
             ], [
                 "type": "function",
                 "name": "remind_me",
-                "description": "Rappel unique : « préviens-moi dans 5 minutes », « dis-moi quand ça fait 30 secondes que je marche ». L'app compte (le décompte ne tourne que pendant l'activité visée et repart de zéro s'il en change) et te relance à l'échéance. Confirme en une phrase, puis n'annonce rien avant d'être relancé. Pour un bloc d'effort avec bip, préfère start_timer.",
+                "description": "Rappel unique : « préviens-moi dans 5 minutes ». L'app compte et te relance à l'échéance. Confirme en une phrase, puis n'annonce rien avant d'être relancé. Pour un bloc d'effort avec bip, préfère start_timer.",
                 "parameters": [
                     "type": "object",
                     "properties": [
                         "seconds": ["type": "integer", "description": "Délai, de 5 à 3600 s"],
-                        "while_activity": ["type": "string", "enum": ["any", "walking", "running", "stationary"], "description": "any pour un simple délai ; sinon le décompte ne tourne que tant qu'il est dans cette activité"],
                         "reason": ["type": "string", "description": "Ce que tu diras au déclenchement, en quelques mots"],
                     ],
-                    "required": ["seconds", "while_activity", "reason"],
+                    "required": ["seconds", "reason"],
                 ],
             ]],
             "tool_choice": "auto",
@@ -1379,16 +1354,12 @@ final class CoachSession: ObservableObject {
         }
         if name == "remind_me" {
             let seconds = min(3600, max(5, (json["seconds"] as? Int) ?? Int((json["seconds"] as? Double) ?? 60)))
-            let raw = json["while_activity"] as? String ?? "any"
-            let target: ActivityMonitor.Activity? = raw == "any" ? nil : ActivityMonitor.Activity(rawValue: raw)
             let reason = (json["reason"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            reminders.append(Reminder(seconds: TimeInterval(seconds), activity: target, reason: reason.isEmpty ? "rappel demandé" : reason, createdAt: Date()))
-            let scope = target.map { " tant qu'il est en \($0.label)" } ?? ""
-            log(.info, "Rappel dans \(seconds) s\(scope) : \(reason)")
+            reminders.append(Reminder(seconds: TimeInterval(seconds), reason: reason.isEmpty ? "rappel demandé" : reason, createdAt: Date()))
+            log(.info, "Rappel dans \(seconds) s : \(reason)")
             var out = timeStatus()
             out["scheduled"] = true
             out["seconds"] = seconds
-            out["while_activity"] = raw
             realtime.sendFunctionOutput(callId: callId, output: out)
             return
         }
@@ -1485,6 +1456,10 @@ final class CoachSession: ObservableObject {
             out["heart_rate_bpm"] = Int(hr)
             out["zone"] = HeartRateZone.zone(for: hr, maxHR: config.maxHR).label
         }
+        let zoneTotal = zoneSeconds.reduce(0, +)
+        if zoneTotal >= 60 {
+            out["time_in_zones"] = zoneSeconds.enumerated().map { "zone \($0.offset + 1) : \($0.element * 100 / zoneTotal) %" }.joined(separator: ", ")
+        }
         if let sec = currentPaceSecPerKm, let p = Formatters.spokenPace(secondsPerKm: sec) { out["pace"] = p }
         else if let p = pace { out["pace"] = p }
         if let d = displayDistance { out["distance"] = Formatters.spokenDistance(d) }
@@ -1505,15 +1480,13 @@ final class CoachSession: ObservableObject {
             out["workout_step"] = planStep ?? ""
             if let next = planQueue.first { out["workout_next_block"] = next.summary }
         }
-        if activity.activity != .unknown {
-            out["activity"] = activity.activity.rawValue
-            out["activity_held_seconds"] = Int(Date().timeIntervalSince(activity.activitySince))
+        if activity.activity == .stationary {
+            out["stopped_seconds"] = Int(Date().timeIntervalSince(activity.activitySince))
         }
         if !reminders.isEmpty {
             let now = Date()
             out["reminders"] = reminders.map { r -> [String: Any] in
-                ["reason": r.reason, "while_activity": r.activity?.rawValue ?? "any",
-                 "remaining_seconds": Int(max(0, r.seconds - heldSeconds(for: r, at: now)))]
+                ["reason": r.reason, "remaining_seconds": Int(max(0, r.seconds - now.timeIntervalSince(r.createdAt)))]
             }
         }
         return out
@@ -1521,18 +1494,11 @@ final class CoachSession: ObservableObject {
 
     // MARK: - Rappels demandés à l'oral
 
-    /// Temps déjà tenu : depuis la demande, ou depuis le début de l'activité visée si elle a commencé après.
-    private func heldSeconds(for r: Reminder, at now: Date) -> TimeInterval {
-        guard let target = r.activity else { return now.timeIntervalSince(r.createdAt) }
-        guard activity.activity == target else { return 0 }
-        return now.timeIntervalSince(max(activity.activitySince, r.createdAt))
-    }
-
     /// Chaque seconde : un rappel échu relance Jeffrey (en priorité, rejoué si quelqu'un parle).
     private func checkReminders() {
         guard phase == .live, !reminders.isEmpty, !isPaused else { return }
         let now = Date()
-        for index in reminders.indices.reversed() where heldSeconds(for: reminders[index], at: now) >= reminders[index].seconds {
+        for index in reminders.indices.reversed() where now.timeIntervalSince(reminders[index].createdAt) >= reminders[index].seconds {
             let r = reminders.remove(at: index)
             log(.info, "Rappel : \(r.reason)")
             realtime.injectText("[RAPPEL] échéance demandée par l'utilisateur : \(r.reason). " + metricsLine(prefix: "[MÉTRIQUES]"))
@@ -1556,7 +1522,7 @@ final class CoachSession: ObservableObject {
         planTotal = w.blocks.count
         planIndex = 0
         if goal.kind == .free {
-            goal = SessionGoal(kind: .duration, target: Double(w.totalSeconds), note: w.title)
+            goal = SessionGoal(kind: .duration, target: Double(w.totalSeconds), note: w.title, startElapsed: liveElapsed())
             goalReached = false
             halfwayAnnounced = false
         }
@@ -1908,8 +1874,6 @@ final class CoachSession: ObservableObject {
             distanceHistory.removeAll { snap.timestamp.timeIntervalSince($0.0) > 45 }
         }
         pace = computePace(snap)
-        // Métrique que watchOS ne calcule qu'en course : preuve directe d'une foulée courue.
-        if let at = snap.runningMetricAt, Date().timeIntervalSince(at) < 15 { activity.noteWatchRunningMetric() }
         if let hr = snap.heartRate, snap.state == .running {
             hrSamples.append(hr)
             let now = snap.timestamp
@@ -2165,7 +2129,7 @@ final class CoachSession: ObservableObject {
             let xs = h.filter { let a = now.timeIntervalSince($0.0); return a >= to && a <= from }.map(\.1)
             return xs.isEmpty ? nil : xs.reduce(0, +) / Double(xs.count)
         }
-        // Galère en montée : FC qui grimpe vite ou déjà très haute, allure ou cadence qui s'effondrent.
+        // Galère en montée : FC déjà très haute, ou qui grimpe vite pendant que l'allure s'effondre.
         if activity.terrain == .climb, !struggleAnnouncedForClimb, now.timeIntervalSince(activity.terrainSince) >= 20,
            now.timeIntervalSince(lastEventCueAt) >= 30 {
             let hrNow = avg(hrHistory, from: 15, to: 0)
@@ -2175,11 +2139,10 @@ final class CoachSession: ObservableObject {
             let hrRising = (hrNow ?? 0) - (hrBefore ?? hrNow ?? 0) >= 8
             let hrHigh = hrNow.map { HeartRateZone.zone(for: $0, maxHR: config.maxHR).rawValue >= 5 } ?? false
             let slowing = (vNow ?? 1) < (vBefore ?? 0) * 0.7 && (vBefore ?? 0) > 1
-            let cadenceDrop = activity.activity == .running && (activity.cadence ?? 999) < activity.typicalRunningCadence * 0.92
-            if (hrRising && (slowing || cadenceDrop)) || hrHigh || (slowing && cadenceDrop) {
+            if (hrRising && slowing) || hrHigh {
                 struggleAnnouncedForClimb = true
                 lastEventCueAt = now
-                let detail = [hrHigh ? "FC en zone 5" : (hrRising ? "FC qui grimpe" : nil), slowing ? "allure qui chute" : nil, cadenceDrop ? "cadence qui tombe" : nil].compactMap { $0 }.joined(separator: ", ")
+                let detail = [hrHigh ? "FC en zone 5" : (hrRising ? "FC qui grimpe" : nil), slowing ? "allure qui chute" : nil].compactMap { $0 }.joined(separator: ", ")
                 cue(reason: "il galère dans la montée (\(detail)) : soutiens-le concrètement, foulée courte, bras, regard, autoriser à marcher si besoin")
                 return
             }

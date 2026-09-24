@@ -24,6 +24,8 @@ struct SessionGoal: Codable, Equatable {
     var kind: Kind
     var target: Double      // secondes ou mètres selon le type
     var note: String = ""
+    /// Temps de séance au moment où l'objectif démarre : un programme lancé à 0:49 se compte à partir de 0:49.
+    var startElapsed: TimeInterval = 0
 
     static let free = SessionGoal(kind: .free, target: 0)
 
@@ -55,8 +57,8 @@ struct SessionGoal: Codable, Equatable {
     func progress(elapsed: TimeInterval, distance: Double?) -> (fraction: Double, remaining: String?) {
         switch kind {
         case .duration:
-            let rem = max(0, target - elapsed)
-            return (min(1, elapsed / max(1, target)), Formatters.elapsed(rem) + " restantes")
+            let e = max(0, elapsed - startElapsed)
+            return (min(1, e / max(1, target)), Formatters.elapsed(max(0, target - e)) + " restantes")
         case .distance:
             let d = distance ?? 0
             let rem = max(0, target - d)
@@ -68,7 +70,7 @@ struct SessionGoal: Codable, Equatable {
 
     func isReached(elapsed: TimeInterval, distance: Double?) -> Bool {
         switch kind {
-        case .duration: return elapsed >= target
+        case .duration: return elapsed - startElapsed >= target
         case .distance: return (distance ?? 0) >= target
         case .free: return false
         }

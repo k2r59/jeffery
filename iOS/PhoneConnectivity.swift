@@ -12,12 +12,11 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     /// Dernier signe de vie de l'app montre (ping quand elle est ouverte, ou instantané de séance).
     @Published private(set) var lastWatchSeenAt: Date = .distantPast
 
-    /// Source de vérité unique « montre connectée » : l'app montre tourne et parle à l'iPhone (joignable au sens d'Apple,
-    /// ou ping/instantané depuis moins de 20 s). Écran éteint, l'app montre reste éveillée grâce à sa veille active ;
-    /// sinon elle est suspendue et l'état retombe à « déconnectée » de lui-même (minuterie). Une sonde transferUserInfo
-    /// dit en plus si la montre est à portée Bluetooth (livraison confirmée dès que le paquet l'atteint, app ouverte ou
-    /// non) : ça ne rend pas « connectée », ça précise seulement le conseil affiché. Tant que l'iPhone n'affiche pas
-    /// « Montre connectée », ni lui ni la montre ne peuvent démarrer une séance.
+    /// Source de vérité unique « montre connectée » : la montre est à portée, app ouverte ou endormie (écran éteint).
+    /// App éveillée : joignable au sens d'Apple, ou ping/instantané depuis moins de 20 s. App endormie : une sonde
+    /// transferUserInfo livrée depuis moins de 45 s (livraison confirmée dès que le paquet atteint la montre). Au départ,
+    /// l'iPhone réveille l'app montre (startWatchApp). Tant que l'iPhone n'affiche pas « Montre connectée », ni lui ni la
+    /// montre ne peuvent démarrer une séance.
     @Published private(set) var watchConnected = false
     private static let heartbeatGrace: TimeInterval = 20
     private static let rangeGrace: TimeInterval = 45
@@ -47,8 +46,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     var disconnectedHint: String {
         if !isPaired { return "Aucune Apple Watch jumelée à cet iPhone." }
         if !isWatchAppInstalled { return "Installe Jeffrey sur ta montre pour démarrer." }
-        if watchInRange { return "Ouvre Jeffrey sur ta montre pour démarrer." }
-        return "Montre hors de portée : rapproche-la et ouvre Jeffrey dessus."
+        return "Montre hors de portée : rapproche-la de l'iPhone."
     }
 
     var onSnapshot: ((MetricsSnapshot) -> Void)?
@@ -66,8 +64,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     var watchInRange: Bool { watchAppAwake || Date().timeIntervalSince(lastInRangeAt) < Self.rangeGrace }
 
     private func refreshConnected() {
-        // Strict : connectée = les deux apps ouvertes en même temps (l'app montre tourne et parle à l'iPhone).
-        let now = watchAppAwake
+        let now = watchInRange
         if now != watchConnected {
             watchConnected = now
             logger.notice("montre \(now ? "connectée" : "déconnectée", privacy: .public) — \(self.diagnostic, privacy: .public)")
@@ -83,10 +80,11 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         }
     }
 
-    /// Sonde de portée : seulement quand l'app montre ne donne pas signe de vie, une à la fois, toutes les 15 s.
-    /// Une sonde en attente reste valable : si la montre revient à portée, sa livraison le signalera.
+    /// Sonde de portée : une à la fois, toutes les 15 s, même app montre ouverte, pour que la portée soit déjà connue
+    /// quand l'écran de la montre s'éteint. Une sonde en attente reste valable : si la montre revient à portée, sa
+    /// livraison le signalera.
     private func probeRangeIfNeeded() {
-        guard isPaired, isWatchAppInstalled, !watchAppAwake else { return }
+        guard isPaired, isWatchAppInstalled else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }
         if let probe, probe.isTransferring { return }

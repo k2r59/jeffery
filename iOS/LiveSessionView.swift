@@ -36,7 +36,7 @@ struct LiveSessionView: View {
                         if let label = coach.timerLabel, let end = coach.timerEndsAt { programCard(label, end) }
                         metricsCard
                         jeffreyCard
-                        // Le reste, replié : relief et cadence, parcours de référence, musique.
+                        // Le reste, replié : relief, parcours de référence, musique.
                         Button { withAnimation(.snappy) { showMore.toggle() } } label: {
                             HStack(spacing: 8) {
                                 Text(showMore ? "Moins" : "Relief, parcours, musique").font(.system(size: 13, weight: .semibold)).foregroundStyle(muted)
@@ -156,7 +156,7 @@ struct LiveSessionView: View {
         .background(cardShape(surface))
     }
 
-    /// Relief, activité et cadence (section repliée).
+    /// Relief et arrêt (section repliée).
     private var activityCard: some View {
         let a = coach.activity
         return VStack(spacing: 0) {
@@ -168,11 +168,10 @@ struct LiveSessionView: View {
             }
             .padding(.horizontal, 16).frame(height: 48)
             HStack(spacing: 14) {
-                if a.activity != .unknown {
+                if a.activity == .stationary {
                     HStack(spacing: 6) {
-                        JIcon(a.activity == .running ? "course" : (a.activity == .walking ? "marche" : (a.activity == .cycling ? "velo" : "pause")), size: 14)
+                        JIcon("pause", size: 14)
                         Text(a.activity.label.capitalized)
-                        if let c = a.cadence, c > 0 { Text("· \(Int(c)) pas/min").foregroundStyle(muted) }
                     }
                 }
                 Spacer()
