@@ -270,8 +270,9 @@ final class CoachSession: ObservableObject {
     // MARK: - Démarrage / arrêt
 
     /// La montre est le capteur : sans elle, pas de séance. Même vérité que le badge « Montre connectée » de l'iPhone,
-    /// et même règle pour un départ demandé depuis la montre.
-    var watchReady: Bool { connectivity.isPaired && connectivity.isWatchAppInstalled && connectivity.watchConnected }
+    /// et même règle pour un départ demandé depuis la montre. Pas de relecture de « jumelée » / « app installée » :
+    /// WatchConnectivity peut les laisser périmés après une réinstallation, alors que la montre parle bien à l'iPhone.
+    var watchReady: Bool { connectivity.watchConnected }
 
     func start(kind: WorkoutKind, mode: CaptureMode = .auto, goal: SessionGoal = .free) {
         guard phase == .idle else { return }
@@ -2083,7 +2084,7 @@ final class CoachSession: ObservableObject {
             if km > lastKmAnnounced {
                 let split = lastKmAt.map { now.timeIntervalSince($0.at) }
                 let splitText = split.map { " en \(Formatters.elapsed($0))" } ?? ""
-                if cue(reason: "kilomètre \(km) passé\(splitText) : annonce-le, situe l'allure par rapport à l'objectif ou au ressenti, un mot d'encouragement") {
+                if cue(reason: "kilomètre \(km) passé\(splitText) : point chiffré avec les valeurs de [MÉTRIQUES] telles quelles (temps du kilomètre, temps écoulé, distance, allure, cœur et zone, restant sur l'objectif ; seulement celles qui existent), puis un mot d'encouragement") {
                     lastKmAnnounced = km
                     lastKmAt = (km, now)
                 }
