@@ -13,6 +13,7 @@
 //   POST /admin/users/:id       Bearer <token admin> { role } → { user }
 //
 // Rôles : admin (tout, sans quota) · allowed · pending (demande d'accès à valider) · blocked.
+// Invitation : clé KV invite:<email> → rôle allowed à la connexion (npx wrangler kv key put --remote --binding JEFFREY …).
 
 import { SignJWT, jwtVerify, createRemoteJWKSet } from "jose";
 
@@ -102,6 +103,11 @@ async function authApple(request: Request, env: Env): Promise<Response> {
   if (body.fullName?.trim() && !user.name) user.name = body.fullName.trim();
   if (email && !user.email) user.email = email;
   if (user.email && admins.includes(user.email)) user.role = "admin";
+  // Invitation déposée par l'administrateur (clé KV invite:<email>) : accès ouvert dès la connexion, sans validation.
+  if (user.role === "pending" && user.email && (await env.JEFFREY.get(`invite:${user.email}`))) {
+    user.role = "allowed";
+    await env.JEFFREY.delete(`invite:${user.email}`);
+  }
   user.lastSeenAt = now;
   await putUser(user, env);
 
