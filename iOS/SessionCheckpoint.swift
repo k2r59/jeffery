@@ -36,6 +36,7 @@ struct SessionCheckpoint: Codable, Equatable {
     var hrSamples: [Double]
     var zoneSeconds: [Int]
     var lastKmAnnounced: Int
+    var lastKmElapsed: TimeInterval
     var timer: TimerState?
     var plan: PlanState?
     var routeID: String?

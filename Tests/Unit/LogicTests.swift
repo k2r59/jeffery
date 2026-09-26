@@ -153,7 +153,7 @@ final class SessionCheckpointTests: XCTestCase {
             goalReached: false, halfwayAnnounced: true, startedAt: savedAt.addingTimeInterval(-420), savedAt: savedAt,
             transcript: [.init(role: "coach", text: "Salut Hervé.", at: savedAt.addingTimeInterval(-400)),
                          .init(role: "user", text: "On y va.", at: savedAt.addingTimeInterval(-390))],
-            hrSamples: [120, 130, 140], zoneSeconds: [10, 20, 30, 0, 0], lastKmAnnounced: 1,
+            hrSamples: [120, 130, 140], zoneSeconds: [10, 20, 30, 0, 0], lastKmAnnounced: 1, lastKmElapsed: 400,
             timer: .init(label: "échauffement 1/3", baseLabel: "échauffement", index: 1, endsAt: savedAt.addingTimeInterval(60),
                          workSeconds: 300, restSeconds: 0, repeatsLeft: 1, phaseIsWork: true),
             plan: .init(title: "Reprise douce", queue: [WorkoutBlock(label: "footing", seconds: 600)], total: 3, index: 1),

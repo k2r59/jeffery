@@ -34,6 +34,8 @@ struct Workout: Identifiable, Equatable {
     let blocks: [WorkoutBlock]
 
     var totalSeconds: Int { blocks.reduce(0) { $0 + $1.totalSeconds } }
+    /// Fractionné : au moins un bloc répété (effort / récup).
+    var isInterval: Bool { blocks.contains { $0.repeats > 1 } }
     var summary: String { blocks.map(\.summary).joined(separator: ", ") }
 
     var toolPayload: [String: Any] {

@@ -4,6 +4,7 @@ import UIKit
 import CoreLocation
 import ActivityKit
 import AVFAudio
+import NaturalLanguage
 
 struct TranscriptLine: Identifiable, Equatable {
     enum Role: String { case user, coach, info }
@@ -125,9 +126,22 @@ final class CoachSession: ObservableObject {
     private var fatigueAnnouncedAt: Date = .distantPast
     private var lastCueZone: HeartRateZone?
     private var lastUserSpokeAt: Date = .distantPast
+    /// Dernière question de Jeffrey et dernière phrase retenue de l'utilisateur : un lancement d'exercice ou une fin
+    /// de séance « confirmés » ne passent que s'il a répondu après la question (le modèle ne peut pas s'en dispenser).
+    private var lastQuestionAt: Date = .distantPast
+    private var lastUserLineAt: Date = .distantPast
+    private var answeredLastQuestion: Bool { lastUserLineAt > lastQuestionAt && lastQuestionAt != .distantPast }
     private var lastSpontaneousCueAt: Date = .distantPast
     private var lastKmAnnounced = 0
-    private var lastKmAt: (km: Int, at: Date)?
+    /// Temps de séance au dernier passage kilométrique : le temps du kilomètre se calcule entre deux passages réels.
+    private var lastKmElapsed: TimeInterval = 0
+    /// Chrono en pause : temps restant du bloc en cours, relancé à la reprise.
+    private var pausedTimerRemaining: Int?
+    /// Fin prévue du bloc qui vient de sonner : le bloc suivant part de là, sans dérive cumulée.
+    private var nextPhaseStart: Date?
+    /// Zone 5 : depuis quand il y est, et dernière consigne de redescendre.
+    private var zone5Since: Date?
+    private var zone5WarnedAt: Date = .distantPast
     private var routineTopic = 0
     private let audio = AudioPipeline()
     /// Cerveau de Jeffrey : OpenAI Realtime (compte Jeffrey) ou Apple AI, choisi au départ de chaque séance.
@@ -148,6 +162,18 @@ final class CoachSession: ObservableObject {
     /// Fin demandée à l'oral : on attend la fin de la réponse qui porte l'appel end_session, sinon le mot de fin
     /// se met en file derrière elle et la déconnexion le coupe.
     private var endAfterResponse: String?
+    /// Réponses encore en cours au moment de l'arrêt : le démontage attend le mot de fin, pas leur fin à elles.
+    private var responsesBeforeFarewell = 0
+    /// Liaison montre tracée dans le journal, relue par Tests/Scripts/check-journal.py.
+    private struct WatchTrace {
+        var started = false
+        var firstHeartRate = false
+        var sessionStart: Date?
+        var lastSampleAt: Date?
+        var gapLogged = false
+        var silentLogged = false
+    }
+    private var watchTrace = WatchTrace()
     private var connectTimeoutTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var pendingPriorityCues: [String] = []
@@ -330,7 +356,7 @@ final class CoachSession: ObservableObject {
         hrHistory.removeAll(); speedHistory.removeAll()
         lastUserSpokeAt = .distantPast; lastSpontaneousCueAt = .distantPast
         struggleAnnouncedForClimb = false; climbStartedAt = nil; lastCoachSpokeAt = .distantPast; fatigueAnnouncedAt = .distantPast; lastCueZone = nil
-        lastKmAnnounced = 0; lastKmAt = nil; routineTopic = 0
+        lastKmAnnounced = 0; lastKmElapsed = 0; routineTopic = 0
         // Repart propre : l'instantané de la séance précédente ne doit pas nourrir celle-ci.
         connectivity.reset()
         connectivity.acceptSnapshotsSince = Date().addingTimeInterval(-3)
@@ -358,6 +384,9 @@ final class CoachSession: ObservableObject {
 
         sessionToken = UUID()
         endAfterResponse = nil
+        watchTrace = WatchTrace()
+        lastQuestionAt = .distantPast; lastUserLineAt = .distantPast
+        pausedTimerRemaining = nil; nextPhaseStart = nil; zone5Since = nil; zone5WarnedAt = .distantPast
         localPaused = false
         pendingPriorityCues.removeAll()
         partialCoachLine = nil
@@ -388,7 +417,6 @@ final class CoachSession: ObservableObject {
             self.stop(reason: "coach injoignable après 25 s (\(self.errorMessage ?? ""))")
         }
 
-        // Côté montre : elle décide seule (séance native en cours → elle la suit, sinon elle pilote).
         // App montre éveillée : commande directe (startWatchApp échoue quand l'iPhone est en arrière-plan, cas d'un
         // départ demandé depuis la montre). Sinon on réveille l'app montre, qui lit la commande déposée.
         if connectivity.isReachable {
@@ -671,6 +699,7 @@ final class CoachSession: ObservableObject {
         connectivity.send(command: .end, kind: kind)
         if realtime.isConnected {
             audio.onCapturedPCM16 = nil
+            responsesBeforeFarewell = responseInProgress ? 1 : 0
             realtime.injectText(metricsLine(prefix: "[MÉTRIQUES FINALES]") + "\nLa séance est terminée.")
             realtime.requestResponse(instructions: "La séance est terminée : fais un débrief en 2 phrases max, chaleureux et concret, puis dis au revoir.")
             endTimeoutTask?.cancel()
@@ -700,6 +729,7 @@ final class CoachSession: ObservableObject {
         let command: WatchCommand = isPaused ? .resume : .pause
         localPaused = command == .pause
         log(.info, command == .pause ? "Pause." : "Reprise.")
+        setChronoPaused(localPaused)
         gps.paused = localPaused
         activity.paused = localPaused
         connectivity.send(command: command, kind: kind) { [weak self] error in
@@ -783,7 +813,7 @@ final class CoachSession: ObservableObject {
             kind: kind, goal: goal, goalReached: goalReached, halfwayAnnounced: halfwayAnnounced,
             startedAt: start, savedAt: Date(),
             transcript: transcript.map { .init(role: $0.role.rawValue, text: $0.text, at: $0.at) },
-            hrSamples: hrSamples, zoneSeconds: zoneSeconds, lastKmAnnounced: lastKmAnnounced,
+            hrSamples: hrSamples, zoneSeconds: zoneSeconds, lastKmAnnounced: lastKmAnnounced, lastKmElapsed: lastKmElapsed,
             timer: timer, plan: plan, routeID: gps.routeID,
             stationarySeconds: activity.secondsStationary, climbingSeconds: activity.secondsClimbing,
             ascent: activity.ascent, descent: activity.descent
@@ -824,6 +854,7 @@ final class CoachSession: ObservableObject {
         hrSamples = c.hrSamples
         zoneSeconds = c.zoneSeconds.count == 5 ? c.zoneSeconds : [Int](repeating: 0, count: 5)
         lastKmAnnounced = c.lastKmAnnounced
+        lastKmElapsed = c.lastKmElapsed
         if let p = c.plan {
             planTitle = p.title; planQueue = p.queue; planTotal = p.total; planIndex = p.index; planStep = "bloc \(p.index)/\(p.total)"
         }
@@ -855,7 +886,7 @@ final class CoachSession: ObservableObject {
         hrHistory.removeAll(); speedHistory.removeAll()
         lastUserSpokeAt = .distantPast; lastSpontaneousCueAt = .distantPast; lastEventCueAt = .distantPast
         struggleAnnouncedForClimb = false; climbStartedAt = nil; lastCoachSpokeAt = .distantPast; fatigueAnnouncedAt = .distantPast; lastCueZone = nil
-        lastKmAt = nil; routineTopic = 0
+        routineTopic = 0
         connectivity.reset()
         connectivity.acceptSnapshotsSince = Date().addingTimeInterval(-3)
         connectivity.requestHealthAuthorization()
@@ -881,6 +912,9 @@ final class CoachSession: ObservableObject {
         reference = nil
         sessionToken = UUID()
         endAfterResponse = nil
+        watchTrace = WatchTrace()
+        lastQuestionAt = .distantPast; lastUserLineAt = .distantPast
+        pausedTimerRemaining = nil; nextPhaseStart = nil; zone5Since = nil; zone5WarnedAt = .distantPast
         localPaused = false
         pendingPriorityCues.removeAll()
         partialCoachLine = nil
@@ -1036,7 +1070,7 @@ final class CoachSession: ObservableObject {
             "tools": [[
                 "type": "function",
                 "name": "start_timer",
-                "description": "Chronomètre de l'app : un bloc (« 5 minutes de course »), un bloc suivi d'une récup (seconds + rest_seconds : « 5 min de course puis 2 min de marche »), ou un fractionné (seconds + rest_seconds + repeats : « 1 min de course, 1 min de marche, 8 fois » ; repeats=99 = jusqu'à ce qu'il dise stop). L'app sonne, prévient à 10 s de la fin, te relance à chaque changement et affiche le compte à rebours sur la montre : « affiche le chrono » = cet outil. Tu ne comptes jamais et tu n'annonces jamais un enchaînement que tu n'as pas lancé ici. Un enchaînement en cours ne se remplace qu'après son accord (replace=true). Confirme en une phrase puis n'annonce rien avant d'être relancé.",
+                "description": "Chronomètre de l'app : un bloc (« 5 minutes de course »), un bloc suivi d'une récup (seconds + rest_seconds : « 5 min de course puis 2 min de marche »), ou un fractionné (seconds + rest_seconds + repeats : « 1 min de course, 1 min de marche, 8 fois » ; repeats=99 = jusqu'à ce qu'il dise stop). L'app te fait annoncer « 30 secondes » puis « 10 secondes », fait vibrer la montre, te relance à chaque changement et affiche le compte à rebours sur la montre : « affiche le chrono » = cet outil. Tu ne comptes jamais et tu n'annonces jamais un enchaînement que tu n'as pas lancé ici. Un enchaînement en cours ne se remplace qu'après son accord (replace=true). Confirme en une phrase puis n'annonce rien avant d'être relancé.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -1056,6 +1090,7 @@ final class CoachSession: ObservableObject {
                     "type": "object",
                     "properties": [
                         "level": ["type": "string", "enum": ["beginner", "amateur", "confirmed"], "description": "Niveau voulu ; omis = niveau du profil"],
+                        "type": ["type": "string", "enum": ["fractionné", "continu"], "description": "Seulement s'il l'a demandé : fractionné (répétitions effort / récup) ou continu ; omis = les deux"],
                     ],
                 ],
             ], [
@@ -1242,7 +1277,9 @@ final class CoachSession: ObservableObject {
                     else { self.replayPriorityCues() }
                 } else {
                     self.scheduleSpeakingReset()
-                    if self.phase == .ending { self.scheduleTeardownAfterPlayback() }
+                    if self.phase == .ending {
+                        if self.responsesBeforeFarewell > 0 { self.responsesBeforeFarewell -= 1 } else { self.scheduleTeardownAfterPlayback() }
+                    }
                 }
             }
         }
@@ -1317,6 +1354,12 @@ final class CoachSession: ObservableObject {
 
     private func handleFunctionCall(name: String, callId: String, arguments: String) {
         let json = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8)) as? [String: Any]) ?? [:]
+        // Appel arrivé après l'arrêt (réponse en cours au moment de « terminer ») : plus rien ne se lance.
+        guard phase == .connecting || phase == .live else {
+            log(.info, "Outil \(name) ignoré : séance terminée.")
+            realtime.sendFunctionOutput(callId: callId, output: ["error": "la séance est terminée"], thenRespond: false)
+            return
+        }
         if name == "get_session_log" {
             guard isAdminUser else {
                 realtime.sendFunctionOutput(callId: callId, output: ["error": "réservé à l'administrateur"])
@@ -1329,7 +1372,8 @@ final class CoachSession: ObservableObject {
         if name != "get_time" { log(.info, "Outil \(name)" + (json.isEmpty ? "" : " " + Self.compactArguments(json))) }
         if name == "end_session" {
             let confirmed = (json["confirmed"] as? Bool) ?? false
-            guard confirmed else {
+            guard confirmed, answeredLastQuestion else {
+                if confirmed { log(.info, "Fin refusée : pas de réponse après « Je termine la séance ? ».") }
                 realtime.sendFunctionOutput(callId: callId, output: ["ended": false, "hint": "demande-lui de confirmer en une question, puis rappelle avec confirmed=true"])
                 return
             }
@@ -1400,12 +1444,20 @@ final class CoachSession: ObservableObject {
         }
         if name == "suggest_workouts" {
             let level = (json["level"] as? String).flatMap(AthleteLevel.init(rawValue:)) ?? config.level
+            var pool = WorkoutLibrary.workouts(kind: kind, level: level)
+            if let type = json["type"] as? String {
+                let typed = pool.filter { $0.isInterval == (type == "fractionné") }
+                if typed.count >= 2 { pool = typed }
+            }
             // Deux options différentes à chaque fois (tirage), pour ne pas proposer toujours les deux mêmes.
-            let list = Array(WorkoutLibrary.workouts(kind: kind, level: level).shuffled().prefix(2)).map(\.toolPayload)
+            let list = Array(pool.shuffled().prefix(2)).map(\.toolPayload)
             log(.info, "Séances proposées (\(level.label)) : " + list.compactMap { $0["title"] as? String }.joined(separator: ", "))
-            realtime.sendFunctionOutput(callId: callId, output: [
-                "known_level": config.level.rawValue, "level": level.rawValue, "sport": kind.coachLabel, "workouts": list,
-            ])
+            var out: [String: Any] = ["known_level": config.level.rawValue, "level": level.rawValue, "sport": kind.coachLabel, "workouts": list]
+            if config.level != .confirmed, let zones = SessionSummary.loadAll().first?.zoneCounts, zones.count == 5, zones.reduce(0, +) > 0 {
+                let z5 = zones[4] * 100 / zones.reduce(0, +)
+                if z5 >= 20 { out["last_session_note"] = "dernière séance très intense (\(z5) % du temps en zone 5) : recommande la plus douce des deux et dis pourquoi en une phrase" }
+            }
+            realtime.sendFunctionOutput(callId: callId, output: out)
             return
         }
         if name == "start_workout" {
@@ -1413,7 +1465,8 @@ final class CoachSession: ObservableObject {
                 realtime.sendFunctionOutput(callId: callId, output: ["error": "séance inconnue, rappelle suggest_workouts"])
                 return
             }
-            if json["confirmed"] as? Bool != true {
+            if json["confirmed"] as? Bool != true || !answeredLastQuestion {
+                if json["confirmed"] as? Bool == true { log(.info, "Lancement refusé : pas de réponse après la reformulation.") }
                 realtime.sendFunctionOutput(callId: callId, output: ["error": "pas encore confirmé : reformule « \(w.title) (\(w.summary)), c'est bien ça ? », et rappelle avec confirmed=true après son oui"])
                 return
             }
@@ -1566,20 +1619,24 @@ final class CoachSession: ObservableObject {
         timerLabel = label
         timerBaseLabel = baseLabel
         timerIndex = index
-        timerEndsAt = Date().addingTimeInterval(TimeInterval(seconds))
+        // Enchaînement : le bloc part de la fin prévue du précédent (sinon chaque bloc prenait une à deux secondes).
+        let start = nextPhaseStart.flatMap { abs($0.timeIntervalSinceNow) < 5 ? $0 : nil } ?? Date()
+        nextPhaseStart = nil
+        let end = start.addingTimeInterval(TimeInterval(seconds))
+        timerEndsAt = end
         log(.info, "Chrono : \(label), \(seconds) s")
         sendMirror(force: true)
         // C'est Jeffrey qui décompte à l'oral (« 30 secondes », « 10 secondes »), plus de bip sur l'iPhone ;
         // la montre, elle, continue de vibrer et de sonner (choix d'Hervé du 23/09).
         timerTask = Task { [weak self] in
-            var remaining = seconds
             for step in [30, 10] where seconds > step + 5 {
-                try? await Task.sleep(nanoseconds: UInt64(remaining - step) * 1_000_000_000)
+                let wait = end.addingTimeInterval(-TimeInterval(step)).timeIntervalSinceNow
+                if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
                 guard let self, !Task.isCancelled else { return }
-                remaining = step
                 self.announceCountdown(step, label: label)
             }
-            try? await Task.sleep(nanoseconds: UInt64(remaining) * 1_000_000_000)
+            let wait = end.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
             guard let self, !Task.isCancelled else { return }
             self.timerPhaseFinished(baseLabel: baseLabel, index: index)
         }
@@ -1593,6 +1650,7 @@ final class CoachSession: ObservableObject {
 
     private func timerPhaseFinished(baseLabel: String, index: Int) {
         let finished = timerLabel ?? baseLabel
+        nextPhaseStart = timerEndsAt
         timerLabel = nil
         timerEndsAt = nil
         if timerPhaseIsWork, timerRepeatsLeft > 1, timerRestSeconds == 0 {
@@ -1604,7 +1662,8 @@ final class CoachSession: ObservableObject {
             runTimerPhase(seconds: timerWorkSeconds, label: "\(baseLabel) \(index + 1)/\(total)", baseLabel: baseLabel, index: index + 1)
             return
         }
-        if timerPhaseIsWork, timerRestSeconds > 0, timerRepeatsLeft >= 1, !(timerRepeatsLeft == 1 && restDone) {
+        // Pas de récup après la dernière répétition d'une série : le bloc suivant (ou la fin) prend le relais.
+        if timerPhaseIsWork, timerRestSeconds > 0, timerRepeatsLeft >= 1, !(timerRepeatsLeft == 1 && (restDone || index > 1)) {
             // Travail terminé → récupération (aussi pour un bloc unique : « 5 min de course puis 2 min de marche »).
             timerPhaseIsWork = false
             restDone = timerRepeatsLeft == 1
@@ -1620,7 +1679,7 @@ final class CoachSession: ObservableObject {
             timerRepeatsLeft -= 1
             let total = timerRepeatsLeft + index
             realtime.injectText("[CHRONO terminé] récupération. Répétition \(index + 1)/\(total) de « \(baseLabel) » (\(timerWorkSeconds) s) qui démarre.")
-            realtime.requestResponse(instructions: "La récup est finie : lance la répétition \(index + 1) sur \(total) de « \(baseLabel) » en une phrase énergique.")
+            realtime.requestResponse(instructions: "La récup est finie : lance la répétition \(index + 1) sur \(total) de « \(baseLabel) » en une phrase.")
             runTimerPhase(seconds: timerWorkSeconds, label: "\(baseLabel) \(index + 1)/\(total)", baseLabel: baseLabel, index: index + 1)
             return
         }
@@ -1655,9 +1714,27 @@ final class CoachSession: ObservableObject {
     private func stopTimer() {
         timerTask?.cancel()
         timerTask = nil
+        pausedTimerRemaining = nil
         timerLabel = nil
         timerEndsAt = nil
         timerRepeatsLeft = 0
+    }
+
+    /// Pause : le bloc en cours est gelé (temps restant gardé) et repart à la reprise, décompte compris.
+    private func setChronoPaused(_ paused: Bool) {
+        if paused {
+            guard let end = timerEndsAt, let label = timerLabel else { return }
+            let remaining = max(1, Int(end.timeIntervalSinceNow.rounded()))
+            pausedTimerRemaining = remaining
+            timerTask?.cancel()
+            timerTask = nil
+            timerEndsAt = nil
+            log(.info, "Chrono « \(label) » gelé, reste \(remaining) s.")
+        } else if let remaining = pausedTimerRemaining, let label = timerLabel {
+            pausedTimerRemaining = nil
+            runTimerPhase(seconds: remaining, label: label, baseLabel: timerBaseLabel, index: timerIndex)
+        }
+        sendMirror(force: true)
     }
 
     /// Arrêt demandé (bouton, outil cancel_timer) : chrono et programme.
@@ -1878,8 +1955,11 @@ final class CoachSession: ObservableObject {
     // MARK: - Métriques → contexte
 
     private func handle(snapshot snap: MetricsSnapshot) {
+        traceWatch(snap)
         if snap.state == .paused || snap.state == .running {
+            let wasPaused = localPaused
             localPaused = snap.state == .paused
+            if phase == .live, wasPaused != localPaused { setChronoPaused(localPaused) }
             gps.paused = localPaused
             activity.paused = localPaused
         }
@@ -1902,11 +1982,15 @@ final class CoachSession: ObservableObject {
         if let hr = snap.heartRate {
             let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
             currentZone = zone
+            if zone.rawValue >= 5, snap.state == .running { zone5Since = zone5Since ?? Date() } else { zone5Since = nil }
             if phase == .live, config.autoCues, let previous = lastAnnouncedZone, previous != zone,
                Date().timeIntervalSince(lastCueAt) > 45, Date().timeIntervalSince(lastEventCueAt) > 45, !isPaused,
                zone.rawValue >= 5 || (previous.rawValue >= 5 && zone.rawValue <= 3) {
                 lastEventCueAt = Date()
-                cue(reason: zone.rawValue >= 5 ? "FC en zone 5 (\(Int(hr)) bpm) : vérifier que c'est voulu, sinon lever le pied" : "FC redescendue de la zone 5 : bien récupéré")
+                let entry = config.level == .confirmed
+                    ? "FC en zone 5 (\(Int(hr)) bpm) : vérifier que c'est voulu, sinon lever le pied"
+                    : "FC en zone 5 (\(Int(hr)) bpm) : consigne ferme et calme de ralentir tout de suite, sans encouragement à pousser"
+                cue(reason: zone.rawValue >= 5 ? entry : "FC redescendue de la zone 5 : bien récupéré")
             }
             if lastAnnouncedZone == nil { lastAnnouncedZone = zone }
         }
@@ -1919,6 +2003,73 @@ final class CoachSession: ObservableObject {
             log(.info, "La montre a terminé la séance.")
             stop(reason: "la montre a terminé la séance")
         }
+    }
+
+    private func traceWatch(_ snap: MetricsSnapshot) {
+        guard phase == .connecting || phase == .live, let t0 = sessionStartedAt else { return }
+        let after = Int(Date().timeIntervalSince(t0))
+        if snap.state == .running, !watchTrace.started {
+            watchTrace.started = true
+            log(.info, "Montre : séance démarrée, premières données \(after) s après le départ.")
+        }
+        if let start = snap.sessionStart {
+            if let known = watchTrace.sessionStart, abs(start.timeIntervalSince(known)) > 3 {
+                log(.info, "Montre : séance redémarrée côté montre (départ décalé de \(Int(start.timeIntervalSince(known))) s).")
+            }
+            watchTrace.sessionStart = start
+        }
+        if let hr = snap.heartRate, !watchTrace.firstHeartRate {
+            watchTrace.firstHeartRate = true
+            log(.info, "Montre : premier cœur \(Int(hr)) battements, \(after) s après le départ.")
+        }
+        // En pause la montre ne mesure plus : la pause ne compte pas comme un trou.
+        let sampleAt = snap.state == .paused ? Date() : snap.lastSampleAt
+        if let at = sampleAt {
+            if watchTrace.gapLogged, let last = watchTrace.lastSampleAt, at > last {
+                watchTrace.gapLogged = false
+                log(.info, "Montre : mesures revenues après \(Int(at.timeIntervalSince(last))) s sans données.")
+                cue(reason: "montre de retour : les mesures reviennent, dis-le en quelques mots")
+            }
+            watchTrace.lastSampleAt = max(at, watchTrace.lastSampleAt ?? at)
+        }
+    }
+
+    /// Montre muette au départ, ou plus aucune mesure depuis 30 s (appelé toutes les 5 s).
+    private func checkWatchGap() {
+        guard phase == .live, !isPaused else { return }
+        if !watchTrace.started, !watchTrace.silentLogged, let t0 = sessionStartedAt, Date().timeIntervalSince(t0) > 20 {
+            watchTrace.silentLogged = true
+            log(.info, "Montre : aucune donnée 20 s après le départ.")
+            cue(reason: "montre muette : rien reçu depuis le départ ; dis-le en une phrase, tu le guides au temps en attendant")
+        }
+        guard !watchTrace.gapLogged, let last = watchTrace.lastSampleAt, Date().timeIntervalSince(last) > 30 else { return }
+        watchTrace.gapLogged = true
+        log(.info, "Montre : aucune mesure depuis 30 s.")
+        cue(reason: "montre muette depuis 30 s : plus de cœur ni de distance ; dis-le en une phrase, tu continues au temps")
+    }
+
+    /// Débutant ou intermédiaire : la zone 5 n'est jamais un objectif. Au-delà d'une minute, consigne ferme de marcher,
+    /// répétée toutes les 2 min tant qu'il y reste.
+    private func checkZone5() {
+        guard phase == .live, !isPaused, config.level != .confirmed, let since = zone5Since else { return }
+        let now = Date()
+        guard now.timeIntervalSince(since) >= 60, now.timeIntervalSince(zone5WarnedAt) >= 120 else { return }
+        zone5WarnedAt = now
+        cue(reason: "zone 5 depuis \(Int(now.timeIntervalSince(since))) s : consigne ferme et calme, il passe en marche jusqu'à redescendre sous \(Int(config.maxHR * 0.8)) battements ; pas d'encouragement à pousser, même en plein bloc de course")
+    }
+
+    /// Passage kilométrique, horodaté au passage réel (vérifié toutes les 5 s) et annoncé en priorité.
+    private func checkKilometre() {
+        guard phase == .live, kind.usesDistance, let d = displayDistance else { return }
+        let km = Int(d / 1000)
+        guard km > lastKmAnnounced else { return }
+        let elapsed = liveElapsed()
+        // Distance arrivée d'un bloc (plusieurs kilomètres d'un coup) : pas de temps de kilomètre, il serait faux.
+        let split = km == lastKmAnnounced + 1 ? elapsed - lastKmElapsed : nil
+        lastKmAnnounced = km
+        lastKmElapsed = elapsed
+        let splitText = split.map { " en \(Formatters.elapsed($0))" } ?? ""
+        cue(reason: "kilomètre \(km) passé\(splitText) : point chiffré avec les valeurs de [MÉTRIQUES] telles quelles (temps du kilomètre, temps écoulé, distance, allure, cœur et zone, restant sur l'objectif ; seulement celles qui existent), puis, s'il est en zone 4 ou 5, un conseil pour redescendre, sinon un mot d'encouragement")
     }
 
     /// Distance affichée : montre en priorité, sinon GPS de l'iPhone.
@@ -2033,7 +2184,7 @@ final class CoachSession: ObservableObject {
                 guard let self else { return }
                 if self.latest?.speed == nil, let v = self.gps.speed, !self.isPaused { self.pace = Formatters.pace(speedMetersPerSecond: v) }
                 self.updatePaceNumber()
-                self.evaluateGoal(); self.detectStruggle()
+                self.evaluateGoal(); self.detectStruggle(); self.checkWatchGap(); self.checkZone5(); self.checkKilometre()
             }
         }
         mirrorTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
@@ -2082,19 +2233,6 @@ final class CoachSession: ObservableObject {
         let silence = now.timeIntervalSince(max(lastCoachSpokeAt, lastCueAt))
         guard silence >= 30 else { return }
 
-        // 1) Passage kilométrique : temps du dernier km, un vrai repère de coach.
-        if let d = displayDistance, kind.usesDistance {
-            let km = Int(d / 1000)
-            if km > lastKmAnnounced {
-                let split = lastKmAt.map { now.timeIntervalSince($0.at) }
-                let splitText = split.map { " en \(Formatters.elapsed($0))" } ?? ""
-                if cue(reason: "kilomètre \(km) passé\(splitText) : point chiffré avec les valeurs de [MÉTRIQUES] telles quelles (temps du kilomètre, temps écoulé, distance, allure, cœur et zone, restant sur l'objectif ; seulement celles qui existent), puis un mot d'encouragement") {
-                    lastKmAnnounced = km
-                    lastKmAt = (km, now)
-                }
-                return
-            }
-        }
         // 2) Zone haute qui change, longue montée sans galère détectée.
         if let hr = latest?.heartRate {
             let zone = HeartRateZone.zone(for: hr, maxHR: config.maxHR)
@@ -2171,6 +2309,7 @@ final class CoachSession: ObservableObject {
         if !goalReached, goal.isReached(elapsed: elapsed, distance: displayDistance) {
             goalReached = true
             lastCueAt = .distantPast
+            log(.info, "Objectif atteint : \(goal.label) à \(Formatters.elapsed(elapsed)).")
             celebrate("Objectif atteint", subtitle: "\(goal.label) · \(Formatters.elapsed(elapsed))")
             if goal.isTrial {
                 let hr = latest?.heartRate.map { " Sa montre t'a donné \(Int($0)) bpm." } ?? " La montre n'a pas encore envoyé de cœur : dis-le sans dramatiser."
@@ -2196,7 +2335,7 @@ final class CoachSession: ObservableObject {
 
     /// Interventions prioritaires : elles passent devant l'espacement (chrono, objectif atteint, galère, arrêt long).
     private func isPriority(_ reason: String) -> Bool {
-        ["objectif atteint", "galère", "chrono", "arrêt depuis", "zone 5"].contains { reason.lowercased().contains($0) }
+        ["objectif atteint", "galère", "chrono", "arrêt depuis", "zone 5", "montre muette", "kilomètre"].contains { reason.lowercased().contains($0) }
     }
 
     /// Les annonces prioritaires refusées (Jeffrey parlait) sont rejouées dès qu'il a fini.
@@ -2261,6 +2400,7 @@ final class CoachSession: ObservableObject {
         }
         log(.user, trimmed)
         lastUserSpokeAt = Date()
+        lastUserLineAt = Date()
         awaitingAnswerSince = nil
         reaskedForCurrentQuestion = false
         if !appleAI { realtime.requestResponse() }
@@ -2306,6 +2446,13 @@ final class CoachSession: ObservableObject {
         let lowered = text.lowercased()
         if lowered.unicodeScalars.contains(where: { $0.value > 0x24F && !CharacterSet.punctuationCharacters.contains($0) && !CharacterSet.symbols.contains($0) }) { return false }
         let words = lowered.split { !$0.isLetter && $0 != "'" }.map(String.init)
+        // Vent ou bruit transcrit en langue étrangère (« Dzisiaj mam oskarzak ») : pas une phrase adressée à Jeffrey.
+        if words.count >= 3 {
+            let recognizer = NLLanguageRecognizer()
+            recognizer.processString(text)
+            let hypotheses = recognizer.languageHypotheses(withMaximum: 3)
+            if (hypotheses[.french] ?? 0) < 0.05, (hypotheses.values.max() ?? 0) > 0.6 { return false }
+        }
         if words.count >= 2 { return true }
         let short: Set<String> = ["oui", "non", "ok", "okay", "stop", "go", "merci", "d'accord", "vas-y", "pause",
                                   "reprends", "termine", "continue", "attends", "ouais", "nan", "encore",
@@ -2336,6 +2483,7 @@ final class CoachSession: ObservableObject {
         // Il vient de poser une question : on attend une réponse, et un bruit ne doit pas la faire disparaître.
         if let last = lastCoachLine?.trimmingCharacters(in: .whitespacesAndNewlines), last.hasSuffix("?") {
             awaitingAnswerSince = Date()
+            lastQuestionAt = Date()
             reaskedForCurrentQuestion = false
         } else {
             awaitingAnswerSince = nil

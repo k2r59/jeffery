@@ -122,11 +122,11 @@ final class WorkoutManager: NSObject, ObservableObject {
     // MARK: - Commandes venant de l'iPhone
 
     func handle(command payload: WatchCommandPayload, issuedAt: Date? = nil) {
+        // Le contexte garde la dernière commande : relue au lancement de l'app (départ à distance), elle vise une
+        // capture précédente (« terminer » de la séance d'avant, ou le départ qui vient de lancer celle-ci).
+        if isActive, let issuedAt, issuedAt <= captureBeganAt { return }
         switch payload.command {
         case .start:
-            // Après un lancement à distance, la commande qui a lancé la capture revient par le contexte : un départ
-            // émis avant le début de la capture en cours est ce doublon, pas une nouvelle séance.
-            if isActive, let issuedAt, issuedAt <= captureBeganAt { return }
             // Nouveau départ = tout repart de zéro : une capture encore en cours (séance précédente mal close,
             // suivi compagnon oublié) est arrêtée avant, sinon l'iPhone hérite du chrono et des distances d'avant.
             // La fin d'une HKWorkoutSession est asynchrone : le nouveau départ attend qu'elle soit close.

@@ -138,7 +138,9 @@ enum AppleAnalyst {
         Tu tiens les notes durables d'un coach sportif sur la personne qu'il accompagne. À partir de la transcription d'une séance \
         et des notes existantes, renvoie la liste MISE À JOUR : faits utiles sur la durée (blessures ou gênes, contexte de vie, \
         objectifs à moyen terme, préférences, habitudes, contraintes), jamais les chiffres d'une séance. Fusionne les doublons, \
-        mets à jour ce qui a changé, supprime le périmé. Si la transcription n'apprend rien de durable, renvoie les notes existantes telles quelles.
+        mets à jour ce qui a changé, supprime le périmé. Garde toujours une gêne, une douleur ou un malaise signalé. N'écris jamais rien \
+        sur l'app, le coach ou ses défauts (retours au développeur, bugs, capteurs, voix) : ce ne sont pas des faits sur la personne. \
+        Si la transcription n'apprend rien de durable, renvoie les notes existantes telles quelles.
         """
         // Le modèle local n'a que 4K de contexte : on lui donne une transcription plus courte.
         let lines = backend == .onDevice ? Array(transcript.suffix(30)) : transcript

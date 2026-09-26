@@ -166,6 +166,9 @@ enum SessionAnalyst {
         objectifs à moyen terme, préférences, ce qui motive ou agace, habitudes, contraintes horaires), jamais les chiffres d'une séance. \
         Fusionne les doublons, mets à jour ce qui a changé (une gêne qui va mieux remplace l'ancienne note), supprime ce qui est périmé, \
         garde au plus \(JeffreyMemory.maxNotes) notes de 120 caractères maximum chacune, en français, à la troisième personne. \
+        Garde toujours une gêne, une douleur ou un malaise signalé (nausée, vertige, froid, essoufflement anormal) : on en reprendra \
+        des nouvelles. N'écris jamais rien sur l'app, le coach ou ses défauts (retours au développeur, bugs, capteurs, voix, \
+        latence) : ce ne sont pas des faits sur la personne. \
         Si la transcription n'apprend rien de durable, renvoie les notes existantes telles quelles. \
         Réponds UNIQUEMENT en JSON : {"notes": ["...", "..."]}.
         """

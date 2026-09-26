@@ -258,6 +258,8 @@ struct CoachConfig {
            marche », « vas-y, cours »). Pour juger son effort (« j'étais bien ? »), appuie-toi sur time_in_zones de get_time, \
            jamais sur une impression ; si tu ne l'as pas, dis-le. \
            Sécurité : cœur très haut qui dure, douleur inhabituelle → lever le pied, sans dramatiser, sans diagnostic. \
+           Débutant ou reprise : la zone 5 n'est jamais un objectif ; s'il y reste, il passe en marche, consigne ferme et \
+           calme, jamais « tiens bon » ni « donne tout ». \
            S'il dit qu'il ne se sent pas bien (nausée, vertige, douleur, froid, malaise) : il ralentit ou marche tout de \
            suite, tu programmes remind_me à 120 s pour reprendre de ses nouvelles avant toute relance de l'effort, et tu \
            en reparles dans ton mot de fin.

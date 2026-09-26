@@ -66,8 +66,12 @@ final class FakeWatch {
 
 /// Serveur Realtime simulé : joue les événements serveur attendus (session, réponses texte + audio silencieux,
 /// transcriptions, appels de fonction déclenchés par mots-clés). Activé par WATCHCOACH_FAKE_REALTIME=1.
+/// Phrases de l'utilisateur scriptées : WATCHCOACH_FAKE_USER="95:Tu peux terminer la séance ?|102:Oui" (secondes
+/// après la connexion). « termin… » fait demander « Je termine la séance ? », le « oui » suivant appelle end_session.
 final class FakeRealtimeBackend {
     static let enabled = ProcessInfo.processInfo.environment["WATCHCOACH_FAKE_REALTIME"] == "1"
+    private var lastUser = ""
+    private var endAsked = false
     var deliver: (([String: Any]) -> Void)?
     private var responseCounter = 0
     private var lastConsigne = ""
@@ -103,7 +107,20 @@ final class FakeRealtimeBackend {
         responseCounter += 1
         let n = responseCounter
         let consigne = lastConsigne.lowercased()
+        let user = lastUser.lowercased()
+        lastUser = ""
         emit(["type": "response.created", "response": ["id": "resp_\(n)"]], after: 0.2)
+        if endAsked, user.hasPrefix("oui") {
+            endAsked = false
+            emit(["type": "response.function_call_arguments.done", "name": "end_session", "call_id": "call_\(n)", "arguments": "{\"confirmed\": true}"], after: 0.6)
+            emit(["type": "response.done", "response": ["id": "resp_\(n)", "status": "completed"]], after: 0.9)
+            return
+        }
+        if user.contains("termin") {
+            endAsked = true
+            say("Je termine la séance ?", response: n)
+            return
+        }
         // Simulation d'un appel de fonction : la consigne de salut déclenche start_timer une fois (bloc 20 s).
         if consigne.contains("présente-toi") || consigne.contains("salue-le"), !pendingTimerCall {
             pendingTimerCall = true
@@ -125,10 +142,19 @@ final class FakeRealtimeBackend {
             emit(["type": "response.done", "response": ["id": "resp_\(n)", "status": "completed"]], after: 0.9)
             return
         }
+        // Consigne « Dis exactement « 30 secondes » » : le décompte du chrono, mot pour mot.
+        if let open = lastConsigne.range(of: "Dis exactement « "), let close = lastConsigne[open.upperBound...].range(of: " »") {
+            say(String(lastConsigne[open.upperBound..<close.lowerBound]), response: n)
+            return
+        }
         let text: String = consigne.contains("débrief") ? "Bien joué, belle séance, on se revoit bientôt."
             : consigne.contains("programme") || consigne.contains("bloc suivant") ? "Bloc suivant, on y va."
             : consigne.contains("chrono") ? "Le chrono a sonné, on enchaîne tranquillement."
             : "Réponse simulée numéro \(n), tout va bien."
+        say(text, response: n)
+    }
+
+    private func say(_ text: String, response n: Int) {
         var t = 1.0
         for word in text.split(separator: " ") {
             emit(["type": "response.output_audio_transcript.delta", "delta": String(word) + " "], after: t)
@@ -145,6 +171,16 @@ final class FakeRealtimeBackend {
 
     func start() {
         emit(["type": "session.created"], after: 0.3)
+        let script = ProcessInfo.processInfo.environment["WATCHCOACH_FAKE_USER"] ?? ""
+        for entry in script.split(separator: "|") {
+            let parts = entry.split(separator: ":", maxSplits: 1)
+            guard parts.count == 2, let at = Double(parts[0]) else { continue }
+            let text = String(parts[1])
+            queue.asyncAfter(deadline: .now() + at) { [weak self] in
+                self?.lastUser = text
+                self?.deliver?(["type": "conversation.item.input_audio_transcription.completed", "item_id": "user_\(Int(at))", "transcript": text])
+            }
+        }
     }
 }
 #endif

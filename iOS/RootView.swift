@@ -46,7 +46,10 @@ struct RootView: View {
             if let t = ProcessInfo.processInfo.environment["WATCHCOACH_TAB"], let i = Int(t) { tab = i }
             if ProcessInfo.processInfo.environment["WATCHCOACH_AUTOSTART"] == "1", coach.phase == .idle {
                 let minutes = Double(ProcessInfo.processInfo.environment["WATCHCOACH_GOAL_MIN"] ?? "2") ?? 2
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                Task { @MainActor in
+                    // Comme un vrai départ : on attend « Montre connectée » (app montre fermée : sonde livrée).
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    for _ in 0..<60 where !coach.watchReady { try? await Task.sleep(nanoseconds: 500_000_000) }
                     coach.start(kind: .running, goal: SessionGoal(kind: .duration, target: minutes * 60, note: "banc d'essai"))
                 }
             }
