@@ -1,7 +1,6 @@
 import SwiftUI
 import HealthKit
 import WatchKit
-import WatchConnectivity
 
 @main
 struct WatchCoachWatchApp: App {
@@ -43,32 +42,17 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
 
     func applicationDidBecomeActive() {
         WatchSender.shared.startPinging()
-        Task { @MainActor in WorkoutManager.shared.appBecameActive() }
+        Task { @MainActor in WorkoutManager.shared.armStandby() }
     }
 
     func applicationWillResignActive() {
         WatchSender.shared.stopPinging()
     }
 
-    /// Lancement à distance : la commande déposée par l'iPhone dit s'il faut suivre l'app Exercice ou piloter la séance.
+    /// Lancement à distance depuis l'iPhone : la montre démarre sa séance.
     func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
         let kind = WorkoutKind(activityType: workoutConfiguration.activityType)
-        let context = WCSession.default.receivedApplicationContext
-        var mode: CaptureMode = .auto
-        if let data = context[WCKeys.command] as? Data,
-           let payload = try? WCCodec.decoder.decode(WatchCommandPayload.self, from: data),
-           let at = context[WCKeys.commandAt] as? Double,
-           Date().timeIntervalSince1970 - at < 180,
-           payload.command == .start {
-            mode = payload.mode
-        }
-        Task { @MainActor in
-            switch mode {
-            case .companion: WorkoutManager.shared.startCompanion(kind: kind)
-            case .owned: WorkoutManager.shared.startOwned(kind: kind)
-            case .auto: WorkoutManager.shared.startAuto(kind: kind)
-            }
-        }
+        Task { @MainActor in WorkoutManager.shared.startOwned(kind: kind) }
     }
 }
 

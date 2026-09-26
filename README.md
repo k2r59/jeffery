@@ -67,11 +67,11 @@ glisser vers la gauche donne Pause et Terminer. La montre reste le capteur cardi
 Apple Watch (WatchCoachWatch)                    iPhone (WatchCoach)                          Services
 ┌───────────────────────────────┐   WatchConnectivity  ┌─────────────────────────────┐  WebSocket  ┌──────────────────┐
 │ capteur :                     │ ───────────────────▶ │ CoachSession                │ ◀─────────▶ │ OpenAI Realtime  │
-│  · compagnon de l'app Exercice│  MetricsSnapshot     │  · métriques → [MÉTRIQUES]  │  PCM16 24k  │  (voix, outils)  │
-│    (session étendue +         │                      │  · événements → cues        │             └──────────────────┘
-│     lecture HealthKit)        │ ◀─────────────────── │  · objectif, référence      │  HTTPS      ┌──────────────────┐
-│  · ou séance pilotée          │  commandes,          │ ActivityMonitor (mouvement, │ ◀─────────▶ │ OpenAI Responses │
-│    (HKWorkoutSession + GPS)   │  état miroir         │   cadence, baromètre)       │             │  (bilan secours) │
+│  séance pilotée               │  MetricsSnapshot     │  · métriques → [MÉTRIQUES]  │  PCM16 24k  │  (voix, outils)  │
+│  (HKWorkoutSession + GPS)     │                      │  · événements → cues        │             └──────────────────┘
+│                               │ ◀─────────────────── │  · objectif, référence      │  HTTPS      ┌──────────────────┐
+│                               │  commandes,          │ ActivityMonitor (arrêt,     │ ◀─────────▶ │ OpenAI Responses │
+│                               │  état miroir         │   baromètre)                │             │  (bilan secours) │
 │ miroir + télécommande         │                      │ RouteRecorder (GPS)         │             └──────────────────┘
 └───────────────────────────────┘                      │ AudioPipeline (micro, voix) │  in-process ┌──────────────────┐
                                                        │ AppleAnalyst (bilan,        │ ◀─────────▶ │ Foundation Models│
@@ -79,13 +79,10 @@ Apple Watch (WatchCoachWatch)                    iPhone (WatchCoach)            
                                                        └─────────────────────────────┘             └──────────────────┘
 ```
 
-### Capture : la montre décide seule
+### Capture : la montre pilote la séance
 
-Rien à régler. Au départ, la montre regarde si l'app Exercice écrit déjà le cœur à haute cadence : si oui, elle suit cette
-séance (mode compagnon : lecture des échantillons HealthKit, arrêt automatique quand la séance native est enregistrée) ;
-sinon elle pilote elle-même une HKWorkoutSession (données à la seconde, GPS, séance enregistrée dans Santé). Si l'app
-Exercice démarre ensuite et coupe la session pilotée, la montre bascule en compagnon sans arrêter Jeffrey. L'iPhone
-affiche « la montre suit l'app Exercice » ou « la montre pilote la séance » dans le journal.
+La montre possède toujours la séance : une HKWorkoutSession (données à la seconde, GPS, séance enregistrée dans Santé).
+L'app Exercice n'est pas utilisée pendant une séance Jeffrey.
 
 ### Intelligence
 
@@ -174,10 +171,8 @@ qu'elle dure.
 
 1. Écouteurs Bluetooth conseillés.
 2. Sur la montre, « Démarrer avec Jeffrey » (ou sur l'iPhone, le sport puis « Démarrer ma course »). Jeffrey demande
-   « tu veux quoi aujourd'hui ? » et on lui répond. L'app Exercice peut tourner en parallèle : lancée avant, la montre
-   la suit ; lancée après, la montre bascule toute seule.
-3. Parler à Jeffrey quand on veut. Pause et Terminer depuis la montre ou l'iPhone. Terminer la séance dans l'app
-   Exercice déclenche le débrief tout seul.
+   « tu veux quoi aujourd'hui ? » et on lui répond.
+3. Parler à Jeffrey quand on veut. Pause et Terminer depuis la montre ou l'iPhone.
 4. Bilan, ressenti, puis « Terminer le bilan ».
 
 ## Structure du code

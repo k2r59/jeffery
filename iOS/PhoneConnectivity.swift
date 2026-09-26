@@ -159,14 +159,14 @@ final class PhoneConnectivity: NSObject, ObservableObject {
         }
     }
 
-    func send(command: WatchCommand, kind: WorkoutKind, mode: CaptureMode, completion: ((Error?) -> Void)? = nil) {
+    func send(command: WatchCommand, kind: WorkoutKind, completion: ((Error?) -> Void)? = nil) {
         #if DEBUG
         if let fake = fakeWatch {
             Task { @MainActor in fake.handle(command: command, kind: kind); completion?(nil) }
             return
         }
         #endif
-        let payload = WatchCommandPayload(command: command, kind: kind, mode: mode)
+        let payload = WatchCommandPayload(command: command, kind: kind)
         guard let data = try? WCCodec.encoder.encode(payload) else { return }
         let session = WCSession.default
         // Horodatage porté par les deux canaux (message et contexte) : la montre n'exécute la commande qu'une fois,

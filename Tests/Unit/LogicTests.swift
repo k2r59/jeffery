@@ -149,7 +149,7 @@ final class WorkoutLibraryTests: XCTestCase {
 final class SessionCheckpointTests: XCTestCase {
     private func sample(savedAt: Date) -> SessionCheckpoint {
         SessionCheckpoint(
-            kind: .running, mode: .companion, goal: SessionGoal(kind: .duration, target: 1500, note: "test"),
+            kind: .running, goal: SessionGoal(kind: .duration, target: 1500, note: "test"),
             goalReached: false, halfwayAnnounced: true, startedAt: savedAt.addingTimeInterval(-420), savedAt: savedAt,
             transcript: [.init(role: "coach", text: "Salut Hervé.", at: savedAt.addingTimeInterval(-400)),
                          .init(role: "user", text: "On y va.", at: savedAt.addingTimeInterval(-390))],

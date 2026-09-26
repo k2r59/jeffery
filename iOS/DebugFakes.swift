@@ -46,7 +46,7 @@ final class FakeWatch {
         let e = elapsed()
         // Profil : échauffement 0-60 s (110→140), effort 60-150 s (150→172, zone 5 vers 120 s), récup ensuite.
         let hr: Double = e < 60 ? 110 + e * 0.5 : (e < 150 ? 150 + (e - 60) * 0.25 : max(120, 172 - (e - 150) * 0.6))
-        var s = MetricsSnapshot.idle(kind: kind, mode: .owned) // la montre factice « décide » : pas de séance native, elle pilote
+        var s = MetricsSnapshot.idle(kind: kind)
         s.state = paused ? .paused : .running
         s.elapsed = e
         s.heartRate = hr

@@ -4,15 +4,12 @@ import WatchKit
 import Combine
 import CoreLocation
 
-/// Gère la capture des métriques côté montre, dans l'un des deux modes :
-/// - `owned` : notre app possède la HKWorkoutSession (séance enregistrée par Jeffrey).
-/// - `companion` : l'app Exercice native possède la séance ; on garde de l'exécution en arrière-plan
-///   via une WKExtendedRuntimeSession et on lit les échantillons HealthKit au fil de l'eau.
+/// Gère la capture des métriques côté montre : notre app possède la HKWorkoutSession (séance enregistrée par Jeffrey).
 @MainActor
 final class WorkoutManager: NSObject, ObservableObject {
     static let shared = WorkoutManager()
 
-    @Published private(set) var snapshot: MetricsSnapshot = .idle(kind: .running, mode: .owned)
+    @Published private(set) var snapshot: MetricsSnapshot = .idle(kind: .running)
     @Published private(set) var statusMessage: String = ""
     @Published var selectedKind: WorkoutKind = .running
 
@@ -25,21 +22,11 @@ final class WorkoutManager: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     private var recordingRoute = false
 
-    // Mode companion
-    private var runtimeSession: WKExtendedRuntimeSession?
-    private var queries: [HKQuery] = []
-    private var companionEnergy: Double = 0
-    private var companionDistance: Double = 0
-    private var seenSampleUUIDs = Set<UUID>()
-
     private var startDate: Date?
-    private var companionGeneration = 0
-    /// Séance pilotée choisie par la décision automatique (bascule possible vers compagnon si l'app Exercice prend la main).
-    private var autoDecided = false
-    /// Fin demandée par l'utilisateur ou l'iPhone (par opposition à une session coupée par watchOS).
-    private var endRequested = false
     /// Départ demandé pendant qu'une capture se terminait : rejoué dès qu'elle est close.
     private var pendingStart: WatchCommandPayload?
+    /// Instant réel où la capture en cours a commencé (horloge de la montre).
+    private var captureBeganAt: Date = .distantPast
     private var pausedAccumulated: TimeInterval = 0
     private var pauseStartedAt: Date?
     private var tickTimer: Timer?
@@ -113,7 +100,6 @@ final class WorkoutManager: NSObject, ObservableObject {
             HKQuantityType(.distanceWalkingRunning),
             HKQuantityType(.distanceCycling),
             HKQuantityType(.runningSpeed),
-            HKObjectType.workoutType(),
         ]
         let share: Set<HKSampleType> = [
             HKQuantityType(.heartRate),
@@ -135,9 +121,12 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     // MARK: - Commandes venant de l'iPhone
 
-    func handle(command payload: WatchCommandPayload) {
+    func handle(command payload: WatchCommandPayload, issuedAt: Date? = nil) {
         switch payload.command {
         case .start:
+            // Après un lancement à distance, la commande qui a lancé la capture revient par le contexte : un départ
+            // émis avant le début de la capture en cours est ce doublon, pas une nouvelle séance.
+            if isActive, let issuedAt, issuedAt <= captureBeganAt { return }
             // Nouveau départ = tout repart de zéro : une capture encore en cours (séance précédente mal close,
             // suivi compagnon oublié) est arrêtée avant, sinon l'iPhone hérite du chrono et des distances d'avant.
             // La fin d'une HKWorkoutSession est asynchrone : le nouveau départ attend qu'elle soit close.
@@ -147,20 +136,12 @@ final class WorkoutManager: NSObject, ObservableObject {
                 end()
                 return
             }
-            begin(payload)
+            startOwned(kind: payload.kind)
         case .pause: pause()
         case .resume: resume()
         case .end: end()
         case .requestStart, .requestPause, .requestResume, .requestEnd, .ask:
             break // demandes montre → iPhone, jamais reçues ici
-        }
-    }
-
-    private func begin(_ payload: WatchCommandPayload) {
-        switch payload.mode {
-        case .owned: startOwned(kind: payload.kind)
-        case .companion: startCompanion(kind: payload.kind)
-        case .auto: startAuto(kind: payload.kind)
         }
     }
 
@@ -185,7 +166,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             self.builder = builder
 
             let start = Date()
-            beginTracking(kind: kind, mode: .owned, start: start)
+            beginTracking(kind: kind, start: start)
             if kind.locationType == .outdoor { startRouteRecording() }
             session.startActivity(with: start)
             builder.beginCollection(withStart: start) { _, error in
@@ -199,180 +180,6 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Décision automatique (compagnon si une séance native tourne, pilotée sinon)
-
-    /// L'utilisateur n'a rien à choisir : si l'app Exercice écrit déjà le cœur à haute cadence, on la suit ;
-    /// sinon la montre pilote la séance elle-même. Si l'app Exercice démarre ensuite et coupe notre session,
-    /// on bascule en compagnon sans arrêter la séance (voir `recoverAfterUnexpectedEnd`).
-    func startAuto(kind: WorkoutKind) {
-        guard !isActive else { return }
-        endStandby()
-        companionGeneration += 1
-        let generation = companionGeneration
-        statusMessage = "Recherche d'une séance en cours…"
-        #if DEBUG
-        if Self.fakeHealth { autoDecided = true; startOwned(kind: kind); return }
-        #endif
-        Task {
-            let inferred = await inferNativeWorkoutStart()
-            await MainActor.run {
-                guard generation == self.companionGeneration, !self.isActive else { return }
-                if let inferred {
-                    self.beginCompanion(kind: kind, start: Self.sessionStart(nativeStart: inferred), inferred: true)
-                } else {
-                    self.autoDecided = true
-                    self.startOwned(kind: kind)
-                }
-            }
-        }
-    }
-
-    /// Fin non demandée d'une séance pilotée (typiquement : l'app Exercice vient de démarrer et watchOS a coupé notre
-    /// session). Si une séance native tourne, on continue en compagnon ; sinon la séance est vraiment finie.
-    private func recoverAfterUnexpectedEnd(kind: WorkoutKind, elapsedSoFar: TimeInterval) {
-        statusMessage = "Séance reprise par l'app Exercice ?"
-        Task {
-            try? await Task.sleep(nanoseconds: 12_000_000_000)
-            let inferred = await inferNativeWorkoutStart()
-            await MainActor.run {
-                guard !self.isActive else { return }
-                if inferred != nil {
-                    // On garde le temps déjà couru : le départ est reculé d'autant.
-                    self.beginCompanion(kind: kind, start: Date().addingTimeInterval(-elapsedSoFar), inferred: true)
-                    self.statusMessage = "L'app Exercice a pris la main, Jeffrey continue"
-                } else {
-                    self.publishEnded()
-                }
-            }
-        }
-    }
-
-    // MARK: - Mode companion (app Exercice native + lecture HealthKit)
-
-    func startCompanion(kind: WorkoutKind) {
-        guard !isActive else { return }
-        endStandby()
-        companionGeneration += 1
-        let generation = companionGeneration
-        statusMessage = "Recherche de la séance en cours…"
-        Task {
-            let inferred = await inferNativeWorkoutStart()
-            await MainActor.run {
-                guard generation == self.companionGeneration else { return } // un .end est arrivé entre-temps
-                self.beginCompanion(kind: kind, start: inferred.map(Self.sessionStart(nativeStart:)) ?? Date(), inferred: inferred != nil)
-            }
-        }
-    }
-
-    /// Départ de la séance Jeffrey en mode compagnon : on se cale sur la séance native si elle vient de commencer
-    /// (l'utilisateur a lancé les deux à la suite), sinon on compte à partir de maintenant. Sans ça, relancer Jeffrey
-    /// pendant une séance Exercice déjà bien engagée héritait de son chrono et de sa distance (retour du 22/09).
-    static func sessionStart(nativeStart: Date) -> Date {
-        Date().timeIntervalSince(nativeStart) <= 180 ? nativeStart : Date()
-    }
-
-    /// L'app Exercice écrit la fréquence cardiaque toutes les quelques secondes pendant une séance, contre
-    /// quelques fois par heure au repos : le début de la série dense la plus récente donne le départ de la séance native.
-    private func inferNativeWorkoutStart() async -> Date? {
-        let type = HKQuantityType(.heartRate)
-        let since = Date().addingTimeInterval(-3 * 3600)
-        let samples: [HKQuantitySample] = await withCheckedContinuation { c in
-            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
-            let q = HKSampleQuery(sampleType: type, predicate: HKQuery.predicateForSamples(withStart: since, end: nil, options: []),
-                                  limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, s, _ in
-                c.resume(returning: (s as? [HKQuantitySample]) ?? [])
-            }
-            healthStore.execute(q)
-        }
-        guard let last = samples.last, Date().timeIntervalSince(last.startDate) < 90 else { return nil }
-        var runStart = last.startDate
-        var count = 1
-        for i in stride(from: samples.count - 2, through: 0, by: -1) {
-            let gap = samples[i + 1].startDate.timeIntervalSince(samples[i].startDate)
-            if gap > 30 { break }
-            runStart = samples[i].startDate
-            count += 1
-        }
-        return count >= 6 ? runStart : nil
-    }
-
-    private func beginCompanion(kind: WorkoutKind, start: Date, inferred: Bool) {
-        guard !isActive else { return }
-        companionEnergy = 0
-        companionDistance = 0
-        seenSampleUUIDs.removeAll()
-        beginTracking(kind: kind, mode: .companion, start: start)
-
-        // Exécution en arrière-plan (max ~1 h par session, relance depuis l'app si besoin).
-        let runtime = WKExtendedRuntimeSession()
-        runtime.delegate = self
-        runtime.start()
-        runtimeSession = runtime
-
-        // Échantillons de la montre uniquement : les pas comptés par l'iPhone ne doivent pas s'ajouter.
-        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
-            HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-5), end: nil, options: []),
-            HKQuery.predicateForObjects(from: Set([HKDevice.local()])),
-        ])
-        var types: [HKQuantityType] = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned),
-                                       HKQuantityType(.runningSpeed)]
-        if let d = kind.distanceType { types.append(d) }
-        for type in types {
-            let query = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: nil, limit: HKObjectQueryNoLimit) { [weak self] _, samples, _, _, _ in
-                self?.ingest(type: type, samples: samples)
-            }
-            query.updateHandler = { [weak self] _, samples, _, _, _ in
-                self?.ingest(type: type, samples: samples)
-            }
-            healthStore.execute(query)
-            queries.append(query)
-        }
-        // Fin de la séance native : l'app Exercice enregistre alors la séance dans Santé → on arrête de suivre.
-        let workoutPredicate = HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-60), end: nil, options: [])
-        let workoutQuery = HKAnchoredObjectQuery(type: .workoutType(), predicate: workoutPredicate, anchor: nil, limit: HKObjectQueryNoLimit) { _, _, _, _, _ in }
-        workoutQuery.updateHandler = { [weak self] _, samples, _, _, _ in
-            guard let workouts = samples as? [HKWorkout], workouts.contains(where: { $0.endDate > start }) else { return }
-            Task { @MainActor in
-                guard let self, self.isActive, self.snapshot.mode == .companion else { return }
-                self.statusMessage = "Séance de l'app Exercice terminée"
-                self.stopCompanion()
-            }
-        }
-        healthStore.execute(workoutQuery)
-        queries.append(workoutQuery)
-        statusMessage = inferred ? "Calé sur la séance en cours" : "Suit l'app Exercice (lance ta séance native si ce n'est pas fait)"
-    }
-
-    nonisolated private func ingest(type: HKQuantityType, samples: [HKSample]?) {
-        guard let samples = samples as? [HKQuantitySample], !samples.isEmpty else { return }
-        Task { @MainActor in
-            let fresh = samples.filter { !self.seenSampleUUIDs.contains($0.uuid) }
-            guard !fresh.isEmpty else { return }
-            fresh.forEach { self.seenSampleUUIDs.insert($0.uuid) }
-            let latest = fresh.max { $0.startDate < $1.startDate }
-            var snap = self.snapshot
-            switch type {
-            case HKQuantityType(.heartRate):
-                if let latest {
-                    snap.heartRate = latest.quantity.doubleValue(for: .count().unitDivided(by: .minute()))
-                }
-            case HKQuantityType(.activeEnergyBurned):
-                self.companionEnergy += fresh.reduce(0) { $0 + $1.quantity.doubleValue(for: .kilocalorie()) }
-                snap.activeEnergy = self.companionEnergy
-            case HKQuantityType(.runningSpeed):
-                if let latest {
-                    snap.speed = latest.quantity.doubleValue(for: .meter().unitDivided(by: .second()))
-                }
-            default:
-                // distance (marche/course ou vélo)
-                self.companionDistance += fresh.reduce(0) { $0 + $1.quantity.doubleValue(for: .meter()) }
-                snap.distance = self.companionDistance
-            }
-            snap.lastSampleAt = latest?.endDate ?? Date()
-            self.publish(snap)
-        }
-    }
-
     // MARK: - Contrôles communs
 
     func pause() {
@@ -380,11 +187,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         #if DEBUG
         if Self.fakeHealth { markPaused(); return }
         #endif
-        if snapshot.mode == .owned {
-            session?.pause()
-        } else {
-            markPaused()
-        }
+        session?.pause()
     }
 
     func resume() {
@@ -392,45 +195,27 @@ final class WorkoutManager: NSObject, ObservableObject {
         #if DEBUG
         if Self.fakeHealth { markResumed(); return }
         #endif
-        if snapshot.mode == .owned {
-            session?.resume()
-        } else {
-            markResumed()
-        }
+        session?.resume()
     }
 
     func end() {
-        companionGeneration += 1
         guard isActive else { return }
         #if DEBUG
-        if Self.fakeHealth { fakeTimer?.invalidate(); fakeTimer = nil; endRequested = true; autoDecided = false; finishTracking(); return }
+        if Self.fakeHealth { fakeTimer?.invalidate(); fakeTimer = nil; finishTracking(); return }
         #endif
-        if snapshot.mode == .owned {
-            endRequested = true
-            session?.end()
-        } else {
-            stopCompanion()
-        }
-    }
-
-    private func stopCompanion() {
-        queries.forEach { healthStore.stop($0) }
-        queries.removeAll()
-        runtimeSession?.invalidate()
-        runtimeSession = nil
-        finishTracking()
-        statusMessage = "Suivi arrêté"
+        session?.end()
     }
 
     // MARK: - Suivi du temps et publication
 
-    private func beginTracking(kind: WorkoutKind, mode: CaptureMode, start: Date) {
+    private func beginTracking(kind: WorkoutKind, start: Date) {
         // L'app reste au premier plan bien plus longtemps après le poignet baissé (limite système ~8 min).
         WKExtension.shared().isFrontmostTimeoutExtended = true
+        captureBeganAt = Date()
         startDate = start
         pausedAccumulated = 0
         pauseStartedAt = nil
-        var snap = MetricsSnapshot.idle(kind: kind, mode: mode)
+        var snap = MetricsSnapshot.idle(kind: kind)
         snap.state = .running
         snapshot = snap
         publish(snap, force: true)
@@ -456,35 +241,19 @@ final class WorkoutManager: NSObject, ObservableObject {
         stopRouteRecording()
         tickTimer?.invalidate()
         tickTimer = nil
-        let wasOwned = snapshot.mode == .owned
-        let kind = snapshot.kind
         let elapsed = currentElapsed()
         startDate = nil
         session = nil
         builder = nil
-        let unexpected = wasOwned && !endRequested && autoDecided
-        endRequested = false
-        autoDecided = false
-        if unexpected, elapsed > 20 {
-            var snap = snapshot
-            snap.state = .paused
-            snapshot = snap
-            recoverAfterUnexpectedEnd(kind: kind, elapsedSoFar: elapsed)
-            return
-        }
-        publishEnded(elapsed: elapsed)
-    }
-
-    private func publishEnded(elapsed: TimeInterval? = nil) {
         var snap = snapshot
         snap.state = .ended
-        snap.elapsed = elapsed ?? currentElapsed()
+        snap.elapsed = elapsed
         snapshot = snap
         publish(snap, force: true)
         // Un départ attendait la fin de la capture précédente (deux séances à la suite) : il part maintenant, à zéro.
         if let next = pendingStart {
             pendingStart = nil
-            begin(next)
+            startOwned(kind: next.kind)
             return
         }
         // Séance finie, l'app reste sous les yeux : on la garde éveillée pour la suivante.
@@ -578,7 +347,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
     }
 }
 
-// MARK: - GPS (mode piloté, extérieur)
+// MARK: - GPS (extérieur)
 
 extension WorkoutManager: CLLocationManagerDelegate {
     private func startRouteRecording() {
@@ -642,54 +411,6 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
     nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
 }
 
-// MARK: - WKExtendedRuntimeSessionDelegate (mode companion)
-
-extension WorkoutManager: WKExtendedRuntimeSessionDelegate {
-    nonisolated func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
-        Task { @MainActor in self.statusMessage = "Suivi en arrière-plan actif" }
-    }
-
-    nonisolated func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
-        Task { @MainActor in
-            WKInterfaceDevice.current().play(.notification)
-            self.statusMessage = "Arrière-plan bientôt expiré : rouvre Jeffrey sur la montre"
-        }
-    }
-
-    nonisolated func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession,
-                                            didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: Error?) {
-        Task { @MainActor in
-            guard self.snapshot.mode == .companion, self.isActive else { return }
-            self.runtimeSession = nil
-            switch reason {
-            case .sessionInProgress, .expired, .resignedFrontmost:
-                self.statusMessage = "Arrière-plan interrompu (\(reason.rawValue)) : rouvre Jeffrey sur la montre"
-            default:
-                self.statusMessage = "Arrière-plan interrompu : \(error?.localizedDescription ?? "raison \(reason.rawValue)")"
-            }
-        }
-    }
-
-    /// Au retour au premier plan : si la session étendue est tombée, on la relance sans rien demander.
-    func appBecameActive() {
-        if needsBackgroundExtension { extendBackground() }
-        armStandby()
-    }
-
-    /// Relance la session d'exécution étendue (l'app doit être au premier plan).
-    func extendBackground() {
-        guard snapshot.mode == .companion, isActive, runtimeSession == nil else { return }
-        let runtime = WKExtendedRuntimeSession()
-        runtime.delegate = self
-        runtime.start()
-        runtimeSession = runtime
-    }
-
-    var needsBackgroundExtension: Bool {
-        snapshot.mode == .companion && isActive && runtimeSession == nil
-    }
-}
-
 #if DEBUG
 // MARK: - Source factice (banc d'essai simulateur)
 
@@ -699,7 +420,7 @@ extension WorkoutManager {
     fileprivate func startFakeOwned(kind: WorkoutKind) {
         fakeDistance = 0
         fakeEnergy = 0
-        beginTracking(kind: kind, mode: .owned, start: Date())
+        beginTracking(kind: kind, start: Date())
         statusMessage = "Séance factice en cours (banc d'essai)"
         fakeTimer?.invalidate()
         fakeTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in

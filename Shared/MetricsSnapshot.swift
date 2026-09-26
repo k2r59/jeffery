@@ -57,24 +57,6 @@ enum WorkoutKind: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// Qui pilote la séance côté montre.
-enum CaptureMode: String, Codable {
-    /// Notre app montre possède la HKWorkoutSession (données ~1 s).
-    case owned
-    /// L'app Exercice native possède la séance ; on lit les échantillons qu'elle écrit dans HealthKit.
-    case companion
-    /// Demande de l'iPhone : la montre choisit elle-même (séance native en cours → compagnon, sinon pilotée).
-    case auto
-
-    var label: String {
-        switch self {
-        case .auto: return "montre en attente de décision"
-        case .owned: return "séance pilotée par la montre Jeffrey"
-        case .companion: return "compagnon de l'app Exercice"
-        }
-    }
-}
-
 enum SessionState: String, Codable {
     case idle
     case running
@@ -90,17 +72,16 @@ struct MetricsSnapshot: Codable, Equatable {
     var activeEnergy: Double?   // kcal cumulées
     var distance: Double?       // mètres cumulés
     var speed: Double?          // m/s instantané (runningSpeed) si dispo
-    var mode: CaptureMode
     var kind: WorkoutKind
     var state: SessionState
-    /// Date du dernier échantillon HealthKit reçu (mode compagnon : utile pour la latence).
+    /// Date du dernier échantillon HealthKit reçu.
     var lastSampleAt: Date?
-    /// Départ réel de la séance côté montre (calé sur la séance native en mode compagnon).
+    /// Départ réel de la séance côté montre.
     var sessionStart: Date? = nil
 
-    static func idle(kind: WorkoutKind, mode: CaptureMode) -> MetricsSnapshot {
+    static func idle(kind: WorkoutKind) -> MetricsSnapshot {
         MetricsSnapshot(timestamp: Date(), elapsed: 0, heartRate: nil, activeEnergy: nil,
-                        distance: nil, speed: nil, mode: mode, kind: kind, state: .idle, lastSampleAt: nil)
+                        distance: nil, speed: nil, kind: kind, state: .idle, lastSampleAt: nil)
     }
 }
 
@@ -185,7 +166,6 @@ struct CoachMirror: Codable, Equatable {
 struct WatchCommandPayload: Codable {
     var command: WatchCommand
     var kind: WorkoutKind
-    var mode: CaptureMode
     var text: String? = nil
 }
 

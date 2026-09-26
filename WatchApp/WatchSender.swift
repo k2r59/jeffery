@@ -92,7 +92,7 @@ final class WatchSender: NSObject, WCSessionDelegate {
     /// explicite de l'iPhone, par exemple quand il n'affiche pas « Montre connectée »).
     func request(_ command: WatchCommand, kind: WorkoutKind, text: String? = nil, completion: @escaping (String?) -> Void) {
         let unreachable = "iPhone injoignable : ouvre Jeffrey sur l'iPhone"
-        let payload = WatchCommandPayload(command: command, kind: kind, mode: .companion, text: text)
+        let payload = WatchCommandPayload(command: command, kind: kind, text: text)
         guard WCSession.isSupported(), let data = try? WCCodec.encoder.encode(payload) else { completion(unreachable); return }
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable else { completion(unreachable); return }
@@ -165,12 +165,13 @@ final class WatchSender: NSObject, WCSessionDelegate {
     private func handleCommand(in message: [String: Any]) {
         guard let data = message[WCKeys.command] as? Data,
               let payload = try? WCCodec.decoder.decode(WatchCommandPayload.self, from: data) else { return }
-        if let at = message[WCKeys.commandAt] as? Double {
+        let at = message[WCKeys.commandAt] as? Double
+        if let at {
             guard at > lastHandledCommandAt, Date().timeIntervalSince1970 - at < 600 else { return }
             lastHandledCommandAt = at
         }
         Task { @MainActor in
-            WorkoutManager.shared.handle(command: payload)
+            WorkoutManager.shared.handle(command: payload, issuedAt: at.map(Date.init(timeIntervalSince1970:)))
         }
     }
 }

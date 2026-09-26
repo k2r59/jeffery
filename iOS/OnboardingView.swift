@@ -544,7 +544,7 @@ struct OnboardingView: View {
                 onboarded = true
                 setupVersion = Prefs.currentSetupVersion
                 UserDefaults.standard.set(WorkoutKind.walking.rawValue, forKey: Prefs.kind)
-                coach.start(kind: .walking, mode: .owned, goal: .trial)
+                coach.start(kind: .walking, goal: .trial)
             }
             if !canTrial {
                 Text("Complète les réglages requis pour l'essai.").font(.system(size: 13, weight: .medium)).foregroundStyle(secondary).frame(maxWidth: .infinity)

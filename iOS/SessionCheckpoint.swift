@@ -27,7 +27,6 @@ struct SessionCheckpoint: Codable, Equatable {
     }
 
     var kind: WorkoutKind
-    var mode: CaptureMode
     var goal: SessionGoal
     var goalReached: Bool
     var halfwayAnnounced: Bool

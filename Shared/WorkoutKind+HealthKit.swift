@@ -21,14 +21,6 @@ extension WorkoutKind {
         }
     }
 
-    var distanceType: HKQuantityType? {
-        switch self {
-        case .cycling: return HKQuantityType(.distanceCycling)
-        case .running, .walking, .hiking: return HKQuantityType(.distanceWalkingRunning)
-        default: return nil
-        }
-    }
-
     init(activityType: HKWorkoutActivityType) {
         switch activityType {
         case .running: self = .running

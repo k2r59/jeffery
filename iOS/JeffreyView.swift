@@ -69,7 +69,7 @@ struct JeffreyView: View {
                             .padding(4).background(Capsule().fill(Theme.surfaceRaised))
                         }
 
-                        card("Ta montre", "Lance ta séance dans l\'app Exercice si tu veux, Jeffrey la suit ; sinon la montre s\'en charge toute seule.") {
+                        card("Ta montre", "Jeffrey lance la séance sur ta montre et l\'enregistre dans Santé.") {
                             HStack {
                                 JIcon("montre", size: 18).foregroundStyle(Theme.creme)
                                 Text(coach.connectivity.linkLabel)

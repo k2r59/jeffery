@@ -200,7 +200,7 @@ struct CoachConfig {
         """
     }
 
-    func instructions(kind: WorkoutKind, mode: CaptureMode, sessionGoal: String? = nil, admin: Bool = false) -> String {
+    func instructions(kind: WorkoutKind, sessionGoal: String? = nil, admin: Bool = false) -> String {
         let goalLine: String
         if let g = sessionGoal, !g.contains("sortie libre") {
             goalLine = "Objectif de la séance : \(g)."
@@ -223,7 +223,7 @@ struct CoachConfig {
         \(basePrompt)
 
         Sportif : \(userName.isEmpty ? "prénom inconnu" : userName), niveau \(level.coachLabel)\(profileLine).\(intentLine)\(notesLine)\(recapLine)\(memoryBlock)
-        Séance en cours : \(kind.coachLabel). Il porte une Apple Watch\(mode == .auto ? "" : " (\(mode.label))"). \(goalLine)
+        Séance en cours : \(kind.coachLabel). Il porte une Apple Watch. \(goalLine)
 
         Tu reçois des messages système [MÉTRIQUES] (cœur et zone, distance, allure, calories, temps, objectif, chrono, \
         « corps/terrain » : arrêt, plat, montée, descente, D+). Tes outils font le reste : chaque \

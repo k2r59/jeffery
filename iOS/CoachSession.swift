@@ -135,8 +135,6 @@ final class CoachSession: ObservableObject {
 
     private var config = CoachConfig.load()
     private var kind: WorkoutKind = .running
-    /// Mode effectif rapporté par la montre (compagnon ou piloté) ; `.auto` tant qu'elle n'a pas décidé.
-    private var mode: CaptureMode = .auto
     private var responseInProgress = false
     private var partialCoachLine: TranscriptLine?
     private var metricsTimer: Timer?
@@ -147,6 +145,9 @@ final class CoachSession: ObservableObject {
     private var distanceHistory: [(Date, Double)] = []
     private var reconnectAttempts = 0
     private var endTimeoutTask: Task<Void, Never>?
+    /// Fin demandée à l'oral : on attend la fin de la réponse qui porte l'appel end_session, sinon le mot de fin
+    /// se met en file derrière elle et la déconnexion le coupe.
+    private var endAfterResponse: String?
     private var connectTimeoutTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var pendingPriorityCues: [String] = []
@@ -222,7 +223,7 @@ final class CoachSession: ObservableObject {
     private func handleAppTermination() {
         guard phase == .connecting || phase == .live else { return }
         log(.info, "Application fermée par l'utilisateur : séance terminée.")
-        connectivity.send(command: .end, kind: kind, mode: mode)
+        connectivity.send(command: .end, kind: kind)
         if let start = sessionStartedAt, !goal.isTrial {
             let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
             if SessionSummary.counts(elapsed: elapsed) { SessionSummary.upsert(makeSummary(start: start, elapsed: elapsed)) }
@@ -274,13 +275,13 @@ final class CoachSession: ObservableObject {
     /// WatchConnectivity peut les laisser périmés après une réinstallation, alors que la montre parle bien à l'iPhone.
     var watchReady: Bool { connectivity.watchConnected }
 
-    func start(kind: WorkoutKind, mode: CaptureMode = .auto, goal: SessionGoal = .free) {
+    func start(kind: WorkoutKind, goal: SessionGoal = .free) {
         guard phase == .idle else { return }
         if AVAudioApplication.shared.recordPermission != .granted {
             Task { [weak self] in
                 let ok = await AudioPipeline.requestMicrophonePermission()
                 guard let self else { return }
-                if ok { self.start(kind: kind, mode: mode, goal: goal) } else { self.errorMessage = "Micro refusé : Jeffrey ne peut pas t'entendre (Réglages › Jeffrey › Micro)." }
+                if ok { self.start(kind: kind, goal: goal) } else { self.errorMessage = "Micro refusé : Jeffrey ne peut pas t'entendre (Réglages › Jeffrey › Micro)." }
             }
             return
         }
@@ -302,7 +303,6 @@ final class CoachSession: ObservableObject {
         }
         selectLink()
         self.kind = kind
-        self.mode = mode
         errorMessage = nil
         transcript.removeAll()
         distanceHistory.removeAll()
@@ -357,6 +357,7 @@ final class CoachSession: ObservableObject {
         }
 
         sessionToken = UUID()
+        endAfterResponse = nil
         localPaused = false
         pendingPriorityCues.removeAll()
         partialCoachLine = nil
@@ -391,7 +392,7 @@ final class CoachSession: ObservableObject {
         // App montre éveillée : commande directe (startWatchApp échoue quand l'iPhone est en arrière-plan, cas d'un
         // départ demandé depuis la montre). Sinon on réveille l'app montre, qui lit la commande déposée.
         if connectivity.isReachable {
-            connectivity.send(command: .start, kind: kind, mode: mode) { [weak self] error in
+            connectivity.send(command: .start, kind: kind) { [weak self] error in
                 guard let self else { return }
                 if error == nil { self.log(.info, "Départ envoyé à la montre."); return }
                 self.launchWatchWorkoutLogged(kind: kind)
@@ -442,7 +443,7 @@ final class CoachSession: ObservableObject {
         case .requestEnd:
             if phase == .idle {
                 // Rien en cours côté iPhone : la montre doit quand même arrêter sa capture.
-                connectivity.send(command: .end, kind: payload.kind, mode: .auto)
+                connectivity.send(command: .end, kind: payload.kind)
             } else {
                 stop(reason: "Terminer touché sur la montre")
             }
@@ -667,7 +668,7 @@ final class CoachSession: ObservableObject {
         gps.stop()
         activity.stop()
         if !gps.status.isEmpty { log(.info, gps.status) }
-        connectivity.send(command: .end, kind: kind, mode: mode)
+        connectivity.send(command: .end, kind: kind)
         if realtime.isConnected {
             audio.onCapturedPCM16 = nil
             realtime.injectText(metricsLine(prefix: "[MÉTRIQUES FINALES]") + "\nLa séance est terminée.")
@@ -701,7 +702,7 @@ final class CoachSession: ObservableObject {
         log(.info, command == .pause ? "Pause." : "Reprise.")
         gps.paused = localPaused
         activity.paused = localPaused
-        connectivity.send(command: command, kind: kind, mode: mode) { [weak self] error in
+        connectivity.send(command: command, kind: kind) { [weak self] error in
             if let error { self?.log(.info, "Montre : \(error.localizedDescription)") }
         }
         realtime.injectText(command == .pause ? "L'utilisateur met la séance en pause : plus de coaching jusqu'à la reprise." : "L'utilisateur reprend la séance.")
@@ -779,7 +780,7 @@ final class CoachSession: ObservableObject {
         }
         let plan = planTitle.map { SessionCheckpoint.PlanState(title: $0, queue: planQueue, total: planTotal, index: planIndex) }
         SessionCheckpoint(
-            kind: kind, mode: mode, goal: goal, goalReached: goalReached, halfwayAnnounced: halfwayAnnounced,
+            kind: kind, goal: goal, goalReached: goalReached, halfwayAnnounced: halfwayAnnounced,
             startedAt: start, savedAt: Date(),
             transcript: transcript.map { .init(role: $0.role.rawValue, text: $0.text, at: $0.at) },
             hrSamples: hrSamples, zoneSeconds: zoneSeconds, lastKmAnnounced: lastKmAnnounced,
@@ -799,7 +800,7 @@ final class CoachSession: ObservableObject {
         guard checkpoint.isResumable else {
             log(.info, "Séance interrompue il y a \(Int(checkpoint.age / 60)) min : close sans reprise.")
             endOrphanLiveActivities()
-            connectivity.send(command: .end, kind: kind, mode: mode)
+            connectivity.send(command: .end, kind: kind)
             let elapsed = checkpoint.savedAt.timeIntervalSince(checkpoint.startedAt)
             if SessionSummary.counts(elapsed: elapsed) {
                 endedSummary = makeSummary(start: checkpoint.startedAt, elapsed: elapsed)
@@ -814,7 +815,6 @@ final class CoachSession: ObservableObject {
 
     private func restore(_ c: SessionCheckpoint) {
         kind = c.kind
-        mode = c.mode
         goal = c.goal
         goalReached = c.goalReached
         halfwayAnnounced = c.halfwayAnnounced
@@ -880,6 +880,7 @@ final class CoachSession: ObservableObject {
         }
         reference = nil
         sessionToken = UUID()
+        endAfterResponse = nil
         localPaused = false
         pendingPriorityCues.removeAll()
         partialCoachLine = nil
@@ -943,7 +944,7 @@ final class CoachSession: ObservableObject {
     private func writeSessionJournal() {
         guard let first = transcript.first else { return }
         let start = sessionStartedAt ?? latest?.sessionStart ?? first.at
-        var lines = ["Séance \(kind.coachLabel) · \(start.formatted(date: .abbreviated, time: .shortened)) · montre \(mode == .owned ? "pilote" : (mode == .companion ? "suit l'app Exercice" : "en attente")) · \(config.usesAppleAI ? "Apple AI" : "Jeffrey AI (\(config.model))") · montre \(connectivity.diagnostic)", ""]
+        var lines = ["Séance \(kind.coachLabel) · \(start.formatted(date: .abbreviated, time: .shortened)) · \(config.usesAppleAI ? "Apple AI" : "Jeffrey AI (\(config.model))") · montre \(connectivity.diagnostic)", ""]
         for l in transcript {
             let t = Int(max(0, l.at.timeIntervalSince(start)))
             let who: String
@@ -1030,7 +1031,7 @@ final class CoachSession: ObservableObject {
     private func baseSessionConfig() -> [String: Any] {
         [
             "type": "realtime",
-            "instructions": config.instructions(kind: kind, mode: mode, sessionGoal: goal.coachLabel(), admin: isAdminUser),
+            "instructions": config.instructions(kind: kind, sessionGoal: goal.coachLabel(), admin: isAdminUser),
             "output_modalities": [useAppleVoice ? "text" : "audio"],
             "tools": [[
                 "type": "function",
@@ -1220,6 +1221,11 @@ final class CoachSession: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.responseInProgress = false
+                if let reason = self.endAfterResponse {
+                    self.endAfterResponse = nil
+                    self.stop(reason: reason)
+                    return
+                }
                 if self.capturingAck {
                     self.capturingAck = false
                     let saidIt = (self.lastCoachLine ?? "").lowercased().contains("regarde")
@@ -1329,7 +1335,14 @@ final class CoachSession: ObservableObject {
             }
             log(.info, "Fin de séance demandée à l'oral et confirmée.")
             realtime.sendFunctionOutput(callId: callId, output: ["ended": true], thenRespond: false)
-            stop(reason: "fin demandée à l'oral (end_session)")
+            endAfterResponse = "fin demandée à l'oral (end_session)"
+            let token = sessionToken
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard let self, self.sessionToken == token, let reason = self.endAfterResponse else { return }
+                self.endAfterResponse = nil
+                self.stop(reason: reason)
+            }
             return
         }
         if name == "get_time" {
@@ -1902,18 +1915,9 @@ final class CoachSession: ObservableObject {
             stop(reason: "la montre a envoyé « terminé » avant le début (état \(snap.state), instantané de \(Int(Date().timeIntervalSince(snap.timestamp))) s)")
             return
         }
-        if snap.mode != .auto, snap.mode != mode, snap.state != .ended {
-            let wasDecided = mode != .auto
-            mode = snap.mode
-            let line = mode == .companion ? "La montre suit l'app Exercice." : "La montre pilote la séance."
-            log(.info, line)
-            if wasDecided, phase == .live {
-                realtime.injectText("[MONTRE] \(line) " + (mode == .companion ? "La séance continue, rien ne change pour lui." : ""))
-            }
-        }
         if phase == .live, snap.state == .ended {
-            log(.info, mode == .owned ? "La montre a terminé la séance." : "La séance de l'app Exercice est terminée.")
-            stop(reason: mode == .owned ? "la montre a terminé la séance" : "la séance de l'app Exercice est terminée")
+            log(.info, "La montre a terminé la séance.")
+            stop(reason: "la montre a terminé la séance")
         }
     }
 
@@ -2379,7 +2383,7 @@ final class CoachSession: ObservableObject {
             "phase": String(describing: phase),
             "elapsed": String(format: "%02d:%02d", elapsed / 60, elapsed % 60),
             "started_at": DateFormatter.localizedString(from: start, dateStyle: .none, timeStyle: .short),
-            "sport": kind.coachLabel, "capture": mode.label,
+            "sport": kind.coachLabel,
             "coach_link": config.usesAppleAI ? "Apple AI sur l'iPhone" : "Jeffrey AI (\(config.model))",
             "coach_connected": realtime.isConnected,
             "reconnections": reconnectAttempts,
