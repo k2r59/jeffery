@@ -137,6 +137,8 @@ final class CoachSession: ObservableObject {
     private var lastKmElapsed: TimeInterval = 0
     /// Chrono en pause : temps restant du bloc en cours, relancé à la reprise.
     private var pausedTimerRemaining: Int?
+    /// Pause ou reprise demandée ici : les instantanés de la montre arrivés juste après décrivent encore l'état d'avant.
+    private var lastPauseToggleAt: Date = .distantPast
     /// Fin prévue du bloc qui vient de sonner : le bloc suivant part de là, sans dérive cumulée.
     private var nextPhaseStart: Date?
     /// Zone 5 : depuis quand il y est, et dernière consigne de redescendre.
@@ -729,6 +731,7 @@ final class CoachSession: ObservableObject {
         let command: WatchCommand = isPaused ? .resume : .pause
         localPaused = command == .pause
         log(.info, command == .pause ? "Pause." : "Reprise.")
+        lastPauseToggleAt = Date()
         setChronoPaused(localPaused)
         gps.paused = localPaused
         activity.paused = localPaused
@@ -1706,6 +1709,7 @@ final class CoachSession: ObservableObject {
             return
         }
         sendMirror(force: true)
+        log(.info, "Chrono terminé : \(finished).")
         realtime.injectText("[CHRONO terminé] « \(finished) ». " + metricsLine(prefix: "[MÉTRIQUES]"))
         realtime.requestResponse(instructions: "Le chrono « \(finished) » vient de sonner : annonce-le et donne la consigne suivante en une ou deux phrases.")
     }
@@ -1957,9 +1961,13 @@ final class CoachSession: ObservableObject {
     private func handle(snapshot snap: MetricsSnapshot) {
         traceWatch(snap)
         if snap.state == .paused || snap.state == .running {
-            let wasPaused = localPaused
-            localPaused = snap.state == .paused
-            if phase == .live, wasPaused != localPaused { setChronoPaused(localPaused) }
+            // Juste après une pause ou reprise demandée ici, la montre n'a pas encore appliqué la commande : son état est
+            // périmé. Sinon (pause faite sur la montre seule), l'iPhone et le chrono la suivent.
+            if Date().timeIntervalSince(lastPauseToggleAt) > 5 {
+                let wasPaused = localPaused
+                localPaused = snap.state == .paused
+                if phase == .live, wasPaused != localPaused { setChronoPaused(localPaused) }
+            }
             gps.paused = localPaused
             activity.paused = localPaused
         }

@@ -66,12 +66,14 @@ final class FakeWatch {
 
 /// Serveur Realtime simulé : joue les événements serveur attendus (session, réponses texte + audio silencieux,
 /// transcriptions, appels de fonction déclenchés par mots-clés). Activé par WATCHCOACH_FAKE_REALTIME=1.
-/// Phrases de l'utilisateur scriptées : WATCHCOACH_FAKE_USER="95:Tu peux terminer la séance ?|102:Oui" (secondes
-/// après la connexion). « termin… » fait demander « Je termine la séance ? », le « oui » suivant appelle end_session.
+/// Phrases de l'utilisateur scriptées : WATCHCOACH_FAKE_USER="40:Oui|95:Tu peux terminer la séance ?|102:Oui" (secondes
+/// après la connexion). Après suggest_workouts il reformule (« c'est bien ça ? ») et lance au « oui » suivant ;
+/// « termin… » fait demander « Je termine la séance ? », le « oui » suivant appelle end_session.
 final class FakeRealtimeBackend {
     static let enabled = ProcessInfo.processInfo.environment["WATCHCOACH_FAKE_REALTIME"] == "1"
     private var lastUser = ""
     private var endAsked = false
+    private var workoutRecapAsked = false
     var deliver: (([String: Any]) -> Void)?
     private var responseCounter = 0
     private var lastConsigne = ""
@@ -136,7 +138,13 @@ final class FakeRealtimeBackend {
             emit(["type": "response.done", "response": ["id": "resp_\(n)", "status": "completed"]], after: 0.9)
             return
         }
-        if let id = pendingWorkoutId {
+        // Comme le vrai coach : il reformule le choix, et ne lance qu'au « oui » qui suit.
+        if let id = pendingWorkoutId, !workoutRecapAsked {
+            workoutRecapAsked = true
+            say("La première, c'est bien ça ?", response: n)
+            return
+        }
+        if let id = pendingWorkoutId, user.hasPrefix("oui") {
             pendingWorkoutId = nil
             emit(["type": "response.function_call_arguments.done", "name": "start_workout", "call_id": "call_\(n)", "arguments": "{\"id\": \"\(id)\", \"confirmed\": true}"], after: 0.6)
             emit(["type": "response.done", "response": ["id": "resp_\(n)", "status": "completed"]], after: 0.9)

@@ -6,7 +6,8 @@
 # Usage : Tests/Scripts/e2e-session.sh [dossier de sortie]
 # Variables : WATCH_FIRST=1 (app montre ouverte avant le départ) ou 0 (fermée : l'iPhone doit la lancer),
 #             WATCH_SCRIPT="pause@60,resume@78" (appuis montre, seulement si WATCH_FIRST=1),
-#             FAKE_USER="100:Tu peux terminer la séance ?|107:Oui, vas-y." (phrases dites, s après la connexion),
+#             FAKE_USER="38:Oui, c'est bien ça.|100:Tu peux terminer la séance ?|107:Oui, vas-y." (phrases dites,
+#               s après la connexion : confirme l'exercice proposé, puis demande la fin et la confirme),
 #             STOP_AFTER=170 (arrêt de secours, s).
 set -u
 PHONE=DA7A1593-AA47-4E29-B4F4-5DB2EAA6F507   # iPhone 18 Pro Max, jumelé à…
@@ -14,7 +15,7 @@ WATCH=D92CC0CE-C1D9-46DD-A332-05D451100C90   # …Apple Watch Series 12 (46 mm)
 OUT=${1:-/tmp/jeffrey-e2e}
 WATCH_FIRST=${WATCH_FIRST:-1}
 WATCH_SCRIPT=${WATCH_SCRIPT:-"pause@60,resume@78"}
-FAKE_USER=${FAKE_USER:-"100:Tu peux terminer la séance ?|107:Oui, vas-y."}
+FAKE_USER=${FAKE_USER:-"38:Oui, c'est bien ça.|100:Tu peux terminer la séance ?|107:Oui, vas-y."}
 STOP_AFTER=${STOP_AFTER:-170}
 mkdir -p "$OUT"
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)

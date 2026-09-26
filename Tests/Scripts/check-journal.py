@@ -97,7 +97,9 @@ def check(events):
         if due > stop_t - 1:
             continue
         label = x[len("Chrono : "):x.rfind(",")]
-        nxt = [tt for tt, xx in info if tt >= t + 1 and (xx.startswith("Chrono : ") or xx.startswith("Programme terminé"))]
+        if any(t <= tt <= due and "gelé" in xx for tt, xx in info):
+            continue  # bloc mis en pause : il reprend avec son temps restant (ligne « Chrono » suivante)
+        nxt = [tt for tt, xx in info if tt >= t + 1 and xx.startswith(("Chrono : ", "Chrono terminé", "Programme terminé"))]
         if nxt:
             drift = nxt[0] - due
             if abs(drift) > 3:
@@ -121,13 +123,20 @@ def check(events):
     if goal and prog_start and prog_end and prog_start[0] < goal[0] < prog_end[0] - 3:
         add("ÉCHEC", "objectif et programme", f"objectif atteint à {mmss(goal[0])}, programme fini à {mmss(prog_end[0])}")
 
-    # 9. Mot de fin après l'arrêt.
+    # 9. Mot de fin après l'arrêt, et pas d'arrêt par la montre dans la première minute.
     if stops:
         reason = next(x for t, x in info if t == stops[0] and x.startswith("Arrêt de la séance"))
+        if "la montre a terminé" in reason and stops[0] < 60:
+            add("ÉCHEC", "pas d'arrêt précoce", f"la montre a terminé la séance à {mmss(stops[0])}")
         silent_end = any(k in reason for k in ("fermée", "injoignable", "avant le début"))
         farewell = [x for t, x in coach if t >= stops[0]]
         if not silent_end:
-            add("OK" if farewell else "ÉCHEC", "mot de fin", farewell[0][:60] if farewell else "aucune phrase après l'arrêt")
+            if not farewell:
+                add("ÉCHEC", "mot de fin", "aucune phrase après l'arrêt")
+            elif farewell[-1].rstrip().endswith(","):
+                add("ATTENTION", "mot de fin", f"coupé : « {farewell[-1][:60]} »")
+            else:
+                add("OK", "mot de fin", farewell[0][:60])
 
     # 10. Vocabulaire de Jeffrey.
     kilo = [(t, x) for t, x in coach if re.search(r"\bkilos?\b", x, re.I)]
