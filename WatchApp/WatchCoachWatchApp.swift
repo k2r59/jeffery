@@ -42,7 +42,6 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
 
     func applicationDidBecomeActive() {
         WatchSender.shared.startPinging()
-        Task { @MainActor in WorkoutManager.shared.armStandby() }
     }
 
     func applicationWillResignActive() {

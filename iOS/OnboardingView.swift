@@ -46,6 +46,9 @@ struct OnboardingView: View {
     @StateObject private var setup = SetupState()
     @ObservedObject private var account = AccountStore.shared
     @State private var showOwnKey = false
+    @State private var showDemoLogin = false
+    @State private var demoUsername = ""
+    @State private var demoPassword = ""
     @StateObject private var preview = VoicePreview()
     @StateObject private var appleVoice = AppleVoice()
     @AppStorage(Prefs.onboarded) private var onboarded: Bool = false
@@ -388,6 +391,16 @@ struct OnboardingView: View {
                     .opacity(account.isBusy ? 0.6 : 1)
                 if account.isBusy { ProgressView().tint(accent).frame(maxWidth: .infinity) }
                 if let e = account.error { statusLine(ok: false, e) }
+                // Relecture Apple : identifiant et mot de passe fournis dans App Store Connect.
+                Button { withAnimation(.snappy) { showDemoLogin.toggle() } } label: {
+                    HStack(spacing: 6) {
+                        Text("Compte de démonstration").font(.system(size: 13, weight: .semibold)).foregroundStyle(secondary)
+                        JIcon("suivant", size: 12).foregroundStyle(secondary).rotationEffect(.degrees(showDemoLogin ? 90 : 0))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .accessibilityIdentifier("Compte de démonstration")
+                if showDemoLogin { demoLoginFields }
             }
             // Clé perso : réservé à l'administrateur (ou à un téléphone qui en a déjà une).
             if account.user?.isAdmin == true || !(KeychainStore.read(KeychainStore.apiKeyAccount) ?? "").isEmpty {
@@ -405,6 +418,31 @@ struct OnboardingView: View {
             primaryButton("Continuer", enabled: account.isSignedIn) { go(.voice) }
         }
         .onAppear { setup.refreshAccess() }
+    }
+
+    private var demoLoginFields: some View {
+        VStack(spacing: 12) {
+            TextField("Identifiant", text: $demoUsername)
+                .focused($focused)
+                .keyboardType(.emailAddress).textContentType(.username)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: fieldRadius, style: .continuous).fill(surface).overlay(RoundedRectangle(cornerRadius: fieldRadius, style: .continuous).strokeBorder(border)))
+            SecureField("Mot de passe", text: $demoPassword)
+                .focused($focused)
+                .textContentType(.password)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: fieldRadius, style: .continuous).fill(surface).overlay(RoundedRectangle(cornerRadius: fieldRadius, style: .continuous).strokeBorder(border)))
+            Button {
+                focused = false
+                Task { await account.signInWithDemo(username: demoUsername, password: demoPassword); setup.refreshAccess() }
+            } label: {
+                Text("Se connecter").font(.system(size: 14, weight: .bold)).foregroundStyle(bg)
+                    .frame(maxWidth: .infinity).frame(height: 44).background(Capsule().fill(accent))
+            }
+            .disabled(demoUsername.isEmpty || demoPassword.isEmpty || account.isBusy)
+            .opacity(demoUsername.isEmpty || demoPassword.isEmpty ? 0.4 : 1)
+        }
     }
 
     private var ownKeyFields: some View {

@@ -166,6 +166,20 @@ final class AccountStore: NSObject, ObservableObject {
         return r.user
     }
 
+    /// Compte de démonstration donné à la relecture d'Apple : identifiant et mot de passe au lieu de Sign in with Apple.
+    func signInWithDemo(username: String, password: String) async {
+        error = nil
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            let response: JeffreyBackend.AuthResponse = try await JeffreyBackend.call("auth/review", method: "POST", body: ["username": username, "password": password])
+            KeychainStore.write(response.token, account: Self.tokenAccount)
+            apply(user: response.user, quota: response.quota)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     private func apply(user: JeffreyBackend.User, quota: JeffreyBackend.Quota?) {
         self.user = user
         self.quota = quota

@@ -6,6 +6,7 @@
 //
 // Routes (JSON) :
 //   POST /auth/apple            { identityToken, fullName? }  → { token, user }        connexion Sign in with Apple
+//   POST /auth/review           { username, password }        → { token, user }        compte de démonstration (relecture Apple)
 //   GET  /me                    Bearer <token>                → { user, quota }
 //   POST /session               Bearer <token>                → { clientSecret, expiresAt, model }   jeton Realtime
 //   POST /openai/responses      Bearer <token>, corps Responses → réponse OpenAI (bilan de secours, mémoire)
@@ -22,6 +23,7 @@ export interface Env {
   OPENAI_API_KEY: string;
   JWT_SECRET: string;
   APPLE_BUNDLE_ID: string;
+  REVIEW_PASSWORD?: string;   // secret : mot de passe du compte de démonstration donné à la relecture Apple
   ADMIN_EMAILS: string;
   DAILY_SESSION_LIMIT: string;
   REALTIME_MODEL: string;
@@ -53,6 +55,7 @@ export default {
     const path = url.pathname.replace(/\/+$/, "") || "/";
     try {
       if (request.method === "POST" && path === "/auth/apple") return await authApple(request, env);
+      if (request.method === "POST" && path === "/auth/review") return await authReview(request, env);
       if (path === "/") return json({ service: "jeffrey-api", ok: true });
 
       const user = await authenticate(request, env);
@@ -110,7 +113,10 @@ async function authApple(request: Request, env: Env): Promise<Response> {
   }
   user.lastSeenAt = now;
   await putUser(user, env);
+  return await signedIn(user, env);
+}
 
+async function signedIn(user: User, env: Env): Promise<Response> {
   const token = await new SignJWT({ role: user.role })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -118,6 +124,30 @@ async function authApple(request: Request, env: Env): Promise<Response> {
     .setExpirationTime(`${TOKEN_DAYS}d`)
     .sign(secret(env));
   return json({ token, user: publicUser(user), quota: await quota(user, env) });
+}
+
+// MARK: Compte de démonstration (relecture TestFlight / App Store)
+
+// Apple exige un identifiant et un mot de passe pour relire l'app : ce compte « autorisé » les remplace
+// pour Sign in with Apple. Sans le secret REVIEW_PASSWORD, la route refuse tout.
+const REVIEW_USERNAME = "relecture@jeffrey.app";
+
+async function authReview(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as { username?: string; password?: string } | null;
+  const username = body?.username?.trim().toLowerCase();
+  if (!env.REVIEW_PASSWORD || username !== REVIEW_USERNAME || !sameSecret(body?.password ?? "", env.REVIEW_PASSWORD)) {
+    return error(401, "identifiant ou mot de passe incorrect");
+  }
+  const now = new Date().toISOString();
+  const user = (await getUser("review", env)) ?? { id: "review", email: null, name: "Relecture Apple", role: "allowed", createdAt: now, lastSeenAt: now, sessions: 0 };
+  user.lastSeenAt = now;
+  await putUser(user, env);
+  return await signedIn(user, env);
+}
+
+function sameSecret(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
+  return x.byteLength === y.byteLength && crypto.subtle.timingSafeEqual(x, y);
 }
 
 async function authenticate(request: Request, env: Env): Promise<User | null> {

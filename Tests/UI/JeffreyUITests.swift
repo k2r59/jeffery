@@ -28,7 +28,8 @@ final class JeffreyUITests: XCTestCase {
         add(a)
     }
 
-    func testOnboardingThenTabs() {
+    /// Accueil complet jusqu'à l'écran du compte (app remise à zéro).
+    private func onboardToAccountStep() {
         app.launchEnvironment["WATCHCOACH_RESET"] = "1"
         app.launch()
         XCTAssertTrue(app.staticTexts["Ton rythme. Ton coach."].waitForExistence(timeout: 5))
@@ -64,8 +65,12 @@ final class JeffreyUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Continuer"].waitForExistence(timeout: 5))
         app.buttons["Continuer"].tap()
         removeUIInterruptionMonitor(monitor2)
-        // Compte Apple obligatoire : sans connexion (impossible sur simulateur), le parcours s'arrête ici.
         XCTAssertTrue(app.staticTexts["Ton coach, à toi."].waitForExistence(timeout: 3))
+    }
+
+    func testOnboardingThenTabs() {
+        onboardToAccountStep()
+        // Compte Apple obligatoire : sans connexion (impossible sur simulateur), le parcours s'arrête ici.
         screenshot("03-onboarding-compte")
         XCTAssertFalse(app.buttons["Continuer"].isEnabled)
         XCTAssertFalse(app.buttons["Plus tard"].exists)
@@ -202,5 +207,25 @@ extension JeffreyUITests {
         bulk.tap()
         expectConfirmation("Supprimer 4 séances ?")
         screenshot("18-selection-confirmation")
+    }
+
+    /// Parcours du relecteur Apple : compte de démonstration sur le vrai serveur, puis fin de l'accueil.
+    /// Mot de passe : TEST_RUNNER_WATCHCOACH_REVIEW_PASSWORD=… xcodebuild test … (server/.review-credentials).
+    func testReviewerDemoLogin() throws {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["WATCHCOACH_REVIEW_PASSWORD"], "mot de passe de relecture non fourni")
+        onboardToAccountStep()
+        app.buttons["Compte de démonstration"].tap()
+        let user = app.textFields["Identifiant"]
+        XCTAssertTrue(user.waitForExistence(timeout: 3))
+        user.tap(); user.typeText("relecture@jeffrey.app")
+        let pass = app.secureTextFields["Mot de passe"]
+        pass.tap(); pass.typeText(password)
+        app.buttons["Se connecter"].tap()
+        XCTAssertTrue(app.staticTexts["Autorisé"].waitForExistence(timeout: 15), "le compte de démonstration doit être autorisé")
+        screenshot("04-relecture-connecte")
+        XCTAssertTrue(app.buttons["Continuer"].isEnabled)
+        app.buttons["Continuer"].tap()
+        XCTAssertTrue(app.staticTexts["Choisis ton intelligence."].waitForExistence(timeout: 5))
+        screenshot("05-relecture-intelligence")
     }
 }

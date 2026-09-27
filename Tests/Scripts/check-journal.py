@@ -143,7 +143,8 @@ def check(events):
     add("ÉCHEC" if kilo else "OK", "« kilomètre » en entier",
         "; ".join(f"{mmss(t)} « {x[:50]} »" for t, x in kilo) or "jamais « kilo »")
     gait = [(t, x) for t, x in coach
-            if re.search(r"\btu (marches|cours|es en (train de )?(marche|course|courir|marcher))\b|\b(de nouveau|toujours) en (course|marche)\b", x, re.I)]
+            if re.search(r"\btu (marches|cours|es en (train de )?(marche|course|courir|marcher))\b|\b(de nouveau|toujours) en (course|marche)\b", x, re.I)
+            and not re.search(r"\b(savoir|sais pas|mesure pas) si tu\b", x, re.I)]
     add("ATTENTION" if gait else "OK", "pas d'avis marche/course",
         "; ".join(f"{mmss(t)} « {x[:60]} »" for t, x in gait) or "aucun")
     return results

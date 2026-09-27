@@ -14,7 +14,7 @@ settings:
     DEVELOPMENT_TEAM: PTB959SX83
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "2"
+    CURRENT_PROJECT_VERSION: "3"
 
 targets:
   WatchCoach:
@@ -31,6 +31,7 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Jeffrey
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Chiffrement : uniquement HTTPS standard, donc exempt (évite la question à chaque envoi TestFlight).
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
@@ -75,6 +76,7 @@ targets:
       path: WatchApp/Info.plist
       properties:
         CFBundleDisplayName: Jeffrey
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         WKApplication: true
         WKCompanionAppBundleIdentifier: dev.promo.watchcoach
         WKRunsIndependentlyOfCompanionApp: false
@@ -109,6 +111,7 @@ targets:
       path: Widgets/Info.plist
       properties:
         CFBundleDisplayName: Jeffrey
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
