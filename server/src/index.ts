@@ -7,6 +7,7 @@
 // Routes (JSON) :
 //   POST /auth/apple            { identityToken, fullName? }  → { token, user }        connexion Sign in with Apple
 //   POST /auth/review           { username, password }        → { token, user }        compte de démonstration (relecture Apple)
+//   GET  /privacy                                             → page HTML              politique de confidentialité (App Store)
 //   GET  /me                    Bearer <token>                → { user, quota }
 //   POST /session               Bearer <token>                → { clientSecret, expiresAt, model }   jeton Realtime
 //   POST /openai/responses      Bearer <token>, corps Responses → réponse OpenAI (bilan de secours, mémoire)
@@ -17,6 +18,7 @@
 // Invitation : clé KV invite:<email> → rôle allowed à la connexion (npx wrangler kv key put --remote --binding JEFFREY …).
 
 import { SignJWT, jwtVerify, createRemoteJWKSet } from "jose";
+import { PRIVACY_HTML } from "./privacy";
 
 export interface Env {
   JEFFREY: KVNamespace;
@@ -57,6 +59,7 @@ export default {
       if (request.method === "POST" && path === "/auth/apple") return await authApple(request, env);
       if (request.method === "POST" && path === "/auth/review") return await authReview(request, env);
       if (path === "/") return json({ service: "jeffrey-api", ok: true });
+      if (path === "/privacy") return new Response(PRIVACY_HTML, { headers: { "content-type": "text/html; charset=utf-8" } });
 
       const user = await authenticate(request, env);
       if (!user) return error(401, "connexion requise");
