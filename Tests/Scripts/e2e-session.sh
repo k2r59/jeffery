@@ -8,7 +8,9 @@
 #             WATCH_SCRIPT="pause@60,resume@78" (appuis montre, seulement si WATCH_FIRST=1),
 #             FAKE_USER="38:Oui, c'est bien ça.|100:Tu peux terminer la séance ?|107:Oui, vas-y." (phrases dites,
 #               s après la connexion : confirme l'exercice proposé, puis demande la fin et la confirme),
-#             STOP_AFTER=170 (arrêt de secours, s).
+#             STOP_AFTER=170 (arrêt de secours, s),
+#             WATCH_ENV="WATCHCOACH_FAKE_HEALTH_DENIED=1" (pannes de montre simulées : Santé refusée, ou
+#               WATCHCOACH_IGNORE_START=1 pour une montre qui ne répond jamais au départ).
 set -u
 PHONE=DA7A1593-AA47-4E29-B4F4-5DB2EAA6F507   # iPhone 18 Pro Max, jumelé à…
 WATCH=D92CC0CE-C1D9-46DD-A332-05D451100C90   # …Apple Watch Series 12 (46 mm)
@@ -17,6 +19,7 @@ WATCH_FIRST=${WATCH_FIRST:-1}
 WATCH_SCRIPT=${WATCH_SCRIPT:-"pause@60,resume@78"}
 FAKE_USER=${FAKE_USER:-"38:Oui, c'est bien ça.|100:Tu peux terminer la séance ?|107:Oui, vas-y."}
 STOP_AFTER=${STOP_AFTER:-170}
+WATCH_ENV=${WATCH_ENV:-}
 mkdir -p "$OUT"
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PAPP=$ROOT/build/dd-sim/Build/Products/Debug-iphonesimulator/WatchCoach.app
@@ -31,11 +34,14 @@ xcrun simctl install $WATCH "$WAPP" || exit 1
 for svc in motion location microphone media-library; do xcrun simctl privacy $PHONE grant $svc $PBID 2>/dev/null; done
 xcrun simctl privacy $WATCH grant location $WBID 2>/dev/null
 # Données de santé fabriquées, même quand c'est l'iPhone qui lance l'app montre (variable vue par tout le simulateur).
+# Laissée en place après le banc : l'iPhone réveille l'app montre en arrière-plan (sonde de portée) et, sans elle,
+# la montre demanderait la vraie autorisation Santé, dont la fenêtre bloquerait les séances suivantes sur l'iPhone.
 xcrun simctl spawn $WATCH launchctl setenv WATCHCOACH_FAKE_HEALTH 1
+for kv in ${=WATCH_ENV}; do xcrun simctl spawn $WATCH launchctl setenv ${kv%%=*} ${kv#*=}; done
 
 CONT=$(xcrun simctl get_app_container $PHONE $PBID data)
 rm -f "$CONT/Documents/sessions.json" "$CONT/Documents/derniere-seance.txt"; rm -rf "$CONT/Documents/journaux"
-xcrun simctl launch --terminate-running-process $PHONE $PBID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null; sleep 3
+SIMCTL_CHILD_WATCHCOACH_NO_HEALTH=1 xcrun simctl launch --terminate-running-process $PHONE $PBID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null; sleep 3
 xcrun simctl terminate $PHONE $PBID
 
 if [[ $WATCH_FIRST == 1 ]]; then
@@ -57,6 +63,6 @@ cp "$CONT/Documents/derniere-seance.txt" "$OUT/journal.txt" 2>/dev/null || echo 
 echo "=== JOURNAL iPhone ==="; cat "$OUT/journal.txt"
 echo "=== CRASHES (10 min) ==="; find ~/Library/Logs/DiagnosticReports -name 'WatchCoach*.ips' -mmin -10 2>/dev/null
 xcrun simctl terminate $WATCH $WBID 2>/dev/null; xcrun simctl terminate $PHONE $PBID 2>/dev/null
-xcrun simctl spawn $WATCH launchctl unsetenv WATCHCOACH_FAKE_HEALTH
+for kv in ${=WATCH_ENV}; do xcrun simctl spawn $WATCH launchctl unsetenv ${kv%%=*}; done
 echo "=== VÉRIFICATION ==="
 "$ROOT/Tests/Scripts/check-journal.py" "$OUT/journal.txt"

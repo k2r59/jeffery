@@ -16,7 +16,7 @@ export const PRIVACY_HTML = `<!doctype html>
 </head>
 <body>
 <h1><span>J</span>effrey · Politique de confidentialité</h1>
-<p class="muted">Dernière mise à jour : 1er octobre 2026</p>
+<p class="muted">Dernière mise à jour : 2 octobre 2026</p>
 
 <p>Jeffrey est un coach sportif vocal pour iPhone et Apple Watch. Cette page explique quelles données l'app utilise, où elles vont et comment les supprimer.</p>
 
@@ -31,8 +31,9 @@ export const PRIVACY_HTML = `<!doctype html>
 <ul>
   <li>Ton compte : l'identifiant anonyme fourni par « Se connecter avec Apple », l'adresse e-mail et le nom si tu as choisi de les partager, ton statut d'accès et les dates de création et de dernière connexion.</li>
   <li>Un compteur de séances (total, et par jour pendant 3 jours) pour appliquer la limite quotidienne.</li>
+  <li>Le journal technique de chaque séance, gardé 30 jours pour corriger les problèmes : événements (départ, réponse de la montre, chronos, erreurs), modèle et versions de l'iPhone et de la montre, et les remarques que tu demandes à Jeffrey de transmettre au développeur.</li>
 </ul>
-<p>Le serveur ne reçoit ni ta voix, ni ce que tu dis, ni tes données de santé, ni ta position.</p>
+<p>Le serveur ne reçoit ni ta voix, ni tes conversations avec Jeffrey, ni tes données de santé, ni ta position.</p>
 
 <h2>Ce qui passe par OpenAI</h2>
 <ul>
@@ -57,6 +58,6 @@ export const PRIVACY_HTML = `<!doctype html>
 <hr>
 
 <h2>English summary</h2>
-<p>Jeffrey is a voice fitness coach for iPhone and Apple Watch. Your profile, coach memory, workouts, Health data and location stay on your devices. The Jeffrey server only stores your account (anonymous Sign in with Apple identifier, e-mail and name if you share them, access status, dates) and a session counter. During a workout, your voice and workout metrics are sent directly to OpenAI so the coach can understand and answer; a summary is sent at the end to write the report. No advertising, no tracking, no data sale. To delete your account, e-mail <a href="mailto:herve.colard@promo.dev">herve.colard@promo.dev</a>.</p>
+<p>Jeffrey is a voice fitness coach for iPhone and Apple Watch. Your profile, coach memory, workouts, Health data and location stay on your devices. The Jeffrey server only stores your account (anonymous Sign in with Apple identifier, e-mail and name if you share them, access status, dates), a session counter, and a technical log of each workout kept 30 days for troubleshooting (events, device models and versions, never your conversations). During a workout, your voice and workout metrics are sent directly to OpenAI so the coach can understand and answer; a summary is sent at the end to write the report. No advertising, no tracking, no data sale. To delete your account, e-mail <a href="mailto:herve.colard@promo.dev">herve.colard@promo.dev</a>.</p>
 </body>
 </html>`;

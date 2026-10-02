@@ -78,6 +78,10 @@ struct MetricsSnapshot: Codable, Equatable {
     var lastSampleAt: Date?
     /// Départ réel de la séance côté montre.
     var sessionStart: Date? = nil
+    /// Séance impossible à démarrer ou coupée par watchOS : la raison, à dire et afficher sur l'iPhone.
+    var failure: String? = nil
+    /// Modèle, watchOS et autorisation Santé de la montre, pour le journal technique.
+    var device: String? = nil
 
     static func idle(kind: WorkoutKind) -> MetricsSnapshot {
         MetricsSnapshot(timestamp: Date(), elapsed: 0, heartRate: nil, activeEnergy: nil,

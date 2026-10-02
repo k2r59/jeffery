@@ -7,6 +7,7 @@ struct RootView: View {
     @StateObject private var history = WorkoutHistory()
     @State private var tab = 0
     @State private var summaryToShow: SessionSummary?
+    @State private var failureToShow: CoachSession.SessionFailure?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -24,10 +25,16 @@ struct RootView: View {
         .preferredColorScheme(.dark)
         .fullScreenCover(isPresented: Binding(get: { coach.phase != .idle }, set: { _ in }), onDismiss: {
             if let s = coach.endedSummary { coach.endedSummary = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { summaryToShow = s } }
+            if let f = coach.sessionFailure { coach.sessionFailure = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { failureToShow = f } }
         }) {
             LiveSessionView().environmentObject(coach)
         }
         .sheet(item: $summaryToShow) { summary in SessionEndView(summary: summary) }
+        .alert(failureToShow?.title ?? "", isPresented: Binding(get: { failureToShow != nil }, set: { if !$0 { failureToShow = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(failureToShow?.steps ?? "")
+        }
         .fullScreenCover(isPresented: Binding(get: { !onboarded || setupVersion < Prefs.currentSetupVersion }, set: { _ in })) { OnboardingView() }
         .task {
             await history.load(); SessionAnalysisService.shared.catchUp()

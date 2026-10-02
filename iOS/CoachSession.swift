@@ -166,6 +166,15 @@ final class CoachSession: ObservableObject {
     private var endAfterResponse: String?
     /// Réponses encore en cours au moment de l'arrêt : le démontage attend le mot de fin, pas leur fin à elles.
     private var responsesBeforeFarewell = 0
+    /// Séance impossible côté montre : titre et marche à suivre, affichés en grand une fois l'écran de séance refermé.
+    struct SessionFailure: Identifiable, Equatable {
+        let id = UUID()
+        let title: String
+        let steps: String
+    }
+    @Published var sessionFailure: SessionFailure?
+    /// Échec du réveil à distance de l'app montre, cité si la montre reste muette.
+    private var watchLaunchError: String?
     /// Liaison montre tracée dans le journal, relue par Tests/Scripts/check-journal.py.
     private struct WatchTrace {
         var started = false
@@ -173,7 +182,7 @@ final class CoachSession: ObservableObject {
         var sessionStart: Date?
         var lastSampleAt: Date?
         var gapLogged = false
-        var silentLogged = false
+        var deviceLogged = false
     }
     private var watchTrace = WatchTrace()
     private var connectTimeoutTask: Task<Void, Never>?
@@ -387,6 +396,7 @@ final class CoachSession: ObservableObject {
         sessionToken = UUID()
         endAfterResponse = nil
         watchTrace = WatchTrace()
+        watchLaunchError = nil
         lastQuestionAt = .distantPast; lastUserLineAt = .distantPast
         pausedTimerRemaining = nil; nextPhaseStart = nil; zone5Since = nil; zone5WarnedAt = .distantPast
         localPaused = false
@@ -436,6 +446,7 @@ final class CoachSession: ObservableObject {
         connectivity.launchWatchWorkout(kind: kind) { [weak self] error in
             guard let self else { return }
             if let error {
+                self.watchLaunchError = error.localizedDescription
                 self.log(.info, "Lancement montre : \(error.localizedDescription). Démarre la séance depuis la montre.")
             } else {
                 self.log(.info, "Séance lancée sur la montre.")
@@ -682,7 +693,8 @@ final class CoachSession: ObservableObject {
 
     /// Arrête la séance. `reason` est journalisé : chaque chemin d'arrêt doit dire pourquoi (séance du 20/09 arrêtée
     /// 15 s après le départ sans aucune trace de la cause).
-    func stop(reason: String? = nil) {
+    /// `farewell` remplace le débrief quand la séance n'a pas vraiment eu lieu (montre qui n'a pas démarré).
+    func stop(reason: String? = nil, farewell: String? = nil) {
         guard phase == .connecting || phase == .live else { return }
         log(.info, "Arrêt de la séance : \(reason ?? "demandé par l'utilisateur (Terminer)")")
         let wasLive = phase == .live
@@ -703,7 +715,7 @@ final class CoachSession: ObservableObject {
             audio.onCapturedPCM16 = nil
             responsesBeforeFarewell = responseInProgress ? 1 : 0
             realtime.injectText(metricsLine(prefix: "[MÉTRIQUES FINALES]") + "\nLa séance est terminée.")
-            realtime.requestResponse(instructions: "La séance est terminée : fais un débrief en 2 phrases max, chaleureux et concret, puis dis au revoir.")
+            realtime.requestResponse(instructions: farewell ?? "La séance est terminée : fais un débrief en 2 phrases max, chaleureux et concret, puis dis au revoir.")
             endTimeoutTask?.cancel()
             endTimeoutTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
@@ -768,6 +780,7 @@ final class CoachSession: ObservableObject {
         sendMirror(force: true)
         // Journal écrit tant que le départ de séance est connu : les horodatages s'y réfèrent.
         writeSessionJournal()
+        uploadDiagnostics()
         // Le tour d'essai de l'onboarding ne laisse pas de séance dans l'historique.
         if let start = sessionStartedAt, !goal.isTrial {
             let elapsed = latest.map { $0.state == .running ? $0.elapsed + Date().timeIntervalSince($0.timestamp) : $0.elapsed } ?? Date().timeIntervalSince(start)
@@ -916,6 +929,7 @@ final class CoachSession: ObservableObject {
         sessionToken = UUID()
         endAfterResponse = nil
         watchTrace = WatchTrace()
+        watchLaunchError = nil
         lastQuestionAt = .distantPast; lastUserLineAt = .distantPast
         pausedTimerRemaining = nil; nextPhaseStart = nil; zone5Since = nil; zone5WarnedAt = .distantPast
         localPaused = false
@@ -977,6 +991,39 @@ final class CoachSession: ObservableObject {
     static let journalURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("derniere-seance.txt")
     /// Un fichier par séance dans Documents/journaux (les 30 derniers), pour retrouver une séance précise après coup.
     static let journalsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("journaux", isDirectory: true)
+
+    /// Journal technique envoyé au serveur en fin de séance (gardé 30 jours) : les événements, jamais la conversation,
+    /// sauf les retours que l'utilisateur demande de transmettre au développeur.
+    private func uploadDiagnostics() {
+        #if targetEnvironment(simulator)
+        return  // bancs d'essai : rien à remonter au serveur
+        #else
+        guard let first = transcript.first, let token = AccountStore.shared.token else { return }
+        let start = sessionStartedAt ?? first.at
+        let info = Bundle.main.infoDictionary
+        var machine = utsname()
+        uname(&machine)
+        let model = withUnsafeBytes(of: &machine.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        var lines = ["Jeffrey \(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?")) · \(model) · iOS \(UIDevice.current.systemVersion) · montre \(connectivity.diagnostic)"]
+        for l in transcript where l.role == .info {
+            let t = Int(max(0, l.at.timeIntervalSince(start)))
+            lines.append(String(format: "%02d:%02d  %@", t / 60, t % 60, Self.technicalLine(l.text)))
+        }
+        let body: [String: Any] = ["startedAt": ISO8601DateFormatter().string(from: start), "kind": kind.rawValue, "journal": lines.joined(separator: "\n")]
+        Task {
+            let _: [String: Bool]? = try? await JeffreyBackend.call("diagnostics", method: "POST", token: token, body: body)
+        }
+        #endif
+    }
+
+    /// Ce qu'il a dit (bruit ou écho transcrits, notes personnelles) ne quitte pas le téléphone.
+    static func technicalLine(_ line: String) -> String {
+        if line.hasPrefix("Bruit ignoré") { return "Bruit ignoré" }
+        if line.hasPrefix("Écho ignoré") { return "Écho ignoré" }
+        if line.hasPrefix("Note mémorisée") { return "Note mémorisée" }
+        if line.hasPrefix("Outil save_note"), !line.contains("kind=feedback") { return "Outil save_note (mémoire)" }
+        return line
+    }
 
     private func writeSessionJournal() {
         guard let first = transcript.first else { return }
@@ -1960,6 +2007,14 @@ final class CoachSession: ObservableObject {
 
     private func handle(snapshot snap: MetricsSnapshot) {
         traceWatch(snap)
+        if let failure = snap.failure, phase == .connecting || phase == .live {
+            log(.info, "Montre : \(failure).")
+            sessionFailure = failure.hasPrefix("Santé")
+                ? SessionFailure(title: "Autorise Santé sur ta montre", steps: "Ta montre n'a pas encore l'autorisation Santé : Jeffrey ne peut pas démarrer la séance.\n\n1. Ouvre Jeffrey sur ta montre.\n2. Réponds « Autoriser » à toutes les questions.\n3. Relance la séance depuis l'iPhone.")
+                : SessionFailure(title: watchTrace.started ? "La montre a arrêté la séance" : "La montre n'a pas pu démarrer", steps: "\(failure.prefix(1).uppercased() + failure.dropFirst()).\n\n1. Vérifie que l'app Exercice n'a pas de séance en cours.\n2. Ouvre Jeffrey sur ta montre.\n3. Relance la séance depuis l'iPhone.")
+            stop(reason: "la montre n'a pas pu lancer ou tenir la séance", farewell: "La montre n'a pas pu lancer ou tenir la séance (\(failure)). Dis-le en une ou deux phrases simples avec ce qu'il doit faire, sans débrief.")
+            return
+        }
         if snap.state == .paused || snap.state == .running {
             // Juste après une pause ou reprise demandée ici, la montre n'a pas encore appliqué la commande : son état est
             // périmé. Sinon (pause faite sur la montre seule), l'iPhone et le chrono la suivent.
@@ -2016,6 +2071,10 @@ final class CoachSession: ObservableObject {
     private func traceWatch(_ snap: MetricsSnapshot) {
         guard phase == .connecting || phase == .live, let t0 = sessionStartedAt else { return }
         let after = Int(Date().timeIntervalSince(t0))
+        if let device = snap.device, !watchTrace.deviceLogged {
+            watchTrace.deviceLogged = true
+            log(.info, "Montre : \(device).")
+        }
         if snap.state == .running, !watchTrace.started {
             watchTrace.started = true
             log(.info, "Montre : séance démarrée, premières données \(after) s après le départ.")
@@ -2045,10 +2104,13 @@ final class CoachSession: ObservableObject {
     /// Montre muette au départ, ou plus aucune mesure depuis 30 s (appelé toutes les 5 s).
     private func checkWatchGap() {
         guard phase == .live, !isPaused else { return }
-        if !watchTrace.started, !watchTrace.silentLogged, let t0 = sessionStartedAt, Date().timeIntervalSince(t0) > 20 {
-            watchTrace.silentLogged = true
-            log(.info, "Montre : aucune donnée 20 s après le départ.")
-            cue(reason: "montre muette : rien reçu depuis le départ ; dis-le en une phrase, tu le guides au temps en attendant")
+        // Rien de la montre 25 s après le départ : elle n'a pas démarré (app absente ou fermée, Santé jamais autorisée,
+        // montre verrouillée). Sans elle pas de séance : on arrête en disant quoi faire, au lieu d'un compteur figé.
+        if !watchTrace.started, let t0 = sessionStartedAt, Date().timeIntervalSince(t0) > 25 {
+            log(.info, "Montre : aucune donnée 25 s après le départ\(watchLaunchError.map { " (lancement : \($0))" } ?? "").")
+            sessionFailure = SessionFailure(title: "La montre n'a pas démarré", steps: "Jeffrey n'a rien reçu de ta montre.\n\n1. Vérifie que Jeffrey est installé sur ta montre (app Watch de l'iPhone › Apps disponibles › Installer).\n2. Ouvre-le une première fois sur la montre et réponds « Autoriser ».\n3. Garde la montre au poignet, déverrouillée, puis relance la séance.")
+            stop(reason: "montre muette au départ", farewell: "La montre n'a pas démarré la séance : dis en une ou deux phrases simples d'ouvrir Jeffrey sur la montre, d'autoriser Santé, puis de relancer. Pas de débrief.")
+            return
         }
         guard !watchTrace.gapLogged, let last = watchTrace.lastSampleAt, Date().timeIntervalSince(last) > 30 else { return }
         watchTrace.gapLogged = true

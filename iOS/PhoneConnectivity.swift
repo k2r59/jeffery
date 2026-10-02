@@ -45,7 +45,7 @@ final class PhoneConnectivity: NSObject, ObservableObject {
     /// Ce qu'il faut faire pour que la montre passe « connectée ».
     var disconnectedHint: String {
         if !isPaired { return "Aucune Apple Watch jumelée à cet iPhone." }
-        if !isWatchAppInstalled { return "Installe Jeffrey sur ta montre pour démarrer." }
+        if !isWatchAppInstalled { return "Installe Jeffrey sur ta montre (app Watch › Apps disponibles, watchOS 10 minimum)." }
         return "Montre hors de portée : rapproche-la de l'iPhone."
     }
 

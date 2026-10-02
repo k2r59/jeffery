@@ -11,6 +11,7 @@
 //   GET  /me                    Bearer <token>                → { user, quota }
 //   POST /session               Bearer <token>                → { clientSecret, expiresAt, model }   jeton Realtime
 //   POST /openai/responses      Bearer <token>, corps Responses → réponse OpenAI (bilan de secours, mémoire)
+//   POST /diagnostics           Bearer <token>, { startedAt, kind, journal } → { ok }  journal technique d'une séance (30 j)
 //   GET  /admin/users           Bearer <token admin>          → { users }
 //   POST /admin/users/:id       Bearer <token admin> { role } → { user }
 //
@@ -42,6 +43,7 @@ interface User {
   createdAt: string;
   lastSeenAt: string;
   sessions: number;    // total de jetons délivrés
+  dailyLimit?: number; // séances par jour pour ce compte ; absent = DAILY_SESSION_LIMIT
 }
 
 const APPLE_JWKS = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
@@ -67,6 +69,7 @@ export default {
       if (request.method === "GET" && path === "/me") return json({ user: publicUser(user), quota: await quota(user, env) });
       if (request.method === "POST" && path === "/session") return await mintSession(user, env);
       if (request.method === "POST" && path === "/openai/responses") return await proxyResponses(request, user, env);
+      if (request.method === "POST" && path === "/diagnostics") return await saveDiagnostics(request, user, env);
 
       if (path.startsWith("/admin/")) {
         if (user.role !== "admin") return error(403, "réservé à l'administrateur");
@@ -168,6 +171,19 @@ async function authenticate(request: Request, env: Env): Promise<User | null> {
   }
 }
 
+// MARK: Journal technique
+
+// Événements d'une séance (départ, montre, erreurs, chronos), sans la conversation : lu par l'administrateur
+// (wrangler kv key list --prefix diag:) pour comprendre une séance ratée chez un testeur.
+async function saveDiagnostics(request: Request, user: User, env: Env): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as { startedAt?: string; kind?: string; journal?: string } | null;
+  if (!body?.journal || body.journal.length > 100_000) return error(400, "journal manquant ou trop long");
+  const startedAt = body.startedAt ?? new Date().toISOString();
+  const record = { user: user.id, name: user.name, startedAt, kind: body.kind ?? null, receivedAt: new Date().toISOString(), journal: body.journal };
+  await env.JEFFREY.put(`diag:${user.id}:${startedAt}`, JSON.stringify(record), { expirationTtl: 30 * 86400 });
+  return json({ ok: true });
+}
+
 // MARK: Jeton Realtime
 
 async function mintSession(user: User, env: Env): Promise<Response> {
@@ -215,7 +231,7 @@ async function checkAccess(user: User, env: Env): Promise<Response | null> {
 const day = () => new Date().toISOString().slice(0, 10);
 
 async function quota(user: User, env: Env): Promise<{ used: number; limit: number; unlimited: boolean }> {
-  const limit = Number(env.DAILY_SESSION_LIMIT) || 4;
+  const limit = user.dailyLimit ?? (Number(env.DAILY_SESSION_LIMIT) || 4);
   const used = Number((await env.JEFFREY.get(`usage:${user.id}:${day()}`)) ?? "0");
   return { used, limit, unlimited: user.role === "admin" };
 }

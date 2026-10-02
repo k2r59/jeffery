@@ -49,8 +49,11 @@ def check(events):
         add("?", "liaison montre", "journal sans trace montre (ancien) : non vérifiable")
     else:
         started = [x for _, x in watch if "séance démarrée" in x]
-        silent = [t for t, x in watch if "aucune donnée 20 s" in x]
-        if silent or not started:
+        silent = [t for t, x in watch if "aucune donnée" in x]
+        failures = [x for _, x in watch if "n'a pas pu" in x or "non autorisée" in x or "a coupé" in x]
+        if failures:
+            add("ÉCHEC", "montre démarrée", failures[0])
+        elif silent or not started:
             add("ÉCHEC", "montre démarrée", "aucune donnée de la montre après le départ")
         else:
             s = int(re.search(r"(\d+) s après", started[0])[1])

@@ -40,6 +40,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     /// Banc d'essai (simulateur) : pas de HealthKit, la montre fabrique elle-même un cœur, une distance et des calories
     /// plausibles et les envoie à l'iPhone par la vraie WatchConnectivity. WATCHCOACH_FAKE_HEALTH=1.
     static let fakeHealth = ProcessInfo.processInfo.environment["WATCHCOACH_FAKE_HEALTH"] == "1"
+    /// Bancs d'essai des pannes : Santé refusée (départ impossible), ou montre qui ne répond jamais au départ.
+    static let fakeHealthDenied = ProcessInfo.processInfo.environment["WATCHCOACH_FAKE_HEALTH_DENIED"] == "1"
+    static let ignoreStart = ProcessInfo.processInfo.environment["WATCHCOACH_IGNORE_START"] == "1"
     private var fakeTimer: Timer?
     private var fakeDistance: Double = 0
     private var fakeEnergy: Double = 0
@@ -108,8 +111,17 @@ final class WorkoutManager: NSObject, ObservableObject {
     func startOwned(kind: WorkoutKind) {
         guard !isActive else { return }
         #if DEBUG
+        if Self.ignoreStart { return }
+        if Self.fakeHealthDenied { failStart(kind: kind, Self.healthMissing); return }
         if Self.fakeHealth { startFakeOwned(kind: kind); return }
         #endif
+        // Sans autorisation Santé, la séance ne démarre pas, et la question ne peut pas s'afficher quand l'iPhone
+        // réveille l'app en arrière-plan : on le dit au lieu de rester muet.
+        guard healthStore.authorizationStatus(for: HKObjectType.workoutType()) == .sharingAuthorized else {
+            failStart(kind: kind, Self.healthMissing)
+            requestAuthorization()
+            return
+        }
         let config = HKWorkoutConfiguration()
         config.activityType = kind.activityType
         config.locationType = kind.locationType
@@ -133,8 +145,34 @@ final class WorkoutManager: NSObject, ObservableObject {
             }
             statusMessage = "Séance Jeffrey en cours"
         } catch {
-            statusMessage = "Impossible de démarrer : \(error.localizedDescription)"
+            failStart(kind: kind, "la montre n'a pas pu démarrer la séance (\(error.localizedDescription))")
         }
+    }
+
+    private static let healthMissing = "Santé non autorisée sur la montre : ouvre Jeffrey sur ta montre et autorise Santé"
+
+    /// Départ impossible : la montre l'affiche et prévient l'iPhone, qui arrête la séance en donnant la raison.
+    private func failStart(kind: WorkoutKind, _ reason: String) {
+        statusMessage = reason
+        var snap = MetricsSnapshot.idle(kind: kind)
+        snap.state = .ended
+        snap.failure = reason
+        snap.device = Self.deviceDescription(healthStore: healthStore)
+        publish(snap, force: true)
+    }
+
+    /// « Watch6,2 · watchOS 10.4 · Santé autorisée » : de quoi comprendre une panne sans avoir la montre en main.
+    static func deviceDescription(healthStore: HKHealthStore) -> String {
+        var info = utsname()
+        uname(&info)
+        let model = withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        let health: String
+        switch healthStore.authorizationStatus(for: HKObjectType.workoutType()) {
+        case .sharingAuthorized: health = "Santé autorisée"
+        case .sharingDenied: health = "Santé refusée"
+        default: health = "Santé jamais demandée"
+        }
+        return "\(model) · watchOS \(WKInterfaceDevice.current().systemVersion) · \(health)"
     }
 
     // MARK: - Contrôles communs
@@ -174,6 +212,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         pauseStartedAt = nil
         var snap = MetricsSnapshot.idle(kind: kind)
         snap.state = .running
+        snap.device = Self.deviceDescription(healthStore: healthStore)
         snapshot = snap
         publish(snap, force: true)
         tickTimer?.invalidate()
@@ -292,6 +331,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
         Task { @MainActor in
             guard workoutSession === self.session else { return }
             self.statusMessage = "Séance : \(error.localizedDescription)"
+            self.snapshot.failure = "watchOS a coupé la séance (\(error.localizedDescription))"
             self.finishTracking()
         }
     }
