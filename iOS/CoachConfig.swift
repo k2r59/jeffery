@@ -11,7 +11,6 @@ enum Prefs {
     static let kind = "pref.kind"
     static let weightKg = "pref.weightKg"
     static let heightCm = "pref.heightCm"
-    static let duckMusic = "pref.duckMusic"
     static let userName = "pref.userName"
     static let intent = "pref.intent"
     static let onboarded = "pref.onboarded"
@@ -57,7 +56,6 @@ enum Prefs {
             kind: WorkoutKind.running.rawValue,
             weightKg: 0.0,
             heightCm: 0.0,
-            duckMusic: true,
             userName: "",
             intent: "",
             onboarded: false,

@@ -90,10 +90,54 @@ final class AudioPipeline {
         try startEngine()
         installObservers()
         isRunning = true
+        onAudioEvent?(routeDescription())
+        watchOtherAudio()
+    }
+
+    /// Événements audio pour le journal : liaison des écouteurs, décrochages, musique des autres apps.
+    var onAudioEvent: ((String) -> Void)?
+
+    /// « sortie AirPods Pro (Bluetooth A2DP) · entrée AirPods Pro (Bluetooth HFP) · Bluetooth haute qualité : actif ».
+    func routeDescription() -> String {
+        let route = AVAudioSession.sharedInstance().currentRoute
+        func port(_ p: AVAudioSessionPortDescription?) -> String { p.map { "\($0.portName) (\($0.portType.rawValue))" } ?? "aucune" }
+        var text = "sortie \(port(route.outputs.first)) · entrée \(port(route.inputs.first))"
+        if let hq = route.inputs.first?.bluetoothMicrophoneExtension?.highQualityRecording {
+            text += " · Bluetooth haute qualité : \(hq.isEnabled ? "actif" : (hq.isSupported ? "inactif" : "non supporté"))"
+        }
+        return text
+    }
+
+    /// Musique d'une autre app : notée au départ puis à chaque arrêt ou reprise (preuve qu'on ne la coupe pas).
+    private var otherAudioTimer: Timer?
+    private func watchOtherAudio() {
+        otherAudioTimer?.invalidate()
+        var playing = AVAudioSession.sharedInstance().isOtherAudioPlaying
+        onAudioEvent?("musique d'une autre app : \(playing ? "en cours" : "aucune")")
+        otherAudioTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            let now = AVAudioSession.sharedInstance().isOtherAudioPlaying
+            guard now != playing else { return }
+            playing = now
+            self?.onAudioEvent?("musique d'une autre app : \(now ? "reprise" : "arrêtée")")
+        }
+    }
+
+    private static func label(_ reason: AVAudioSession.RouteChangeReason) -> String {
+        switch reason {
+        case .newDeviceAvailable: return "écouteurs branchés"
+        case .oldDeviceUnavailable: return "écouteurs débranchés"
+        case .categoryChange: return "réglage audio modifié"
+        case .override: return "sortie forcée"
+        case .wakeFromSleep: return "réveil"
+        case .noSuitableRouteForCategory: return "aucune sortie"
+        case .routeConfigurationChange: return "configuration"
+        default: return "autre"
+        }
     }
 
     func stop() {
         isRunning = false
+        otherAudioTimer?.invalidate(); otherAudioTimer = nil
         restartTask?.cancel(); restartTask = nil
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers.removeAll()
@@ -119,20 +163,19 @@ final class AudioPipeline {
     var noiseGate: Float = 0.015
     private var gateHold = 0
 
-    /// Micro : écouteurs Bluetooth (mains libres, musique en qualité téléphone) ou micro de l'iPhone (musique en pleine qualité).
+    /// Micro : écouteurs Bluetooth ou micro de l'iPhone (musique toujours en pleine qualité).
     var useHeadsetMic = true
-    /// Changement de catégorie déclenché par nous : l'observateur de route ne doit pas redémarrer le moteur.
-    private var internalCategoryChange = false
 
-    /// Atténuer la musique des autres apps pendant que le coach parle.
-    var duckOthersWhileSpeaking = true
-    private var ducking = false
-
-    private var baseOptions: AVAudioSession.CategoryOptions {
-        // .mixWithOthers : la musique (Apple Music, Spotify…) continue pendant la séance.
-        // Sans HFP, la sortie reste en A2DP (pleine qualité) et le micro est celui de l'iPhone.
-        useHeadsetMic ? [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
-                      : [.allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
+    /// Réglage audio posé une seule fois au départ, jamais modifié pendant la séance : chaque changement fait
+    /// décrocher un instant les écouteurs Bluetooth, et l'app de musique (Deezer, Spotify…) se met en pause comme
+    /// si on les avait retirés, sans reprendre seule (retour de Marie-Laure du 06/10).
+    private var sessionOptions: AVAudioSession.CategoryOptions {
+        // .mixWithOthers : la musique continue à son niveau, la voix de Jeffrey passe par-dessus.
+        var options: AVAudioSession.CategoryOptions = [.allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
+        // Micro des écouteurs : pleine qualité dans les deux sens si les écouteurs le permettent (AirPods récents),
+        // sinon repli en mains libres (musique en qualité téléphone).
+        if useHeadsetMic { options.formUnion([.bluetoothHighQualityRecording, .allowBluetoothHFP]) }
+        return options
     }
 
     /// Demande la permission micro (à faire avant `start`, l'app au premier plan).
@@ -140,50 +183,10 @@ final class AudioPipeline {
         await AVAudioApplication.requestRecordPermission()
     }
 
-    private func applyCategory(duck: Bool) throws {
-        var options = baseOptions
-        if duck { options.insert(.duckOthers) }
-        // .voiceChat active l'annulation d'écho : indispensable pour que le coach ne s'entende pas lui-même.
-        try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: options)
-    }
-
-    /// Active ou retire l'atténuation des autres apps (appelé quand le coach commence / finit de parler).
-    private var unduckTask: DispatchWorkItem?
-
-    func setDucking(_ on: Bool) {
-        guard isRunning, duckOthersWhileSpeaking || !on else { return }
-        unduckTask?.cancel()
-        if !on {
-            // On garde la musique basse encore 1,5 s après la phrase : pas de pompage entre deux phrases proches.
-            let task = DispatchWorkItem { [weak self] in self?.applyDucking(false) }
-            unduckTask = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: task)
-            return
-        }
-        applyDucking(true)
-    }
-
-    private func applyDucking(_ on: Bool) {
-        guard on != ducking else { return }
-        ducking = on
-        internalCategoryChange = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-            do {
-                try self.applyCategory(duck: on)
-                // La réactivation applique le nouveau réglage aux autres apps (retour du volume quand on cesse d'atténuer).
-                try AVAudioSession.sharedInstance().setActive(true, options: [])
-            } catch {
-                // Sans gravité : la musique reste à son niveau.
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.internalCategoryChange = false }
-        }
-    }
-
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
-        ducking = false
-        try applyCategory(duck: false)
+        // Mode par défaut : seul compatible avec l'enregistrement Bluetooth haute qualité.
+        try session.setCategory(.playAndRecord, mode: .default, options: sessionOptions)
         try session.setPreferredSampleRate(24_000)
         try session.setPreferredIOBufferDuration(0.02)
         try session.setActive(true, options: [])
@@ -320,7 +323,8 @@ final class AudioPipeline {
         observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
             guard let self, self.isRunning, let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
                   let reason = AVAudioSession.RouteChangeReason(rawValue: raw) else { return }
-            guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable || (reason == .categoryChange && !self.internalCategoryChange) else { return }
+            self.onAudioEvent?("changement de route (\(Self.label(reason))) · \(self.routeDescription())")
+            guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable || reason == .categoryChange else { return }
             // Le format d'entrée change avec la route (AirPods ↔ micro interne) : on réinstalle la capture, un
             // instant plus tard, le temps que le matériel se stabilise (plantage du 19/09 : tap installé trop tôt).
             self.engine.stop()

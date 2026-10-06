@@ -13,7 +13,6 @@ struct SettingsView: View {
     @AppStorage(Prefs.weightKg) private var weightKg: Double = 0
     @AppStorage(Prefs.heightCm) private var heightCm: Double = 0
     @State private var healthNotice: String?
-    @AppStorage(Prefs.duckMusic) private var duckMusic: Bool = true
     @AppStorage(Prefs.userName) private var userName: String = ""
     @AppStorage(Prefs.micSensitivity) private var micSensitivity: String = MicSensitivity.medium.rawValue
     @AppStorage(Prefs.intent) private var intentRaw: String = ""
@@ -143,7 +142,6 @@ struct SettingsView: View {
                     TextField("Objectif (ex. 45 min en zone 2, ou 6 × 400 m)", text: $goal, axis: .vertical)
                         .lineLimit(2...4)
                     Toggle("Interventions automatiques du coach", isOn: $autoCues)
-                    Toggle("Baisser la musique quand le coach parle", isOn: $duckMusic)
                     Picker("Sensibilité du micro", selection: $micSensitivity) {
                         ForEach(MicSensitivity.allCases) { Text($0.label).tag($0.rawValue) }
                     }

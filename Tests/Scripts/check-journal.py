@@ -43,6 +43,31 @@ def check(events):
     else:
         add("OK", "départ unique", f"{len(starts)} départ")
 
+    # Audio : liaison des écouteurs, décrochages, musique des autres apps (trace « Audio : »).
+    audio = [(t, x[len("Audio : "):]) for t, x in info if x.startswith("Audio : ")]
+    if audio:
+        route = next((x for _, x in audio if x.startswith("sortie ")), "")
+        if "HFP" in route.split(" · entrée")[0]:
+            add("ATTENTION", "qualité de la musique", "écouteurs en mains libres : musique en qualité téléphone (" + route[:90] + ")")
+        else:
+            add("OK", "qualité de la musique", route[:110])
+        drops = [(t, x) for t, x in audio if x.startswith("changement de route") and t > 10]
+        user_drops = [d for d in drops if "branchés" in d[1]]
+        own_drops = [d for d in drops if d not in user_drops]
+        if own_drops:
+            add("ÉCHEC", "pas de décrochage audio", "; ".join(f"{mmss(t)} {x[:60]}" for t, x in own_drops))
+        elif user_drops:
+            add("ATTENTION", "pas de décrochage audio", "écouteurs branchés/débranchés à " + ", ".join(mmss(t) for t, _ in user_drops))
+        else:
+            add("OK", "pas de décrochage audio", "liaison stable toute la séance")
+        stop_at = next((t for t, x in info if x.startswith("Arrêt de la séance")), 10**9)
+        if any(x == "musique d'une autre app : en cours" for _, x in audio):
+            cut = [t for t, x in audio if x == "musique d'une autre app : arrêtée" and t < stop_at]
+            add("ÉCHEC" if cut else "OK", "musique jamais coupée",
+                ("musique arrêtée à " + ", ".join(map(mmss, cut))) if cut else "la musique a joué jusqu'à la fin")
+        else:
+            add("?", "musique jamais coupée", "pas de musique au départ : non vérifiable")
+
     # 2 à 5. Liaison montre (trace « Montre : »).
     watch = [(t, x) for t, x in info if x.startswith("Montre : ")]
     if not watch:

@@ -32,7 +32,7 @@ final class CoachSession: ObservableObject {
     @Published private(set) var coachSpeaking = false {
         didSet {
             if coachSpeaking != oldValue {
-                audio.setDucking(coachSpeaking); realtime.setCoachSpeaking(coachSpeaking); sendMirror(force: true)
+                realtime.setCoachSpeaking(coachSpeaking); sendMirror(force: true)
                 if !coachSpeaking { micMutedUntil = Date().addingTimeInterval(0.8) }
             }
         }
@@ -233,6 +233,9 @@ final class CoachSession: ObservableObject {
         audio.onRouteChanged = { [weak self] name in
             Task { @MainActor in self?.status = "Audio : \(name)" }
         }
+        audio.onAudioEvent = { [weak self] text in
+            Task { @MainActor in self?.log(.info, "Audio : \(text)") }
+        }
         gps.$lastLocation
             .compactMap { $0 }
             .sink { [weak self] location in self?.handle(location: location) }
@@ -373,7 +376,6 @@ final class CoachSession: ObservableObject {
         connectivity.acceptSnapshotsSince = Date().addingTimeInterval(-3)
         connectivity.requestHealthAuthorization()
         UIApplication.shared.isIdleTimerDisabled = true
-        audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
         audio.noiseGate = config.micSensitivity.noiseGate
         audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
         useAppleVoice = config.voiceEngine == "apple" || config.usesAppleAI
@@ -907,7 +909,6 @@ final class CoachSession: ObservableObject {
         connectivity.acceptSnapshotsSince = Date().addingTimeInterval(-3)
         connectivity.requestHealthAuthorization()
         UIApplication.shared.isIdleTimerDisabled = true
-        audio.duckOthersWhileSpeaking = UserDefaults.standard.object(forKey: Prefs.duckMusic) as? Bool ?? true
         audio.noiseGate = config.micSensitivity.noiseGate
         audio.voiceGain = (UserDefaults.standard.object(forKey: Prefs.voiceBoost) as? Bool ?? true) ? 1.8 : 1.0
         useAppleVoice = config.voiceEngine == "apple" || config.usesAppleAI

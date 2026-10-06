@@ -5,7 +5,6 @@ struct JeffreyView: View {
     @EnvironmentObject private var coach: CoachSession
     @AppStorage(Prefs.presence) private var presence: String = "present"
     @AppStorage(Prefs.voice) private var voice: String = "marin"
-    @AppStorage(Prefs.duckMusic) private var duckMusic: Bool = true
     @AppStorage(Prefs.micSource) private var micSource: String = "headset"
     @AppStorage(Prefs.userName) private var userName: String = ""
     @State private var showAdvanced = false
@@ -55,13 +54,8 @@ struct JeffreyView: View {
                         }
 
                         card("Musique et micro", micSource == "headset"
-                             ? "Micro des écouteurs : Jeffrey t'entend bien, la musique passe en qualité téléphone pendant la séance."
-                             : "Micro de l'iPhone : musique en pleine qualité, parle un peu plus fort.") {
-                            Toggle(isOn: $duckMusic) {
-                                HStack(spacing: 8) { JIcon("musique", size: 18); Text("Baisser la musique quand il parle") }
-                                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                            }
-                            .tint(Theme.lime)
+                             ? "Micro des écouteurs : Jeffrey t'entend bien. Ta musique continue, sa voix passe par-dessus ; avec des AirPods récents elle reste en pleine qualité, sinon elle passe en qualité téléphone (choisis alors Micro iPhone)."
+                             : "Micro de l'iPhone : ta musique continue en pleine qualité, sa voix passe par-dessus ; parle un peu plus fort.") {
                             HStack(spacing: 4) {
                                 segment("Micro écouteurs", selected: micSource == "headset") { micSource = "headset" }
                                 segment("Micro iPhone", selected: micSource == "iphone") { micSource = "iphone" }

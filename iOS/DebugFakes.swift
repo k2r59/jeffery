@@ -162,11 +162,28 @@ final class FakeRealtimeBackend {
         say(text, response: n)
     }
 
+    /// Vraie voix de Jeffrey (aperçu de voix gardé en cache sur l'iPhone) pour entendre le coach factice par-dessus
+    /// la musique pendant un essai ; silence s'il n'y a pas d'aperçu (simulateur).
+    private lazy var voice: Data = {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let files = (try? FileManager.default.contentsOfDirectory(at: docs, includingPropertiesForKeys: nil)) ?? []
+        let preview = files.first { $0.lastPathComponent.hasPrefix("preview-") && $0.pathExtension == "pcm" }
+        return preview.flatMap { try? Data(contentsOf: $0) } ?? Data()
+    }()
+    private var voiceOffset = 0
+
+    private func voiceChunk(_ size: Int) -> Data {
+        guard voice.count >= size else { return Data(count: size) }
+        if voiceOffset + size > voice.count { voiceOffset = 0 }
+        defer { voiceOffset += size }
+        return voice.subdata(in: voiceOffset..<voiceOffset + size)
+    }
+
     private func say(_ text: String, response n: Int) {
         var t = 1.0
         for word in text.split(separator: " ") {
             emit(["type": "response.output_audio_transcript.delta", "delta": String(word) + " "], after: t)
-            emit(["type": "response.output_audio.delta", "delta": Data(count: 4800).base64EncodedString()], after: t)
+            emit(["type": "response.output_audio.delta", "delta": voiceChunk(9600).base64EncodedString()], after: t)
             t += 0.12
         }
         emit(["type": "response.output_audio_transcript.done", "transcript": text], after: t)
@@ -191,4 +208,5 @@ final class FakeRealtimeBackend {
         }
     }
 }
+
 #endif
