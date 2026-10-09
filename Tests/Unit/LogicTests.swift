@@ -122,7 +122,7 @@ final class MemoryAndSessionTests: XCTestCase {
 
 final class WorkoutLibraryTests: XCTestCase {
     func testEverySportAndLevelHasWorkouts() {
-        for kind in WorkoutKind.allCases {
+        for kind in WorkoutKind.offered {
             for level in AthleteLevel.allCases {
                 let list = WorkoutLibrary.workouts(kind: kind, level: level)
                 XCTAssertFalse(list.isEmpty, "\(kind) \(level)")

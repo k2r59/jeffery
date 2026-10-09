@@ -233,8 +233,10 @@ final class CoachSession: ObservableObject {
         audio.onRouteChanged = { [weak self] name in
             Task { @MainActor in self?.status = "Audio : \(name)" }
         }
+        // Toujours sur le fil principal (départ, observateurs, minuterie) : noté tout de suite, avant un éventuel
+        // rapport d'échec du départ.
         audio.onAudioEvent = { [weak self] text in
-            Task { @MainActor in self?.log(.info, "Audio : \(text)") }
+            MainActor.assumeIsolated { self?.log(.info, "Audio : \(text)") }
         }
         gps.$lastLocation
             .compactMap { $0 }
@@ -409,10 +411,11 @@ final class CoachSession: ObservableObject {
             do { try audio.start() } catch {
                 var tolerate = false
                 #if DEBUG
-                tolerate = FakeRealtimeBackend.enabled
+                tolerate = FakeRealtimeBackend.enabled && ProcessInfo.processInfo.environment["WATCHCOACH_AUDIO_FAIL"] == nil
                 #endif
                 if !tolerate {
                     errorMessage = "Audio : \(error.localizedDescription)"
+                    reportStartFailure("Départ impossible : audio (\(error.localizedDescription)).")
                     phase = .idle
                     return
                 }
@@ -966,6 +969,7 @@ final class CoachSession: ObservableObject {
                 #endif
                 if !tolerate {
                     errorMessage = "Audio : \(error.localizedDescription)"
+                    reportStartFailure("Reprise impossible : audio (\(error.localizedDescription)).")
                     phase = .idle
                     resuming = false
                     return
@@ -1015,6 +1019,15 @@ final class CoachSession: ObservableObject {
             let _: [String: Bool]? = try? await JeffreyBackend.call("diagnostics", method: "POST", token: token, body: body)
         }
         #endif
+    }
+
+    /// Départ impossible avant toute séance : noté et envoyé au serveur, sinon rien ne remonterait (le journal ne
+    /// part qu'en fin de séance).
+    private func reportStartFailure(_ text: String) {
+        log(.info, text)
+        writeSessionJournal()
+        uploadDiagnostics()
+        sessionStartedAt = nil
     }
 
     /// Ce qu'il a dit (bruit ou écho transcrits, notes personnelles) ne quitte pas le téléphone.

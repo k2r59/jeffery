@@ -160,7 +160,7 @@ struct WatchContentView: View {
             VStack(spacing: 10) {
                 JeffreyWordmark(size: 15).padding(.top, 2)
                 Picker("Sport", selection: $workout.selectedKind) {
-                    ForEach(WorkoutKind.allCases) { Text($0.label).tag($0) }
+                    ForEach(WorkoutKind.offered) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.navigationLink)
                 .tint(citron)

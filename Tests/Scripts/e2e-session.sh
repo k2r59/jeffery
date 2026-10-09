@@ -10,7 +10,8 @@
 #               s après la connexion : confirme l'exercice proposé, puis demande la fin et la confirme),
 #             STOP_AFTER=170 (arrêt de secours, s),
 #             WATCH_ENV="WATCHCOACH_FAKE_HEALTH_DENIED=1" (pannes de montre simulées : Santé refusée, ou
-#               WATCHCOACH_IGNORE_START=1 pour une montre qui ne répond jamais au départ).
+#               WATCHCOACH_IGNORE_START=1 pour une montre qui ne répond jamais au départ),
+#             PHONE_ENV="WATCHCOACH_AUDIO_FAIL=highQuality,standard" (réglages audio qui échouent au départ).
 set -u
 PHONE=DA7A1593-AA47-4E29-B4F4-5DB2EAA6F507   # iPhone 18 Pro Max, jumelé à…
 WATCH=D92CC0CE-C1D9-46DD-A332-05D451100C90   # …Apple Watch Series 12 (46 mm)
@@ -20,6 +21,7 @@ WATCH_SCRIPT=${WATCH_SCRIPT:-"pause@60,resume@78"}
 FAKE_USER=${FAKE_USER:-"38:Oui, c'est bien ça.|100:Tu peux terminer la séance ?|107:Oui, vas-y."}
 STOP_AFTER=${STOP_AFTER:-170}
 WATCH_ENV=${WATCH_ENV:-}
+PHONE_ENV=${PHONE_ENV:-}
 mkdir -p "$OUT"
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PAPP=$ROOT/build/dd-sim/Build/Products/Debug-iphonesimulator/WatchCoach.app
@@ -37,11 +39,16 @@ xcrun simctl privacy $WATCH grant location $WBID 2>/dev/null
 # Laissée en place après le banc : l'iPhone réveille l'app montre en arrière-plan (sonde de portée) et, sans elle,
 # la montre demanderait la vraie autorisation Santé, dont la fenêtre bloquerait les séances suivantes sur l'iPhone.
 xcrun simctl spawn $WATCH launchctl setenv WATCHCOACH_FAKE_HEALTH 1
+# Idem côté iPhone : la montre relance l'app iPhone en arrière-plan (fin de séance, ping) hors du banc ; sans ce
+# réglage pour tout le simulateur, elle lirait l'historique Santé et la fenêtre d'autorisation bloquerait la suite.
+xcrun simctl spawn $PHONE launchctl setenv WATCHCOACH_NO_HEALTH 1
 for kv in ${=WATCH_ENV}; do xcrun simctl spawn $WATCH launchctl setenv ${kv%%=*} ${kv#*=}; done
 
 CONT=$(xcrun simctl get_app_container $PHONE $PBID data)
-rm -f "$CONT/Documents/sessions.json" "$CONT/Documents/derniere-seance.txt"; rm -rf "$CONT/Documents/journaux"
-SIMCTL_CHILD_WATCHCOACH_NO_HEALTH=1 xcrun simctl launch --terminate-running-process $PHONE $PBID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null; sleep 3
+# Séance en cours d'une séance précédente (seance-en-cours.json) : sans l'effacer, l'app la reprendrait au lieu d'en
+# démarrer une neuve, et la reprise demanderait l'autorisation Santé (fenêtre qui bloque l'iPhone virtuel).
+rm -f "$CONT/Documents/sessions.json" "$CONT/Documents/derniere-seance.txt" "$CONT/Documents/seance-en-cours.json"; rm -rf "$CONT/Documents/journaux"
+SIMCTL_CHILD_WATCHCOACH_NO_HEALTH=1 SIMCTL_CHILD_WATCHCOACH_FAKE_ACCOUNT=1 xcrun simctl launch --terminate-running-process $PHONE $PBID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null; sleep 3
 xcrun simctl terminate $PHONE $PBID
 
 if [[ $WATCH_FIRST == 1 ]]; then
@@ -49,11 +56,13 @@ if [[ $WATCH_FIRST == 1 ]]; then
     xcrun simctl launch $WATCH $WBID >/dev/null
   sleep 6
 fi
-# L'iPhone : coach factice, départ automatique dès « Montre connectée », objectif 2 min.
+# L'iPhone : coach factice, départ automatique dès « Montre connectée », objectif 2 min. Processus neuf : la montre
+# ouverte a pu réveiller l'app iPhone en arrière-plan, sans ces variables ; un simple lancement la ramènerait telle quelle.
+for kv in ${=PHONE_ENV}; do export SIMCTL_CHILD_$kv; done
 SIMCTL_CHILD_WATCHCOACH_FAKE_REALTIME=1 SIMCTL_CHILD_WATCHCOACH_AUTOSTART=1 SIMCTL_CHILD_WATCHCOACH_GOAL_MIN=2 \
 SIMCTL_CHILD_WATCHCOACH_STOP_AFTER=$STOP_AFTER SIMCTL_CHILD_WATCHCOACH_NO_HEALTH=1 SIMCTL_CHILD_WATCHCOACH_NO_SPLASH=1 \
-SIMCTL_CHILD_WATCHCOACH_FAKE_USER="$FAKE_USER" \
-  xcrun simctl launch $PHONE $PBID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null
+SIMCTL_CHILD_WATCHCOACH_FAKE_USER="$FAKE_USER" SIMCTL_CHILD_WATCHCOACH_FAKE_ACCOUNT=1 \
+  xcrun simctl launch --terminate-running-process $PHONE $PBID -pref.onboarded YES -pref.setupVersion 2 -pref.userName Test >/dev/null
 
 snap() { xcrun simctl io $PHONE screenshot "$OUT/phone-$1.png" >/dev/null 2>&1; xcrun simctl io $WATCH screenshot "$OUT/watch-$1.png" >/dev/null 2>&1; }
 sleep 30; snap 30s

@@ -109,6 +109,7 @@ final class AccountStore: NSObject, ObservableObject {
             let response: JeffreyBackend.AuthResponse = try await JeffreyBackend.call("auth/apple", method: "POST", body: ["identityToken": identityToken, "fullName": name])
             KeychainStore.write(response.token, account: Self.tokenAccount)
             apply(user: response.user, quota: response.quota)
+            reportPreviousSignOut(token: response.token)
             if let given = credential.fullName?.givenName, !given.isEmpty, (UserDefaults.standard.string(forKey: Prefs.userName) ?? "").isEmpty {
                 UserDefaults.standard.set(given, forKey: Prefs.userName)
             }
@@ -126,13 +127,18 @@ final class AccountStore: NSObject, ObservableObject {
             let me: JeffreyBackend.MeResponse = try await JeffreyBackend.call("me", token: token)
             apply(user: me.user, quota: me.quota)
         } catch let e as JeffreyBackend.APIError where e.status == 401 {
-            signOut()
+            signOut(reason: "jeton refusé par le serveur (\(e.message))")
         } catch {
             self.error = error.localizedDescription
         }
     }
 
-    func signOut() {
+    /// Raison de la dernière déconnexion, signalée au serveur à la reconnexion : une déconnexion surprise ne reste
+    /// plus inexpliquée (testeuse déconnectée le 09/10 sans trace).
+    private static let signOutKey = "account.signOutReason"
+
+    func signOut(reason: String) {
+        UserDefaults.standard.set("\(Date().formatted(date: .abbreviated, time: .shortened)) · \(reason)", forKey: Self.signOutKey)
         _ = KeychainStore.delete(Self.tokenAccount)
         user = nil
         quota = nil
@@ -145,7 +151,7 @@ final class AccountStore: NSObject, ObservableObject {
         do {
             return try await JeffreyBackend.call("session", method: "POST", token: token)
         } catch let e as JeffreyBackend.APIError where e.status == 401 {
-            signOut()
+            signOut(reason: "jeton refusé au départ d'une séance (\(e.message))")
             throw JeffreyBackend.APIError(status: 401, message: "Session expirée : reconnecte-toi avec Apple.")
         }
     }
@@ -175,8 +181,19 @@ final class AccountStore: NSObject, ObservableObject {
             let response: JeffreyBackend.AuthResponse = try await JeffreyBackend.call("auth/review", method: "POST", body: ["username": username, "password": password])
             KeychainStore.write(response.token, account: Self.tokenAccount)
             apply(user: response.user, quota: response.quota)
+            reportPreviousSignOut(token: response.token)
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    private func reportPreviousSignOut(token: String) {
+        guard let previous = UserDefaults.standard.string(forKey: Self.signOutKey) else { return }
+        UserDefaults.standard.removeObject(forKey: Self.signOutKey)
+        let journal = "Compte : déconnecté le \(previous) · reconnecté le \(Date().formatted(date: .abbreviated, time: .shortened))"
+        let body: [String: Any] = ["startedAt": ISO8601DateFormatter().string(from: Date()), "kind": "compte", "journal": journal]
+        Task {
+            let _: [String: Bool]? = try? await JeffreyBackend.call("diagnostics", method: "POST", token: token, body: body)
         }
     }
 

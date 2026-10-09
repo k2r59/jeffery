@@ -12,6 +12,9 @@ enum WorkoutKind: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Sports proposés (iPhone et montre) ; les autres restent pour relire les anciennes séances.
+    static let offered: [WorkoutKind] = [.running, .walking, .hiking]
+
     /// Pictogramme du pack Jeffrey (`JIcon`).
     var iconName: String {
         switch self {

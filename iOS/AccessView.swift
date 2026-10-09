@@ -48,7 +48,7 @@ struct AccessView: View {
                     Text(q.unlimited ? "Séances illimitées (administrateur)." : "Aujourd'hui : \(q.used) séance\(q.used > 1 ? "s" : "") sur \(q.limit).")
                         .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
                 }
-                Button("Se déconnecter") { account.signOut(); dismiss() }.font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+                Button("Se déconnecter") { account.signOut(reason: "bouton Se déconnecter (onglet Jeffrey)"); dismiss() }.font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
             } else {
                 Text("Pas connecté.").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                 Text("Refais la configuration (onglet Jeffrey) pour te connecter avec Apple, ou (administrateur) renseigne une clé dans Avancé.")

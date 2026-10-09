@@ -4,11 +4,14 @@ struct RootView: View {
     @EnvironmentObject private var coach: CoachSession
     @AppStorage(Prefs.onboarded) private var onboarded: Bool = false
     @AppStorage(Prefs.setupVersion) private var setupVersion: Int = 0
+    @ObservedObject private var account = AccountStore.shared
     @StateObject private var history = WorkoutHistory()
     @State private var tab = 0
     @State private var summaryToShow: SessionSummary?
     @State private var failureToShow: CoachSession.SessionFailure?
     @Environment(\.scenePhase) private var scenePhase
+
+    private var needsSetup: Bool { !onboarded || setupVersion < Prefs.currentSetupVersion }
 
     var body: some View {
         TabView(selection: $tab) {
@@ -35,7 +38,10 @@ struct RootView: View {
         } message: {
             Text(failureToShow?.steps ?? "")
         }
-        .fullScreenCover(isPresented: Binding(get: { !onboarded || setupVersion < Prefs.currentSetupVersion }, set: { _ in })) { OnboardingView() }
+        // Pas connecté : l'app ne montre que la connexion (l'accueil complet s'il n'a jamais été fait).
+        .fullScreenCover(isPresented: Binding(get: { needsSetup || !account.isSignedIn }, set: { _ in })) {
+            OnboardingView(signInOnly: !needsSetup)
+        }
         .task {
             await history.load(); SessionAnalysisService.shared.catchUp()
             // Une séance était en cours quand l'app s'est arrêtée : reprise, ou bilan si elle est trop vieille.

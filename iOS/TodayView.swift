@@ -14,7 +14,7 @@ struct TodayView: View {
     @State private var reference: ReferenceRoute?
     @State private var lastAdvice: String?
 
-    /// Les cinq activités de l'écran d'accueil, avec leur pictogramme et l'intitulé du bouton.
+    /// Les trois activités de l'écran d'accueil, avec leur pictogramme et l'intitulé du bouton.
     private struct KindOption: Identifiable {
         let id: String
         let kind: WorkoutKind
@@ -26,9 +26,7 @@ struct TodayView: View {
     private static let options: [KindOption] = [
         KindOption(id: "course", kind: .running, icon: "course", label: "Course", cta: "Démarrer ma course"),
         KindOption(id: "marche", kind: .walking, icon: "marche", label: "Marche", cta: "Démarrer ma marche"),
-        KindOption(id: "velo", kind: .cycling, icon: "velo", label: "Vélo", cta: "Démarrer mon vélo"),
         KindOption(id: "rando", kind: .hiking, icon: "randonnee", label: "Rando", cta: "Démarrer ma rando"),
-        KindOption(id: "renfo", kind: .functionalStrength, icon: "renforcement", label: "Renfo", cta: "Démarrer mon renfo"),
     ]
 
     /// Valeurs relevées au pixel sur la maquette (iPhone 390 x 844 pt).
@@ -39,8 +37,8 @@ struct TodayView: View {
         static let cardRadius: CGFloat = 16
     }
 
-    private var kind: WorkoutKind { WorkoutKind(rawValue: kindRaw) ?? .running }
-    private var selected: KindOption { Self.options.first { $0.kind == kind } ?? Self.options[0] }
+    private var selected: KindOption { Self.options.first { $0.kind.rawValue == kindRaw } ?? Self.options[0] }
+    private var kind: WorkoutKind { selected.kind }
 
     private var weekInterval: DateInterval? { Calendar.current.dateInterval(of: .weekOfYear, for: Date()) }
     private var weekWorkouts: [HKWorkout] {

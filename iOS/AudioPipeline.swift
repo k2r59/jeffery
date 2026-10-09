@@ -62,7 +62,7 @@ final class PCMPlaybackQueue {
 
 /// Capture micro → PCM16 mono 24 kHz (format Realtime) et lecture des réponses audio du coach.
 final class AudioPipeline {
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()
     private var sourceNode: AVAudioSourceNode?
     private var converter: AVAudioConverter?
     private let playback = PCMPlaybackQueue()
@@ -85,12 +85,48 @@ final class AudioPipeline {
         set { playback.gain = newValue }
     }
 
+    /// Réglages essayés dans l'ordre au départ : le premier qui démarre est gardé pour toute la séance. Un format
+    /// refusé par certains écouteurs (erreur -10868 chez une testeuse le 09/10) ne bloque plus la séance.
+    private enum Setup: CaseIterable {
+        case highQuality, standard, voiceChat
+        var label: String {
+            switch self {
+            case .highQuality: return "pleine qualité Bluetooth"
+            case .standard: return "standard"
+            case .voiceChat: return "conversation"
+            }
+        }
+    }
+    private var setup: Setup = .highQuality
+
     func start() throws {
-        try configureSession()
-        try startEngine()
+        var lastError: Error?
+        for candidate in Setup.allCases {
+            setup = candidate
+            do {
+                #if DEBUG
+                // Banc d'essai : WATCHCOACH_AUDIO_FAIL=highQuality,standard fait échouer ces réglages (format refusé).
+                let failing = (ProcessInfo.processInfo.environment["WATCHCOACH_AUDIO_FAIL"] ?? "").split(separator: ",")
+                if failing.contains(Substring(String(describing: candidate))) { throw NSError(domain: NSOSStatusErrorDomain, code: -10868) }
+                #endif
+                try configureSession()
+                try startEngine()
+                lastError = nil
+                break
+            } catch {
+                lastError = error
+                onAudioEvent?("réglage \(candidate.label) refusé (\(error.localizedDescription))")
+                // Moteur neuf pour le réglage suivant : l'ancien garde le format d'entrée de l'essai raté (0 Hz).
+                engine.stop()
+                if let sourceNode { engine.detach(sourceNode) }
+                sourceNode = nil
+                engine = AVAudioEngine()
+            }
+        }
+        if let lastError { throw lastError }
         installObservers()
         isRunning = true
-        onAudioEvent?(routeDescription())
+        onAudioEvent?("réglage \(setup.label) · \(routeDescription())")
         watchOtherAudio()
     }
 
@@ -174,7 +210,8 @@ final class AudioPipeline {
         var options: AVAudioSession.CategoryOptions = [.allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
         // Micro des écouteurs : pleine qualité dans les deux sens si les écouteurs le permettent (AirPods récents),
         // sinon repli en mains libres (musique en qualité téléphone).
-        if useHeadsetMic { options.formUnion([.bluetoothHighQualityRecording, .allowBluetoothHFP]) }
+        if useHeadsetMic { options.insert(.allowBluetoothHFP) }
+        if useHeadsetMic, setup == .highQuality { options.insert(.bluetoothHighQualityRecording) }
         return options
     }
 
@@ -185,10 +222,12 @@ final class AudioPipeline {
 
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
-        // Mode par défaut : seul compatible avec l'enregistrement Bluetooth haute qualité.
-        try session.setCategory(.playAndRecord, mode: .default, options: sessionOptions)
-        try session.setPreferredSampleRate(24_000)
-        try session.setPreferredIOBufferDuration(0.02)
+        // Mode par défaut : seul compatible avec l'enregistrement Bluetooth haute qualité ; « conversation » est le
+        // réglage d'avant le 06/10, gardé en dernier recours.
+        try session.setCategory(.playAndRecord, mode: setup == .voiceChat ? .voiceChat : .default, options: sessionOptions)
+        // Souhaits faits à iOS, pas des conditions : un refus ne doit pas empêcher la séance.
+        try? session.setPreferredSampleRate(24_000)
+        try? session.setPreferredIOBufferDuration(0.02)
         try session.setActive(true, options: [])
         if !useHeadsetMic, let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
             try? session.setPreferredInput(builtIn)

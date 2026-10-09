@@ -63,7 +63,9 @@ struct OnboardingView: View {
     @AppStorage(Prefs.voiceEngine) private var voiceEngine: String = "openai"
     @AppStorage(Prefs.analysisProvider) private var analysisProvider: String = "apple"
     @AppStorage(Prefs.voice) private var voice: String = "marin"
-    @State private var step: Step = .welcome
+    @State private var step: Step
+    /// Déconnecté après l'accueil : seule l'étape Compte, sans retour ; l'écran se ferme une fois connecté.
+    private let signInOnly: Bool
     @State private var apiKey = KeychainStore.read(KeychainStore.apiKeyAccount) ?? ""
     @State private var voiceSampled = false
     @AppStorage(Prefs.aiProvider) private var aiProvider: String = "jeffrey"
@@ -75,6 +77,11 @@ struct OnboardingView: View {
         return AppleAnalyst.availableBackend(preferLocal: true) != nil
     }
     @FocusState private var focused: Bool
+
+    init(signInOnly: Bool = false) {
+        self.signInOnly = signInOnly
+        _step = State(initialValue: signInOnly ? .account : .welcome)
+    }
 
     private var stepTransition: AnyTransition {
         .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity))
@@ -103,7 +110,7 @@ struct OnboardingView: View {
                 .ignoresSafeArea()
             VStack(spacing: 0) {
                 header
-                progress
+                if !signInOnly { progress }
                 // Une seule étape vivante à la fois (un TabView paginé garde toutes les pages actives).
                 Group {
                     switch step {
@@ -149,10 +156,12 @@ struct OnboardingView: View {
                     JIcon("retour", size: 18).foregroundStyle(ink).frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .opacity(step == .welcome ? 0 : 1)
-                .disabled(step == .welcome)
+                .opacity(step == .welcome || signInOnly ? 0 : 1)
+                .disabled(step == .welcome || signInOnly)
                 Spacer()
-                Text("\(step.rawValue + 1)/\(Step.allCases.count)").font(.system(size: 15, weight: .medium)).foregroundStyle(secondary)
+                if !signInOnly {
+                    Text("\(step.rawValue + 1)/\(Step.allCases.count)").font(.system(size: 15, weight: .medium)).foregroundStyle(secondary)
+                }
             }
         }
         .padding(.horizontal, 16).padding(.top, 4)
@@ -364,7 +373,7 @@ struct OnboardingView: View {
                     } else if u.role == "blocked" {
                         Text("Accès désactivé. Contacte Hervé.").font(.system(size: 13, weight: .medium)).foregroundStyle(warning)
                     }
-                    Button("Se déconnecter") { account.signOut(); setup.refreshAccess() }
+                    Button("Se déconnecter") { account.signOut(reason: "bouton Se déconnecter (accueil)"); setup.refreshAccess() }
                         .font(.system(size: 13, weight: .semibold)).foregroundStyle(secondary)
                 }
                 .padding(16)

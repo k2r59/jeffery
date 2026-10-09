@@ -46,7 +46,8 @@ def check(events):
     # Audio : liaison des écouteurs, décrochages, musique des autres apps (trace « Audio : »).
     audio = [(t, x[len("Audio : "):]) for t, x in info if x.startswith("Audio : ")]
     if audio:
-        route = next((x for _, x in audio if x.startswith("sortie ")), "")
+        route = next((x for _, x in audio if "sortie " in x and not x.startswith("changement")), "")
+        route = route[route.find("sortie "):] if route else ""
         if "HFP" in route.split(" · entrée")[0]:
             add("ATTENTION", "qualité de la musique", "écouteurs en mains libres : musique en qualité téléphone (" + route[:90] + ")")
         else:
